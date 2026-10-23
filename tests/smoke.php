@@ -360,6 +360,162 @@ foreach (['civic', 'heritage', 'harvest', 'monochrome'] as $t) {
     check("theme $t is served with its tokens and font faces", str_contains($css, "/* theme: $t */") && str_contains($css, '@font-face'));
 }
 
+// ---- Membership (phase 4) -----------------------------------------------------
+/** Hidden guard fields (csrf + signed time) from a form page. */
+function guard_tokens(Browser $b, string $page): array
+{
+    $html = $b->get($page)['body'];
+    return [
+        '_csrf' => preg_match('/name="_csrf" value="([a-f0-9]{64})"/', $html, $m) ? $m[1] : '',
+        'form_ts' => preg_match('/name="form_ts" value="([^"]+)"/', $html, $m) ? html_entity_decode($m[1]) : '',
+        'website_url' => '',
+    ];
+}
+function last_mail_link(string $pattern): string
+{
+    $files = glob(BASE . '/storage/mail/*.eml') ?: [];
+    rsort($files);
+    foreach (array_slice($files, 0, 5) as $file) {
+        $body = quoted_printable_decode((string) file_get_contents($file));
+        if (preg_match($pattern, $body, $m)) {
+            return $m[0];
+        }
+    }
+    return '';
+}
+$joiner = new Browser($base);
+status_is($joiner, '/join', 200, 'name="form_ts"');
+check('join form has every field from §4.1', (bool) preg_match_all('/name="(first_name|last_name|birth_day|birth_month|birth_year|gender|address|nationality|country|region|city|photo|password|consent|newsletters|cf_home_district)"/', $joiner->last['body'], $mm) && count(array_unique($mm[1])) === 16, implode(',', array_unique($mm[1] ?? [])));
+$photoFile = $tmp . '/me.jpg';
+$im = imagecreatetruecolor(800, 600);
+imagefilledrectangle($im, 0, 0, 800, 600, imagecolorallocate($im, 40, 120, 160));
+imagejpeg($im, $photoFile);
+$joinEmail = 'joiner@example.test';
+$joinFields = ['first_name' => 'Jo', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'birth_year' => '1990', 'country' => 'United Kingdom', 'region' => 'England',
+    'email' => $joinEmail, 'password' => 'joiner-password-1', 'password_confirm' => 'joiner-password-1', 'consent' => '1', 'newsletters' => '1', 'cf_home_district' => 'Quayside'];
+$r = $joiner->post('/join', $joinFields + guard_tokens($joiner, '/join') + ['photo' => new CURLFile($photoFile, 'image/jpeg', 'me.jpg')]);
+check('a too-fast sign-up is refused (time check)', $r['status'] === 422 && str_contains($r['body'], 'very quick'));
+$tokens = guard_tokens($joiner, '/join');
+$groupBrowser = new Browser($base);
+$groupTokens = guard_tokens($groupBrowser, '/join/group');
+sleep(3);
+$r = $joiner->post('/join', $joinFields + array_merge($tokens, ['website_url' => 'http://spam.example']) + ['photo' => new CURLFile($photoFile, 'image/jpeg', 'me.jpg')]);
+check('honeypot sign-up is refused', $r['status'] === 422 && q_val('SELECT id FROM users WHERE email = ?', [$joinEmail]) === null);
+$r = $joiner->post('/join', array_merge($joinFields, ['password_confirm' => 'nope', 'consent' => '']) + $tokens + ['photo' => new CURLFile($photoFile, 'image/jpeg', 'me.jpg')]);
+check('join validation errors are shown (422)', $r['status'] === 422 && str_contains($r['body'], 'do not match') && str_contains($r['body'], 'agree to the terms'));
+$mailBefore = count(glob(BASE . '/storage/mail/*.eml') ?: []);
+$r = $joiner->post('/join', $joinFields + $tokens + ['photo' => new CURLFile($photoFile, 'image/jpeg', 'me.jpg')]);
+check('sign-up creates an unverified account and logs in', $r['status'] === 303 && $r['location'] === '/account' && q_val('SELECT status FROM users WHERE email = ?', [$joinEmail]) === 'unverified');
+check('verification email sent', count(glob(BASE . '/storage/mail/*.eml') ?: []) === $mailBefore + 1);
+$verifyLink = last_mail_link('#' . preg_quote($base, '#') . '/join/verify/[a-f0-9]{64}#');
+check('verification email contains the link', $verifyLink !== '');
+status_is($joiner, '/account', 200, 'Check your email');
+$r = $joiner->get('/account/card');
+check('unverified members cannot open the card', $r['status'] === 303 && $r['location'] === '/account');
+check('no member number before verification', q_val('SELECT m.member_number FROM members m JOIN users u ON u.id = m.user_id WHERE u.email = ?', [$joinEmail]) === null);
+$verifyPath = (string) parse_url($verifyLink, PHP_URL_PATH);
+status_is(new Browser($base), $verifyPath, 200, 'Verify my email');
+$r = $joiner->submit($verifyPath, $verifyPath, []);
+$member = q_one('SELECT m.*, u.status FROM members m JOIN users u ON u.id = m.user_id WHERE u.email = ?', [$joinEmail]);
+check('verifying the email activates the account and assigns the number', $r['status'] === 303 && $member['status'] === 'active' && preg_match('/^HCA-\d\d-\d{4}$/', (string) $member['member_number']) === 1, json_encode([$r['status'], $member['status'] ?? null, $member['member_number'] ?? null]));
+check('welcome email carries the member number', str_contains(quoted_printable_decode((string) file_get_contents((string) (static function () { $f = glob(BASE . '/storage/mail/*.eml') ?: []; sort($f); return end($f); })())), (string) $member['member_number']));
+status_is($joiner, $verifyPath, 404, 'expired');
+$r = $joiner->get('/account');
+check('dashboard shows the card preview and news', $r['status'] === 200 && str_contains($r['body'], 'id-card') && str_contains($r['body'], 'Latest news'));
+$r = $joiner->get('/account/card');
+check('ID card page: front, back, QR target and PNG button', $r['status'] === 200 && str_contains($r['body'], 'id-back') && str_contains($r['body'], 'data-qr="' . $base . '/verify/' . $member['member_number'] . '/' . $member['card_code'] . '"') && str_contains($r['body'], 'data-card-png'));
+check('card shows the custom field marked "show on card"', str_contains($r['body'], 'Home district') && str_contains($r['body'], 'Quayside'));
+status_is($joiner, '/account/card/print', 200, 'cr80-page');
+$verifyUrl = '/verify/' . $member['member_number'] . '/' . $member['card_code'];
+$checker = new Browser($base);
+status_is($checker, $verifyUrl, 200, 'Valid member card');
+$r = $checker->get($verifyUrl . '/photo');
+check('verify page photo is served for a matching card', $r['status'] === 200 && str_contains($r['type'], 'image/webp'));
+$photoId = (int) $member['photo_media_id'];
+$photoVariant = (int) array_key_first(json_decode((string) q_val('SELECT variants FROM media WHERE id = ?', [$photoId]), true));
+check('member photo is hidden from visitors', $checker->get("/media/$photoId/w/$photoVariant")['status'] === 404);
+check('member photo is visible to its owner', $joiner->get("/media/$photoId/w/$photoVariant")['status'] === 200);
+check('member photo is visible to staff', $admin->get("/media/$photoId/w/$photoVariant")['status'] === 200);
+$memberId = (int) $member['id'];
+status_is($admin, '/admin/members', 200, (string) $member['member_number']);
+status_is($admin, '/admin/members?status=active&region=England&field=' . (int) q_val("SELECT id FROM custom_fields WHERE field_key = 'home_district'") . '&value=Quayside', 200, 'Joiner');
+status_is($admin, "/admin/members/$memberId", 200, 'Regenerate card code');
+$r = $admin->submit("/admin/members/$memberId", "/admin/members/$memberId/card-code", []);
+check('admin regenerates the card code', $r['status'] === 303);
+status_is($checker, $verifyUrl, 404, 'Not a valid card');
+$member = q_one('SELECT * FROM members WHERE id = ?', [$memberId]);
+$verifyUrl = '/verify/' . $member['member_number'] . '/' . $member['card_code'];
+status_is($checker, $verifyUrl, 200, 'Valid member card');
+$edit = ['email' => $joinEmail, 'first_name' => 'Jo', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'birth_year' => '1990', 'country' => 'United Kingdom', 'region' => 'England',
+    'membership_type' => 'Standard', 'membership_fee_status' => 'paid', 'card_valid_until' => '2020-01-31', 'cf_home_district' => 'Quayside'];
+$r = $admin->submit("/admin/members/$memberId", "/admin/members/$memberId", $edit);
+check('admin edits the member and sets an expiry date', $r['status'] === 303 && q_val('SELECT card_valid_until FROM members WHERE id = ?', [$memberId]) === '2020-01-31');
+status_is($checker, $verifyUrl, 200, 'Card expired');
+$admin->submit("/admin/members/$memberId", "/admin/members/$memberId", array_merge($edit, ['card_valid_until' => '']));
+$r = $admin->submit("/admin/members/$memberId", "/admin/members/$memberId/reset", []);
+$resetPath = (string) parse_url(last_mail_link('#' . preg_quote($base, '#') . '/reset/[a-f0-9]{64}#'), PHP_URL_PATH);
+check('admin emails a password link that opens the reset form', $r['status'] === 303 && $resetPath !== '' && (new Browser($base))->get($resetPath)['status'] === 200);
+$r = $admin->submit("/admin/members/$memberId", "/admin/members/$memberId/notes", ['body' => 'Brought cakes to the AGM.']);
+check('admin adds a note', $r['status'] === 303 && str_contains($admin->get("/admin/members/$memberId")['body'], 'Brought cakes'));
+$r = $admin->get("/admin/members/cards?ids[]=$memberId");
+check('bulk A4 card sheet (8 per page) renders', $r['status'] === 200 && str_contains($r['body'], 'a4-sheet') && substr_count($r['body'], 'slot-empty') === 14);
+$r = $admin->get('/admin/members.csv?q=Joiner');
+check('members CSV export', str_contains($r['type'], 'text/csv') && str_contains($r['body'], $joinEmail));
+$csvFile = $tmp . '/import.csv';
+file_put_contents($csvFile, "email,first_name,last_name,birth_day,birth_month,region\ncsv.person@example.test,Cee,Esvee,2,3,Wales\nbroken,No,Email,1,1,\n");
+$r = $admin->post('/admin/members/import', ['_csrf' => $admin->csrf('/admin/members/import'), 'csv' => new CURLFile($csvFile, 'text/csv', 'import.csv')]);
+$page = $admin->get('/admin/members/import')['body'];
+check('CSV import creates members and reports bad rows', str_contains($page, 'Created 1') && str_contains($page, 'invalid email') && q_val('SELECT status FROM users WHERE email = ?', ['csv.person@example.test']) === 'active');
+$r = $admin->submit('/admin/custom-fields/new', '/admin/custom-fields', ['label' => 'Year of arrival', 'type' => 'text', 'visible_to_members' => '1', 'applies_to' => 'member', 'sort' => '2']);
+check('super admin adds a custom field', $r['status'] === 303 && q_val("SELECT field_key FROM custom_fields WHERE label = 'Year of arrival'") === 'year_of_arrival');
+status_is($joiner, '/join', 303);
+status_is($admin, '/admin/settings/membership', 200, 'Number format');
+$r = $admin->submit('/admin/settings/membership', '/admin/settings/membership', ['prefix' => 'HCA', 'group_prefix' => 'HCA', 'number_format' => '{0000}', 'card_months' => '12', 'free_first_n' => '0', 'terms_url' => '/privacy-policy', 'signatory' => 'Secretary', 'regions' => 'England', 'genders' => 'Female', 'types' => 'Standard']);
+check('membership settings validate the format and prefixes', $r['status'] === 422 && str_contains($r['body'], 'different prefix') && str_contains($r['body'], 'Include {PREFIX}'));
+// Dashboard pages
+foreach (['/account/profile', '/account/password', '/account/events', '/account/downloads', '/account/notices', '/account/preferences', '/account/privacy'] as $pth) {
+    status_is($joiner, $pth, 200);
+}
+$r = $joiner->submit('/account/preferences', '/account/preferences', ['newsletters' => '1', 'celebrants' => '1']);
+check('email preferences save', $r['status'] === 303 && str_contains((string) q_val('SELECT prefs FROM members WHERE id = ?', [$memberId]), '"celebrants":true'));
+$r = $joiner->submit('/account/profile', '/account/profile', ['first_name' => 'Joanna', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'country' => 'United Kingdom', 'cf_home_district' => 'Marina', 'cf_year_of_arrival' => '2001']);
+check('member edits their profile', $r['status'] === 303 && q_val('SELECT first_name FROM members WHERE id = ?', [$memberId]) === 'Joanna');
+check('profile form shows the saved birthday', (bool) preg_match('/<option value="24" selected>24<\/option>/', $joiner->get('/account/profile')['body']));
+$evRow = q_one("SELECT * FROM events WHERE registration_open = 1 AND start_at > UTC_TIMESTAMP() ORDER BY start_at LIMIT 1");
+$r = $joiner->submit('/events/' . $evRow['slug'], '/events/' . $evRow['slug'] . '/register', ['name' => 'Joanna Joiner', 'email' => $joinEmail, 'phone' => '', 'quantity' => '1'] + (($t = q_val('SELECT id FROM event_tickets WHERE event_id = ? LIMIT 1', [$evRow['id']])) !== null ? ['ticket_id' => (string) $t] : []));
+$regId = (int) q_val('SELECT id FROM event_registrations WHERE email = ? AND event_id = ?', [$joinEmail, $evRow['id']]);
+check('member registers for an event', $regId > 0 && str_contains($joiner->get('/account/events')['body'], (string) $evRow['title']));
+$r = $joiner->submit('/account/events', "/account/events/$regId/cancel", []);
+check('member cancels their registration (My events)', $r['status'] === 303 && q_val('SELECT status FROM event_registrations WHERE id = ?', [$regId]) === 'cancelled');
+$otherReg = (int) q_val("SELECT id FROM event_registrations WHERE email = 'gwen@example.test'");
+check('a member cannot cancel someone else\'s registration', $joiner->submit('/account/events', "/account/events/$otherReg/cancel", [])['status'] === 404);
+$r = $joiner->get('/account/privacy/export');
+$export = json_decode($r['body'], true);
+check('data export downloads JSON with the profile', str_contains($r['type'], 'application/json') && ($export['member']['first_name'] ?? '') === 'Joanna' && !isset($export['member']['card_code']));
+$r = $joiner->submit('/account/privacy', '/account/privacy/delete', ['password' => 'wrong']);
+check('deletion request needs the password', q_val('SELECT deletion_requested_at FROM members WHERE id = ?', [$memberId]) === null);
+$r = $joiner->submit('/account/privacy', '/account/privacy/delete', ['password' => 'joiner-password-1']);
+check('deletion request recorded and admins emailed', q_val('SELECT deletion_requested_at FROM members WHERE id = ?', [$memberId]) !== null && last_mail_link('#/admin/members/' . $memberId . '#') !== '');
+status_is($admin, '/admin/members?status=deletion', 200, 'Joanna');
+// Group registration
+$r = $groupBrowser->post('/join/group', ['name' => 'Smoke Valley Association', 'contact_person' => 'Gabi Group', 'country' => 'United Kingdom', 'email' => 'group@example.test',
+    'password' => 'group-password-12', 'password_confirm' => 'group-password-12', 'consent' => '1'] + $groupTokens);
+check('group registration creates an unverified group account', $r['status'] === 303 && q_val("SELECT status FROM groups_orgs WHERE name = 'Smoke Valley Association'") === 'hidden');
+check('unverified groups are not listed', !str_contains($visitor->get('/groups')['body'], 'Smoke Valley Association'));
+$gPath = (string) parse_url(last_mail_link('#' . preg_quote($base, '#') . '/join/verify/[a-f0-9]{64}#'), PHP_URL_PATH);
+$r = $groupBrowser->submit($gPath, $gPath, []);
+check('verified group gets a group ID and is listed', $r['status'] === 303 && str_starts_with((string) q_val("SELECT group_number FROM groups_orgs WHERE name = 'Smoke Valley Association'"), 'GRP-') && str_contains($visitor->get('/groups')['body'], 'Smoke Valley Association'));
+status_is($groupBrowser, '/account', 200, 'Group ID');
+status_is($groupBrowser, '/account/card', 404);
+// Access control
+status_is($visitor, '/account', 303);
+status_is($visitor, '/account/card/print', 303);
+status_is($admin, $verifyUrl . 'x', 404);
+$r = $admin->submit("/admin/members/$memberId", "/admin/members/$memberId/delete", ['confirm' => 'DELETE']);
+check('admin confirms the deletion; the number stays retired', $r['status'] === 303 && q_val('SELECT id FROM members WHERE id = ?', [$memberId]) === null
+    && q_val('SELECT number FROM issued_numbers WHERE number = ?', [$member['member_number']]) !== null);
+status_is($checker, $verifyUrl, 404, 'Not a valid card');
+
 // ---- Permissions -----------------------------------------------------------
 create_user('limited@example.test', 'limited-admin-password', 'admin', 'Lim Ited', 'active', ['events']);
 create_user('member@example.test', 'member-password-123', 'member', 'Mo Member', 'active');
@@ -372,6 +528,9 @@ status_is($limited, '/admin/groups', 403);
 status_is($limited, '/admin/posts', 403);
 status_is($limited, '/admin/settings', 403);
 status_is($limited, '/admin/design', 403);
+status_is($limited, '/admin/members', 403);
+status_is($limited, '/admin/members.csv', 403);
+status_is($limited, '/admin/custom-fields', 403);
 status_is($limited, '/admin/pages/' . $homeId . '/builder', 403);
 check('limited admin sidebar hides other sections', !str_contains($limited->get('/admin')['body'], 'href="/admin/posts"'));
 $member = new Browser($base);
@@ -380,6 +539,7 @@ check('member logs in and lands on /account', $r['status'] === 303 && $r['locati
 status_is($member, '/admin', 403);
 status_is($member, '/admin/posts', 403);
 status_is($member, '/admin/design', 403);
+status_is($member, '/admin/members', 403);
 status_is($member, '/members-noticeboard', 200, 'Members');
 $r = $member->get('/downloads/' . $membersDl['id'] . '/file');
 check('members can download members-only files', $r['status'] === 200);

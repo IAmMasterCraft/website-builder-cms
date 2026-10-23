@@ -1,0 +1,56 @@
+<?php /** @var array $user @var ?array $member @var ?array $group */ ?>
+<?php if ($user['status'] !== 'active'): ?>
+  <div class="verify-banner">
+    <span class="verify-icon" aria-hidden="true"><?= icon('mail') ?></span>
+    <div>
+      <h2>Check your email</h2>
+      <p>We sent a link to <strong><?= e($user['email']) ?></strong>. Open it to verify your address<?= $group ? ': your group then gets its ID and appears in the directory.' : ' and get your member number and card.' ?></p>
+      <p class="muted">Nothing arrived? Check your spam folder, or send a new link. Accounts that are not verified within <?= VERIFY_DAYS ?> days are removed.</p>
+      <form method="post" action="/account/verify/resend"><?= csrf_field() ?><button class="btn small" type="submit">Send a new link</button></form>
+    </div>
+  </div>
+  <p>While you wait, you can <a href="/account/profile">check your profile</a>.</p>
+<?php else: ?>
+  <?php if (!empty($is_birthday)): ?><div class="birthday-banner" role="status"><?= icon('heart') ?> Happy birthday, <?= e($member['first_name']) ?>! Warm wishes from everyone at <?= e(setting('site.name')) ?>.</div><?php endif ?>
+  <p class="lede">Welcome back, <?= e($member ? $member['first_name'] : $user['display_name']) ?>.</p>
+  <div class="dash-grid">
+    <?php if ($member && !empty($card)): ?>
+      <section class="dash-card">
+        <div class="dash-card-head"><h2>Your member card</h2><a class="link-arrow" href="/account/card">Open <?= icon('arrow-right') ?></a></div>
+        <a class="card-link" href="/account/card" aria-label="Open your member card"><?= view('partials/id_card', ['card' => $card, 'side' => 'front']) ?></a>
+        <?php if ($card['expired']): ?><p class="notice warn">Your card expired. Please contact us to renew your membership.</p><?php endif ?>
+      </section>
+    <?php elseif ($group): ?>
+      <section class="dash-card">
+        <h2>Your group</h2>
+        <p class="group-id"><span class="muted">Group ID</span><strong class="tabular"><?= e($group['group_number'] ?? 'Pending') ?></strong></p>
+        <p><span class="badge"><?= e($group['status'] === 'active' ? 'Listed in the directory' : ucfirst((string) $group['status'])) ?></span></p>
+        <a class="link-arrow" href="/groups#<?= e($group['slug']) ?>">See your listing <?= icon('arrow-right') ?></a>
+      </section>
+    <?php endif ?>
+    <section class="dash-card">
+      <div class="dash-card-head"><h2>Coming up</h2><a class="link-arrow" href="/account/events">My events <?= icon('arrow-right') ?></a></div>
+      <?php if ($my_events): ?>
+        <p class="muted">You are registered for:</p>
+        <ul class="event-list compact"><?php foreach ($my_events as $ev): ?><?= view('partials/event_row', ['event' => $ev]) ?><?php endforeach ?></ul>
+      <?php elseif ($events): ?>
+        <ul class="event-list compact"><?php foreach ($events as $ev): ?><?= view('partials/event_row', ['event' => $ev]) ?><?php endforeach ?></ul>
+      <?php else: ?><p class="muted">No upcoming events right now.</p><?php endif ?>
+    </section>
+    <section class="dash-card">
+      <div class="dash-card-head"><h2>Latest news</h2><a class="link-arrow" href="/news">All news <?= icon('arrow-right') ?></a></div>
+      <?php if ($posts): ?><ul class="post-list"><?php foreach ($posts as $post): ?><li><time class="muted tabular" datetime="<?= e(iso_date($post['publish_at'])) ?>"><?= e(fmt_date($post['publish_at'])) ?></time><h3 class="h3"><a href="<?= e(post_url($post)) ?>"><?= e($post['title']) ?></a></h3></li><?php endforeach ?></ul>
+      <?php else: ?><p class="muted">No news yet.</p><?php endif ?>
+    </section>
+    <section class="dash-card">
+      <h2>Birthdays today</h2>
+      <?php if ($celebrants): ?><ul class="celebrants"><?php foreach ($celebrants as $c): ?><li><span class="celebrant-initial" aria-hidden="true"><?= e($c['initial']) ?></span><strong><?= e($c['name']) ?></strong></li><?php endforeach ?></ul>
+      <?php else: ?><p class="muted">No birthdays to celebrate today.</p><?php endif ?>
+      <p class="hint muted">Only members who chose to appear are listed. <a href="/account/preferences">Your choice</a>.</p>
+    </section>
+    <section class="dash-card">
+      <div class="dash-card-head"><h2>Notices</h2><a class="link-arrow" href="/account/notices">All notices <?= icon('arrow-right') ?></a></div>
+      <p class="muted">No unread notices.</p>
+    </section>
+  </div>
+<?php endif ?>

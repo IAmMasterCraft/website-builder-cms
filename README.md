@@ -6,7 +6,8 @@ alumni bodies. Clean-room build from
 `projects/website-builder-re/specs/website-builder.md` (spec only; the study's
 `targets/` and `evidence/` are never read).
 
-Status: phases 1 (skeleton) and 2 (media, content types, menus) are built.
+Status: phases 1 (skeleton), 2 (media, content types, menus), 3 (page builder,
+themes, design controls) and 4 (membership, ID cards) are built.
 See [BUILD-NOTES.md](BUILD-NOTES.md) for what is done and what is left.
 
 ## Requirements
@@ -50,16 +51,18 @@ The tests drop and recreate every table in the test database.
 | `php bin/migrate [--status]` | Apply pending SQL migrations in `migrations/` |
 | `php bin/make-admin <email> [--role=super_admin\|admin] [--perm=content,events,...]` | Create or update an admin |
 | `php bin/demo <admin-email>` | Load demo content into an empty site |
-| `php bin/cron [--force\|--list]` | Run due scheduled jobs; crontab: `* * * * * php /path/bin/cron` |
+| `php bin/cron [--force\|--list]` | Run due scheduled jobs (publishing, cleanup, purge of unverified sign-ups after 14 days); crontab: `* * * * * php /path/bin/cron` |
 | `bin/check` | Lint, tests and smoke test |
 
 ## Layout
 
 ```
 public/            web root: index.php (front controller), .htaccess, assets/, uploads/ (WebP variants only)
-src/               bootstrap, lib/ (helpers), Core/ (router, sanitiser, mail), Site/, Admin/, Install/ handlers
-templates/         layouts/, site/, admin/, install/, email/, partials/  (print only)
-themes/civic/      theme.json, tokens.css, overrides.css
+src/               bootstrap, lib/ (helpers), Core/ (router, sanitiser, mail), Sections/ (page-builder section types),
+                   Site/, Account/, Admin/, Install/ handlers
+templates/         layouts/, site/, account/, admin/, sections/, install/, email/, partials/  (print only)
+themes/<name>/     civic, heritage, harvest, monochrome: theme.json (design defaults), tokens.css, overrides.css, preview.png
+public/assets/     css/, js/ (ES modules), img/ (icon + section-thumbnail sprites), fonts/ (OFL, self-hosted), vendor/ (qrcode-generator, MIT)
 migrations/        numbered SQL files
 storage/           originals/, variants/ (private), mail/, logs/, cache/, backups/  (not web-reachable)
 bin/               migrate, make-admin, demo, cron, check

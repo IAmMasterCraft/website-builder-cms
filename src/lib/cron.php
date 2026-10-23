@@ -11,6 +11,7 @@ function cron_jobs(): array
     return [
         'publish_scheduled' => ['every' => 1, 'run' => 'cron_publish_scheduled'],
         'cleanup' => ['every' => 60, 'run' => 'cron_cleanup'],
+        'purge_unverified' => ['every' => 60, 'run' => 'cron_purge_unverified'],
         // 'email_queue' => ['every' => 1, 'run' => ...],       phase 5
         // 'birthdays'   => ['daily_at' => '07:00', 'run' => ...], phase 5
         // 'job_expiry'  => ['every' => 60, 'run' => ...],      phase 5
@@ -28,7 +29,14 @@ function cron_cleanup(): string
     $a = q('DELETE FROM login_attempts WHERE attempted_at < UTC_TIMESTAMP() - INTERVAL 1 DAY')->rowCount();
     $b = q('DELETE FROM rate_hits WHERE hit_at < UTC_TIMESTAMP() - INTERVAL 1 DAY')->rowCount();
     $c = q('DELETE FROM password_resets WHERE expires_at < UTC_TIMESTAMP() - INTERVAL 1 DAY')->rowCount();
+    q('DELETE FROM user_tokens WHERE expires_at < UTC_TIMESTAMP() - INTERVAL 1 DAY');
     return "removed $a attempts, $b rate hits, $c expired resets";
+}
+
+/** Accounts that did not verify their email within 14 days are deleted (D7). */
+function cron_purge_unverified(): string
+{
+    return purge_unverified() . ' unverified account(s) removed';
 }
 
 /** Is a job due, given its last run (unix time) and now? */

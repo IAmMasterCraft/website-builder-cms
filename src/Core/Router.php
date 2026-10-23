@@ -4,7 +4,8 @@ declare(strict_types=1);
 namespace Core;
 
 /**
- * Tiny pattern router. Patterns use {name} (one path segment) or {name:regex}.
+ * Tiny pattern router. Patterns use {name} (one path segment) or {name:regex};
+ * the regex may contain quantifiers such as {64} or {6,40}.
  * Routes are matched in the order they were added.
  */
 final class Router
@@ -37,7 +38,7 @@ final class Router
     {
         $out = '';
         $offset = 0;
-        if (preg_match_all('/\{([a-z_][a-z0-9_]*)(?::([^{}]+))?\}/i', $pattern, $m, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)) {
+        if (preg_match_all('/\{([a-z_][a-z0-9_]*)(?::((?:[^{}]|\{\d+(?:,\d*)?\})+))?\}/i', $pattern, $m, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)) {
             foreach ($m as $match) {
                 $out .= preg_quote(substr($pattern, $offset, $match[0][1] - $offset), '#');
                 $regex = isset($match[2]) && $match[2][0] !== '' ? $match[2][0] : '[^/]+';

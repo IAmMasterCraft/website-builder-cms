@@ -272,6 +272,7 @@ function demo_seed(int $userId): void
         ['Quayside Residents’ Group', 'GRP-26-0001', 'Ola Bakare'], ['Harbourside Youth Club', 'GRP-26-0002', 'Chris Evans'],
         ['Old Town Heritage Society', 'GRP-26-0003', 'Maria Santos'],
     ] as $i => [$name, $num, $contact]) {
+        member_reserve_number($num, 'group');
         demo_save('groups', ['name' => $name, 'group_number' => $num, 'contact_person' => $contact, 'email' => 'groups@example.org',
             'country' => 'United Kingdom', 'description' => demo_html('An affiliated local group. (Demo.)'), 'sort' => (string) $i, 'status' => 'active'], $userId);
     }
@@ -290,6 +291,32 @@ function demo_seed(int $userId): void
         'This demo privacy page is a placeholder. Replace it with your organisation’s own policy.'
     ), 'status' => 'published', 'visibility' => 'public'], $userId);
     demo_save('pages', ['title' => 'Members’ noticeboard', 'summary' => 'Updates for members.', 'body' => demo_html('Only logged-in members can read this page.'), 'status' => 'published', 'visibility' => 'members'], $userId);
+
+    // Members (§4): a custom field and a few verified demo members with numbers.
+    setting_set('members', ['prefix' => 'HCA'] + member_settings());
+    $district = db_insert('custom_fields', ['field_key' => 'home_district', 'label' => 'Home district', 'type' => 'select',
+        'options' => json_encode(['Quayside', 'Old Town', 'Hillcrest', 'Marina', 'Elsewhere']), 'is_required' => 0, 'show_on_card' => 1, 'visible_to_members' => 1, 'sort' => 1]);
+    $today = new DateTimeImmutable('now', site_tz());
+    foreach ([
+        ['Amara', 'Okafor', 'Quayside', 'England', $today, true], ['Tom', 'Brennan', 'Old Town', 'Wales', $today->modify('+3 days'), true],
+        ['Priya', 'Shah', 'Marina', 'England', $today->modify('+40 days'), false],
+    ] as $i => [$first, $last, $dist, $region, $bday, $celebrate]) {
+        $uid = create_user(strtolower($first) . '.' . strtolower($last) . '@example.org', bin2hex(random_bytes(12)), 'member', "$first $last", 'active');
+        $base = tempnam(sys_get_temp_dir(), 'gdemo');
+        $tmp = $base . '.jpg';
+        demo_image($tmp, 600, 600, 201 + $i);
+        $photo = member_photo_store($tmp, 'photo.jpg', (int) filesize($tmp), $uid, false);
+        unlink($tmp);
+        unlink($base);
+        db_tx(static function () use ($uid, $first, $last, $dist, $region, $bday, $celebrate, $photo, $district, $today): void {
+            $mid = db_insert('members', ['user_id' => $uid, 'member_number' => member_issue_number('member'), 'membership_type' => 'Standard',
+                'first_name' => $first, 'last_name' => $last, 'birth_day' => (int) $bday->format('j'), 'birth_month' => (int) $bday->format('n'), 'country' => 'United Kingdom',
+                'region' => $region, 'city' => 'Harbourside', 'photo_media_id' => $photo, 'card_code' => card_code_new(),
+                'card_valid_until' => $today->modify('+1 year')->format('Y-m-d'), 'verified_at' => utc_now(), 'consent_at' => utc_now(),
+                'prefs' => json_encode(['newsletters' => true, 'birthday_greeting' => true, 'celebrants' => $celebrate])]);
+            custom_values_save('member_field_values', 'member_id', $mid, [$district => $dist]);
+        });
+    }
 
     // Builder pages (§3.1): the home page, the contact page and a membership page.
     setting_set('donate.bank_text', "Harbourside Community Association (demo)\nSort code 00-00-00 · Account 00000000\nReference: DONATION");

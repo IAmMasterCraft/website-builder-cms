@@ -423,3 +423,24 @@ details.seo[open] summary { margin-bottom: 0.75rem; }
   body.design-mode .sidebar .logo-text, body.design-mode .sidebar nav span, body.design-mode .nav-section { display: none; }
   body.builder-mode .sidebar nav a, body.design-mode .sidebar nav a { justify-content: center; padding-inline: 0; }
 }
+
+/* Membership admin */
+.form-row { display: grid; gap: 1rem; }
+@media (min-width: 40rem) { .form-row { grid-template-columns: 1fr 1fr; } }
+.birthday-field > legend { margin-bottom: 0.35rem; }
+.birthday-row { display: grid; grid-template-columns: 1fr 1.6fr 1.2fr; gap: 0.6rem; }
+.birthday-row label { font-weight: 500; color: var(--muted); font-size: 0.82rem; }
+.check-line { display: flex; gap: 0.55rem; align-items: flex-start; font-weight: 500; cursor: pointer; }
+.check-line input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
+.member-cell { display: flex; gap: 0.6rem; align-items: center; }
+.thumb.round { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: none; }
+.thumb.initial { display: inline-grid; place-items: center; background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; }
+.note-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.note-list li { padding: 0.6rem 0.75rem; border-radius: var(--r-m); background: var(--panel-2); font-size: 0.88rem; }
+.note-list p { margin: 0 0 0.25rem; }
+.media-preview.square { aspect-ratio: 1; max-width: 12rem; }
+.error-list { margin: 0; padding-left: 2.5rem; color: var(--bad); display: grid; gap: 0.25rem; font-size: 0.88rem; }
+.small-text { font-size: 0.82rem; overflow-wrap: anywhere; }
+.side > .panel + .panel, .side > .panel + form.panel { margin-top: 1rem; }
+.side .panel-body.fields form { margin: 0; }
+.form-row { align-items: start; }

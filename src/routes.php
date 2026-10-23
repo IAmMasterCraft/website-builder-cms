@@ -31,10 +31,33 @@ function app_routes(): Router
     $r->get('/reset/{token:[a-f0-9]{64}}', [Site\Auth::class, 'resetForm']);
     $r->post('/reset/{token:[a-f0-9]{64}}', [Site\Auth::class, 'reset']);
 
-    // Membership placeholders until phase 4
-    $r->get('/join', [Site\Placeholder::class, 'join']);
-    $r->get('/join/group', [Site\Placeholder::class, 'joinGroup']);
-    $r->get('/account', [Site\Placeholder::class, 'account']);
+    // Membership (§4)
+    $r->get('/join', [Site\Join::class, 'form']);
+    $r->post('/join', [Site\Join::class, 'submit']);
+    $r->get('/join/group', [Site\Join::class, 'groupForm']);
+    $r->post('/join/group', [Site\Join::class, 'groupSubmit']);
+    $r->get('/join/verify/{token:[a-f0-9]{64}}', [Site\Join::class, 'verifyForm']);
+    $r->post('/join/verify/{token:[a-f0-9]{64}}', [Site\Join::class, 'verify']);
+    $r->get('/verify/{number:[A-Za-z0-9._%-]{1,60}}/{code:[a-z0-9]{6,40}}', [Site\Verify::class, 'show']);
+    $r->get('/verify/{number:[A-Za-z0-9._%-]{1,60}}/{code:[a-z0-9]{6,40}}/photo', [Site\Verify::class, 'photo']);
+    $r->get('/account', [Account\Account::class, 'home']);
+    $r->post('/account/verify/resend', [Site\Join::class, 'resend']);
+    $r->get('/account/profile', [Account\Account::class, 'profile']);
+    $r->post('/account/profile', [Account\Account::class, 'profileSave']);
+    $r->post('/account/photo', [Account\Account::class, 'photo']);
+    $r->get('/account/password', [Account\Account::class, 'password']);
+    $r->post('/account/password', [Account\Account::class, 'passwordSave']);
+    $r->get('/account/card', [Account\Account::class, 'card']);
+    $r->get('/account/card/print', [Account\Account::class, 'cardPrint']);
+    $r->get('/account/events', [Account\Account::class, 'events']);
+    $r->post('/account/events/{id:\d+}/cancel', [Account\Account::class, 'cancelEvent']);
+    $r->get('/account/downloads', [Account\Account::class, 'downloads']);
+    $r->get('/account/notices', [Account\Account::class, 'notices']);
+    $r->get('/account/preferences', [Account\Account::class, 'preferences']);
+    $r->post('/account/preferences', [Account\Account::class, 'preferencesSave']);
+    $r->get('/account/privacy', [Account\Account::class, 'privacy']);
+    $r->get('/account/privacy/export', [Account\Account::class, 'export']);
+    $r->post('/account/privacy/delete', [Account\Account::class, 'deletionRequest']);
 
     $r->post('/contact', [Site\Contact::class, 'send']);
 
@@ -111,6 +134,28 @@ function app_routes(): Router
     $r->post('/admin/design', [Admin\Design::class, 'update']);
     $r->get('/admin/layout', [Admin\Layout::class, 'edit']);
     $r->post('/admin/layout', [Admin\Layout::class, 'update']);
+
+    $r->get('/admin/members', [Admin\Members::class, 'index']);
+    $r->get('/admin/members.csv', [Admin\Members::class, 'csv']);
+    $r->get('/admin/members/import', [Admin\Members::class, 'importForm']);
+    $r->post('/admin/members/import', [Admin\Members::class, 'import']);
+    $r->get('/admin/members/cards', [Admin\Members::class, 'cards']);
+    $r->get('/admin/members/{id:\d+}', [Admin\Members::class, 'edit']);
+    $r->post('/admin/members/{id:\d+}', [Admin\Members::class, 'update']);
+    $r->post('/admin/members/{id:\d+}/status', [Admin\Members::class, 'status']);
+    $r->post('/admin/members/{id:\d+}/delete', [Admin\Members::class, 'delete']);
+    $r->post('/admin/members/{id:\d+}/reset', [Admin\Members::class, 'resetLink']);
+    $r->post('/admin/members/{id:\d+}/card-code', [Admin\Members::class, 'regenerateCode']);
+    $r->post('/admin/members/{id:\d+}/notes', [Admin\Members::class, 'addNote']);
+    $r->get('/admin/members/{id:\d+}/card', [Admin\Members::class, 'card']);
+    $r->get('/admin/custom-fields', [Admin\CustomFields::class, 'index']);
+    $r->get('/admin/custom-fields/new', [Admin\CustomFields::class, 'create']);
+    $r->post('/admin/custom-fields', [Admin\CustomFields::class, 'store']);
+    $r->get('/admin/custom-fields/{id:\d+}', [Admin\CustomFields::class, 'edit']);
+    $r->post('/admin/custom-fields/{id:\d+}', [Admin\CustomFields::class, 'update']);
+    $r->post('/admin/custom-fields/{id:\d+}/delete', [Admin\CustomFields::class, 'delete']);
+    $r->get('/admin/settings/membership', [Admin\MembershipSettings::class, 'edit']);
+    $r->post('/admin/settings/membership', [Admin\MembershipSettings::class, 'update']);
 
     // Generic content CRUD (type key validated against the registry)
     $type = '{type:[a-z-]+}';

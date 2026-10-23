@@ -234,6 +234,7 @@ function content_types(): array
             ],
             'columns' => ['group_number' => 'Group ID', 'contact_person' => 'Contact', 'status' => 'Status'],
             'filters' => ['status' => ['active' => 'Active', 'hidden' => 'Hidden', 'suspended' => 'Suspended']],
+            'after_save' => 'group_after_save',
         ],
         'categories' => [
             'table' => 'categories', 'item' => 'category', 'label' => 'Category', 'plural' => 'Post categories', 'permission' => 'content',
@@ -731,7 +732,7 @@ function content_save(array $type, array $data, array $input, ?int $id = null, ?
             db_update($type['table'], $id, $data);
         }
         $hook = $type['after_save'] ?? null;
-        if (is_string($hook) && in_array($hook, ['post_save_tags', 'event_save_tickets', 'page_after_save'], true)) {
+        if (is_string($hook) && in_array($hook, ['post_save_tags', 'event_save_tickets', 'page_after_save', 'group_after_save'], true)) {
             $hook($id, $input);
         }
         return $id;
@@ -1084,6 +1085,22 @@ function event_register(array $event, array $input, ?array $viewer): array
         ]);
         return [$id, []];
     });
+}
+
+// ---- Groups -----------------------------------------------------------------
+
+/** A suspended group cannot log in; reactivating restores its account (§4.2). */
+function group_after_save(int $id, array $input): void
+{
+    $g = q_one('SELECT user_id, status, verified_at FROM groups_orgs WHERE id = ?', [$id]);
+    if ($g === null || $g['user_id'] === null) {
+        return;
+    }
+    if ($g['status'] === 'suspended') {
+        q("UPDATE users SET status = 'suspended' WHERE id = ? AND role = 'group'", [$g['user_id']]);
+    } else {
+        q("UPDATE users SET status = ? WHERE id = ? AND role = 'group' AND status = 'suspended'", [$g['verified_at'] ? 'active' : 'unverified', $g['user_id']]);
+    }
 }
 
 // ---- Pages ------------------------------------------------------------------

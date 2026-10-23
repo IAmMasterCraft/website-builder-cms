@@ -24,7 +24,8 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
 <link rel="alternate" type="application/rss+xml" title="<?= e($c['site_name']) ?> news" href="/feed.xml">
 <link rel="stylesheet" href="<?= e($c['theme_css']) ?>">
 <link rel="stylesheet" href="<?= e(asset('assets/css/site.css')) ?>">
-<script src="<?= e(asset('assets/js/boot.js')) ?>"></script>
+<?php foreach ($extra_css ?? [] as $css): ?><link rel="stylesheet" href="<?= e(asset($css)) ?>">
+<?php endforeach ?><script src="<?= e(asset('assets/js/boot.js')) ?>"></script>
 <script type="module" src="<?= e(asset('assets/js/site.js')) ?>"></script>
 </head>
 <body class="<?= e($body_class ?? '') ?>">
