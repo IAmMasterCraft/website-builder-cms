@@ -1,0 +1,10 @@
+# Safety net if the host points the web root at the project folder instead
+# of public/: route every request into public/.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_URI} !^/public/
+  RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+<FilesMatch "^(config\.php|config\.example\.php|\.env.*)$">
+  Require all denied
+</FilesMatch>

@@ -1,0 +1,16 @@
+# secrets and local config
+/config.php
+/tests/config.test.php
+
+# runtime data
+/storage/*/*
+!/storage/*/.gitkeep
+/storage/install.lock
+/public/uploads/*
+!/public/uploads/.gitkeep
+!/public/uploads/.htaccess
+
+node_modules/
+*.log
+.DS_Store
+._*

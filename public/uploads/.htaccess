@@ -1,0 +1,13 @@
+# Uploaded image variants only: never execute anything here.
+Options -Indexes -ExecCGI
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+<FilesMatch "\.(?!webp$)[^.]+$">
+  Require all denied
+</FilesMatch>
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+</IfModule>

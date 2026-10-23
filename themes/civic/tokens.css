@@ -1,0 +1,67 @@
+/* Civic theme tokens. Every colour pair used for text is at least 4.5:1. */
+:root {
+  /* colour */
+  --c-brand: #12355b;
+  --c-brand-strong: #0d2742;
+  --c-brand-ink: #ffffff;
+  --c-brand-soft: #e6eef7;
+  --c-accent: #0b7577;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #dff2f1;
+  --c-highlight: #f2b246;
+  --c-ink: #14202e;
+  --c-ink-soft: #2f3b4c;
+  --c-muted: #5a6779;
+  --c-surface: #ffffff;
+  --c-surface-2: #f3f6f9;
+  --c-surface-3: #e7edf3;
+  --c-line: #d6dee8;
+  --c-success: #17663a;
+  --c-success-soft: #e3f4ea;
+  --c-warn: #8a5a00;
+  --c-warn-soft: #fdf1d8;
+  --c-danger: #b42318;
+  --c-danger-soft: #fdecea;
+  --c-on-dark: #e9eef4;
+  --c-on-dark-muted: #b8c4d2;
+
+  /* type */
+  --font-body: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --heading-weight: 700;
+  --heading-tracking: -0.02em;
+  --step--1: clamp(0.83rem, 0.81rem + 0.1vw, 0.89rem);
+  --step-0: clamp(1rem, 0.97rem + 0.15vw, 1.09rem);
+  --step-1: clamp(1.2rem, 1.14rem + 0.3vw, 1.38rem);
+  --step-2: clamp(1.44rem, 1.33rem + 0.55vw, 1.75rem);
+  --step-3: clamp(1.73rem, 1.54rem + 0.95vw, 2.28rem);
+  --step-4: clamp(2.07rem, 1.76rem + 1.55vw, 3rem);
+  --step-5: clamp(2.49rem, 1.98rem + 2.5vw, 3.9rem);
+
+  /* shape */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+  --button-radius: var(--radius-pill);
+
+  /* depth */
+  --shadow-1: 0 1px 2px rgb(13 39 66 / 0.06), 0 1px 1px rgb(13 39 66 / 0.04);
+  --shadow-2: 0 2px 4px rgb(13 39 66 / 0.05), 0 8px 20px -6px rgb(13 39 66 / 0.12);
+  --shadow-3: 0 4px 8px rgb(13 39 66 / 0.06), 0 22px 44px -12px rgb(13 39 66 / 0.22);
+
+  /* space */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4.5rem;
+  --s-9: 6rem;
+
+  --container: 72rem;
+  --container-narrow: 44rem;
+}

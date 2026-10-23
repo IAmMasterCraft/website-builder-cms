@@ -1,0 +1,56 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// Create or update an admin account from the command line.
+//   php bin/make-admin <email> [--name="Full Name"] [--role=super_admin|admin] [--perm=content,events,...]
+// The password is read from the terminal (or the GATHER_ADMIN_PASSWORD environment variable).
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require __DIR__ . '/../src/load.php';
+
+$email = $argv[1] ?? '';
+$opts = getopt('', ['name:', 'role:', 'perm:'], $rest) ?: [];
+if ($email === '' || str_starts_with($email, '--')) {
+    fwrite(STDERR, "Usage: php bin/make-admin <email> [--name=\"Name\"] [--role=super_admin|admin] [--perm=" . implode(',', array_keys(admin_permissions())) . "]\n");
+    exit(1);
+}
+$role = (string) ($opts['role'] ?? 'super_admin');
+if (!in_array($role, ['super_admin', 'admin'], true)) {
+    fwrite(STDERR, "Role must be super_admin or admin.\n");
+    exit(1);
+}
+$perms = isset($opts['perm']) ? array_values(array_filter(array_map('trim', explode(',', (string) $opts['perm'])))) : [];
+foreach ($perms as $p) {
+    if (!array_key_exists($p, admin_permissions())) {
+        fwrite(STDERR, "Unknown permission: $p\n");
+        exit(1);
+    }
+}
+$password = getenv('GATHER_ADMIN_PASSWORD') ?: '';
+if ($password === '') {
+    echo 'Password (min 10 characters): ';
+    if (DIRECTORY_SEPARATOR === '/') {
+        system('stty -echo');
+    }
+    $password = trim((string) fgets(STDIN));
+    if (DIRECTORY_SEPARATOR === '/') {
+        system('stty echo');
+    }
+    echo "\n";
+}
+if (($problem = password_problem($password)) !== null) {
+    fwrite(STDERR, $problem . "\n");
+    exit(1);
+}
+$name = (string) ($opts['name'] ?? strstr($email, '@', true));
+$existing = q_one('SELECT id FROM users WHERE email = ?', [strtolower($email)]);
+if ($existing !== null) {
+    q("UPDATE users SET role = ?, status = 'active', password_hash = ?, display_name = ? WHERE id = ?", [$role, hash_password($password), $name, $existing['id']]);
+    set_user_permissions((int) $existing['id'], $role === 'admin' ? $perms : []);
+    echo "Updated {$email} ({$role}).\n";
+} else {
+    create_user($email, $password, $role, $name, 'active', $role === 'admin' ? $perms : []);
+    echo "Created {$email} ({$role}).\n";
+}

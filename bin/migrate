@@ -1,0 +1,30 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// Apply pending migrations: php bin/migrate [--status]
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require __DIR__ . '/../src/load.php';
+
+if (!is_file(config_path())) {
+    fwrite(STDERR, "No config file at " . config_path() . ". Run the /install wizard or copy config.example.php.\n");
+    exit(1);
+}
+$pdo = db();
+if (in_array('--status', $argv, true)) {
+    $done = [];
+    try {
+        $done = $pdo->query('SELECT version FROM schema_migrations')->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException) {
+    }
+    foreach (migration_files() as $f) {
+        echo (in_array($f, $done, true) ? '[x] ' : '[ ] ') . $f . "\n";
+    }
+    exit(0);
+}
+$applied = migrate($pdo, static function (string $m): void {
+    echo $m, "\n";
+});
+echo $applied ? count($applied) . " migration(s) applied.\n" : "Nothing to migrate.\n";

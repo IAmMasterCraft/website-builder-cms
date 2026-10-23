@@ -1,0 +1,23 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// Load the demo content into an installed site with no posts yet.
+//   php bin/demo <admin-email>
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require __DIR__ . '/../src/load.php';
+
+$email = strtolower((string) ($argv[1] ?? ''));
+$admin = q_one("SELECT id FROM users WHERE email = ? AND role IN ('super_admin','admin')", [$email]);
+if ($admin === null) {
+    fwrite(STDERR, "Usage: php bin/demo <admin-email> (the account must exist; see bin/make-admin)\n");
+    exit(1);
+}
+if ((int) q_val('SELECT COUNT(*) FROM posts') > 0) {
+    fwrite(STDERR, "The site already has content; demo content is only loaded into an empty site.\n");
+    exit(1);
+}
+demo_seed((int) $admin['id']);
+echo "Demo content loaded.\n";

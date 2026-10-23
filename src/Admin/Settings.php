@@ -1,0 +1,114 @@
+<?php
+declare(strict_types=1);
+
+namespace Admin;
+
+use Core\UploadException;
+
+/**
+ * Site identity, contact, header/top bar and theme. The full super-admin
+ * settings area (membership rules, ID format, SMTP...) arrives in phase 7.
+ */
+final class Settings
+{
+    public const SOCIAL = ['facebook' => 'Facebook', 'x' => 'X', 'instagram' => 'Instagram', 'youtube' => 'YouTube', 'linkedin' => 'LinkedIn'];
+
+    public static function edit(array $p): void
+    {
+        require_permission('super_admin');
+        self::form([], []);
+    }
+
+    private static function form(array $values, array $errors, int $status = 200): void
+    {
+        $current = [
+            'site_name' => setting('site.name'), 'tagline' => setting('site.tagline'), 'timezone' => setting('site.timezone'),
+            'footer_about' => setting('site.footer_about'), 'theme' => active_theme(),
+            'contact_email' => setting('contact.email'), 'contact_phone' => setting('contact.phone'), 'contact_address' => setting('contact.address'),
+            'charity_number' => setting('org.charity_number'),
+            'topbar' => setting('header.topbar') ? '1' : '', 'show_auth' => setting('header.show_auth') ? '1' : '', 'sticky' => setting('header.sticky') ? '1' : '',
+        ];
+        foreach ((array) setting('social', []) as $k => $v) {
+            $current['social_' . $k] = $v;
+        }
+        render('admin/settings', [
+            'title' => 'Site settings', 'values' => $values + $current, 'errors' => $errors,
+            'logo' => media_find((int) setting('site.logo_media_id', 0) ?: null), 'themes' => theme_list(),
+        ], 'admin', $status);
+    }
+
+    public static function update(array $p): void
+    {
+        csrf_check();
+        $user = require_permission('super_admin');
+        $v = [];
+        foreach (['site_name', 'tagline', 'timezone', 'footer_about', 'theme', 'contact_email', 'contact_phone', 'contact_address', 'charity_number', 'topbar', 'show_auth', 'sticky'] as $k) {
+            $v[$k] = input($k);
+        }
+        $errors = [];
+        if ($v['site_name'] === '' || mb_strlen($v['site_name']) > 120) {
+            $errors['site_name'] = 'Enter the organisation name (up to 120 characters).';
+        }
+        if (mb_strlen($v['tagline']) > 200) {
+            $errors['tagline'] = 'Keep the tagline under 200 characters.';
+        }
+        if (!in_array($v['timezone'], \DateTimeZone::listIdentifiers(), true)) {
+            $errors['timezone'] = 'Choose a time zone.';
+        }
+        if (!array_key_exists($v['theme'], theme_list())) {
+            $errors['theme'] = 'Choose an installed theme.';
+        }
+        if ($v['contact_email'] !== '' && !filter_var($v['contact_email'], FILTER_VALIDATE_EMAIL)) {
+            $errors['contact_email'] = 'Enter a valid email address.';
+        }
+        foreach (['footer_about' => 600, 'contact_phone' => 40, 'contact_address' => 300, 'charity_number' => 60] as $k => $max) {
+            if (mb_strlen($v[$k]) > $max) {
+                $errors[$k] = "Keep this under $max characters.";
+            }
+        }
+        $social = [];
+        foreach (self::SOCIAL as $k => $label) {
+            $url = input('social_' . $k);
+            $v['social_' . $k] = $url;
+            if ($url !== '' && !preg_match('#^https://[^\s"<>]+$#i', $url)) {
+                $errors['social_' . $k] = "$label must be a full https:// link.";
+            }
+            $social[$k] = $url;
+        }
+        $logoId = null;
+        $file = $_FILES['logo_upload'] ?? null;
+        if (is_array($file) && ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            try {
+                $u = media_upload_from_files($file);
+                $logoId = media_store($u['tmp'], $u['name'], $u['size'], (int) $user['id'], true, ['kind' => 'image', 'folder' => 'site', 'alt' => $v['site_name']]);
+            } catch (UploadException $e) {
+                $errors['logo'] = $e->getMessage();
+            }
+        }
+        if ($errors) {
+            self::form($v, $errors, 422);
+            return;
+        }
+        setting_set('site.name', $v['site_name']);
+        setting_set('site.tagline', $v['tagline']);
+        setting_set('site.timezone', $v['timezone']);
+        setting_set('site.footer_about', $v['footer_about']);
+        setting_set('site.theme', $v['theme']);
+        setting_set('contact.email', $v['contact_email']);
+        setting_set('contact.phone', $v['contact_phone']);
+        setting_set('contact.address', $v['contact_address']);
+        setting_set('org.charity_number', $v['charity_number']);
+        setting_set('social', $social);
+        setting_set('header.topbar', $v['topbar'] === '1');
+        setting_set('header.show_auth', $v['show_auth'] === '1');
+        setting_set('header.sticky', $v['sticky'] === '1');
+        if ($logoId !== null) {
+            setting_set('site.logo_media_id', $logoId);
+        } elseif (input('logo_remove') === '1') {
+            setting_set('site.logo_media_id', null);
+        }
+        audit('update', 'settings', null, 'site settings');
+        flash('Settings saved.');
+        redirect('/admin/settings');
+    }
+}

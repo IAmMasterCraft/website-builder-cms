@@ -1,0 +1,22 @@
+# Gather front controller. Real files (assets, uploads) are served directly;
+# everything else goes to index.php.
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Never serve dotfiles, backups or source files from the web root.
+<FilesMatch "(^\.|\.(sql|log|bak|ini|sh|md|dist)$|~$)">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(css|js|svg|webp|png|jpg|woff2)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>

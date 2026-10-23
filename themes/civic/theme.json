@@ -1,0 +1,6 @@
+{
+  "name": "Civic",
+  "description": "Navy and teal with a clean sans-serif: calm, trustworthy, easy to read.",
+  "swatches": ["#12355b", "#0b7577", "#f2b246", "#f3f6f9"],
+  "fonts": {"heading": "system sans", "body": "system sans"}
+}

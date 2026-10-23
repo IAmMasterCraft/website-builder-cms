@@ -1,0 +1,23 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// Cron dispatcher. Crontab: * * * * * php /path/to/bin/cron
+// Options: --force (run every job now), --list (show jobs)
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require __DIR__ . '/../src/load.php';
+
+if (!app_installed()) {
+    exit(0);
+}
+if (in_array('--list', $argv, true)) {
+    foreach (cron_jobs() as $name => $job) {
+        echo str_pad($name, 20) . 'every ' . $job['every'] . " min\n";
+    }
+    exit(0);
+}
+foreach (cron_run(null, in_array('--force', $argv, true)) as $job => $result) {
+    echo gmdate('Y-m-d H:i:s') . " $job: $result\n";
+}
