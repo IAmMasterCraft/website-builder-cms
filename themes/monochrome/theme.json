@@ -1,0 +1,6 @@
+{
+  "name": "Monochrome",
+  "description": "Editorial black and white with a single bright accent: bold, modern, newspaper-like.",
+  "swatches": ["#111111", "#c2410c", "#f97316", "#f4f4f2"],
+  "design": {"brand": "#111111", "accent": "#c2410c", "surface": "#ffffff", "heading_font": "playfair-display", "body_font": "inter", "radius": "sharp", "button": "square"}
+}

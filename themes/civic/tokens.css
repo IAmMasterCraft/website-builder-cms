@@ -8,7 +8,13 @@
   --c-accent: #0b7577;
   --c-accent-ink: #ffffff;
   --c-accent-soft: #dff2f1;
+  --c-accent-strong: #095f61;
+  --c-accent-text: #075456;
+  --c-link: #0b7577;
+  --focus-ring: rgb(11 117 119 / 0.25);
   --c-highlight: #f2b246;
+  --c-highlight-strong: #f5c26b;
+  --c-highlight-ink: #0d2742;
   --c-ink: #14202e;
   --c-ink-soft: #2f3b4c;
   --c-muted: #5a6779;
@@ -16,6 +22,8 @@
   --c-surface-2: #f3f6f9;
   --c-surface-3: #e7edf3;
   --c-line: #d6dee8;
+  --c-input-border: #b7c3d1;
+  --c-header-bg: rgb(255 255 255 / 0.94);
   --c-success: #17663a;
   --c-success-soft: #e3f4ea;
   --c-warn: #8a5a00;
@@ -23,11 +31,12 @@
   --c-danger: #b42318;
   --c-danger-soft: #fdecea;
   --c-on-dark: #e9eef4;
+  --c-on-dark-strong: #ffffff;
   --c-on-dark-muted: #b8c4d2;
 
   /* type */
-  --font-body: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-heading: "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Inter Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: "Inter Variable", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --heading-weight: 700;
   --heading-tracking: -0.02em;
   --step--1: clamp(0.83rem, 0.81rem + 0.1vw, 0.89rem);

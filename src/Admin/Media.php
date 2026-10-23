@@ -12,7 +12,7 @@ final class Media
     /** @return array{0:string,1:array} WHERE clause + params for library filters */
     private static function filters(string $q, string $kind, string $folder): array
     {
-        $where = ['1=1'];
+        $where = ["visibility <> 'private'"]; // member photos are managed from Members, not the library
         $params = [];
         if ($q !== '') {
             $like = '%' . addcslashes($q, '%_\\') . '%';

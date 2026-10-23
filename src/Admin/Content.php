@@ -184,6 +184,9 @@ final class Content
         $id = content_save($type, $data, $input, null, (int) $user['id']);
         audit('create', $type['item'], $id, (string) ($data[$type['title']] ?? ''));
         flash($type['label'] . ' created.');
+        if ($type['key'] === 'pages' && q_val('SELECT sections FROM pages WHERE id = ?', [$id]) !== null) {
+            redirect('/admin/pages/' . $id . '/builder');
+        }
         redirect('/admin/' . $type['key'] . '/' . $id . '/edit');
     }
 

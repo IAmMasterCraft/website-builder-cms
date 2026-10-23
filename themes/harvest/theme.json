@@ -1,0 +1,6 @@
+{
+  "name": "Harvest",
+  "description": "Fresh greens and warm gold with rounded, friendly type: cheerful and down to earth.",
+  "swatches": ["#1f5132", "#2c7a3f", "#e8b631", "#f4f7ee"],
+  "design": {"brand": "#1f5132", "accent": "#2c7a3f", "surface": "#ffffff", "heading_font": "nunito", "body_font": "nunito", "radius": "round", "button": "pill"}
+}

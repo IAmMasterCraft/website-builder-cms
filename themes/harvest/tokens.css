@@ -1,0 +1,73 @@
+/* harvest theme tokens. Colour pairs used for text reach at least 4.5:1;
+   brand/accent families, fonts and radius are re-derived from theme.json
+   "design" (and the super admin's Design choices) after this file. */
+:root {
+  --c-brand: #1f5132;
+  --c-brand-strong: #163b24;
+  --c-brand-ink: #ffffff;
+  --c-brand-soft: #e5f0e8;
+  --c-accent: #2c7a3f;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #e2f1e5;
+  --c-accent-strong: #2c7a3f;
+  --c-accent-text: #2c7a3f;
+  --c-link: #2c7a3f;
+  --focus-ring: color-mix(in srgb, #2c7a3f 30%, transparent);
+  --c-highlight: #e8b631;
+  --c-highlight-strong: #efc85c;
+  --c-highlight-ink: #1a2e12;
+  --c-ink: #1b2a1f;
+  --c-ink-soft: #34463a;
+  --c-muted: #56685b;
+  --c-surface: #ffffff;
+  --c-surface-2: #f4f7ee;
+  --c-surface-3: #e8eedd;
+  --c-line: #d7e2cd;
+  --c-input-border: #b4c4a8;
+  --c-header-bg: rgb(255 255 255 / 0.94);
+  --c-success: #17663a;
+  --c-success-soft: #e3f4ea;
+  --c-warn: #8a5a00;
+  --c-warn-soft: #fdf1d8;
+  --c-danger: #b42318;
+  --c-danger-soft: #fdecea;
+  --c-on-dark: #f3ece4;
+  --c-on-dark-strong: #ffffff;
+  --c-on-dark-muted: #d2c5b8;
+
+  --font-body: system-ui, sans-serif;
+  --font-heading: system-ui, sans-serif;
+  --heading-weight: 800;
+  --heading-tracking: -0.015em;
+  --step--1: clamp(0.83rem, 0.81rem + 0.1vw, 0.89rem);
+  --step-0: clamp(1rem, 0.97rem + 0.15vw, 1.09rem);
+  --step-1: clamp(1.2rem, 1.14rem + 0.3vw, 1.38rem);
+  --step-2: clamp(1.44rem, 1.33rem + 0.55vw, 1.75rem);
+  --step-3: clamp(1.73rem, 1.54rem + 0.95vw, 2.28rem);
+  --step-4: clamp(2.07rem, 1.76rem + 1.55vw, 3rem);
+  --step-5: clamp(2.49rem, 1.98rem + 2.5vw, 3.9rem);
+
+  --radius-s: 10px;
+  --radius-m: 16px;
+  --radius-l: 24px;
+  --radius-xl: 32px;
+  --radius-pill: 999px;
+  --button-radius: var(--radius-pill);
+
+  --shadow-1: 0 1px 2px rgb(22 59 36 / 0.07), 0 1px 1px rgb(22 59 36 / 0.04);
+  --shadow-2: 0 2px 4px rgb(22 59 36 / 0.05), 0 8px 20px -6px rgb(22 59 36 / 0.14);
+  --shadow-3: 0 4px 8px rgb(22 59 36 / 0.06), 0 22px 44px -12px rgb(22 59 36 / 0.24);
+
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4.5rem;
+  --s-9: 6rem;
+
+  --container: 72rem;
+  --container-narrow: 44rem;
+}

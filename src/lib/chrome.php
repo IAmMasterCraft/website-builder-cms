@@ -16,15 +16,9 @@ function default_main_menu(): array
 function site_chrome(): array
 {
     $path = request_path();
+    [$theme, $themePreview] = request_theme();
     $main = menu_tree('main', $path);
     $hasMainMenu = q_val("SELECT id FROM menus WHERE location = 'main'") !== null;
-    $footer = [];
-    foreach (['footer_1', 'footer_2', 'footer_3', 'footer_4'] as $loc) {
-        $items = menu_tree($loc, $path);
-        if ($items !== []) {
-            $footer[] = ['title' => (string) q_val('SELECT name FROM menus WHERE location = ?', [$loc]), 'items' => $items];
-        }
-    }
     $social = [];
     foreach ((array) setting('social', []) as $network => $url) {
         if (is_string($url) && preg_match('#^https://#i', $url)) {
@@ -45,13 +39,13 @@ function site_chrome(): array
         'social' => $social,
         'topbar_menu' => menu_tree('topbar', $path),
         'main_menu' => $hasMainMenu ? $main : default_main_menu(),
-        'footer_menus' => $footer,
+        'footer_blocks' => footer_blocks($path, $social),
+        'listen_live' => listen_live_visible(),
         'footer_about' => (string) setting('site.footer_about', ''),
-        'latest_posts' => posts_latest(3, current_user()),
         'user' => current_user(),
         'path' => $path,
         'flash' => flash(),
-        'theme_css' => theme_css_url(),
+        'theme_css' => theme_css_url($theme, !$themePreview),
         'year' => (new DateTimeImmutable('now', site_tz()))->format('Y'),
     ];
 }
@@ -63,7 +57,9 @@ function admin_nav(?array $user): array
         'Site' => [
             ['/admin', 'Overview', 'home', null],
             ['/admin/pages', 'Pages', 'file', 'pages_menus'],
+            ['/admin/templates', 'Templates', 'layers', 'pages_menus'],
             ['/admin/menus', 'Menus', 'menu', 'pages_menus'],
+            ['/admin/layout', 'Header and footer', 'sidebar', 'pages_menus'],
             ['/admin/media', 'Media library', 'image', 'gallery_media'],
         ],
         'Content' => [
@@ -79,8 +75,14 @@ function admin_nav(?array $user): array
             ['/admin/branches', 'Branches', 'pin', 'content'],
             ['/admin/groups', 'Groups', 'flag', 'members'],
         ],
+        'Members' => [
+            ['/admin/members', 'Members', 'users', 'members'],
+            ['/admin/custom-fields', 'Custom fields', 'tag', 'super_admin'],
+        ],
         'System' => [
+            ['/admin/design', 'Design', 'image', 'super_admin'],
             ['/admin/settings', 'Site settings', 'settings', 'super_admin'],
+            ['/admin/settings/membership', 'Membership settings', 'award', 'super_admin'],
         ],
     ];
     $out = [];
@@ -108,4 +110,93 @@ function admin_chrome(): array
         'notifications' => $unread + $pendingComments + $pendingJobs,
         'notification_detail' => ['unread' => $unread, 'comments' => $pendingComments, 'jobs' => $pendingJobs],
     ];
+}
+
+/** Footer widgets a column can show (§3.2). */
+function footer_widgets(): array
+{
+    return [
+        'about' => 'About text and social icons',
+        'menu' => 'A footer menu',
+        'contact' => 'Contact details',
+        'latest_posts' => 'Latest news',
+        'social' => 'Social links',
+        'donate' => 'Donate',
+        'join' => '“Join us” button',
+    ];
+}
+
+/** Up to four configured footer columns (defaults until the admin saves some). */
+function footer_columns(): array
+{
+    $saved = setting('footer.columns');
+    if (!is_array($saved)) {
+        return [
+            ['widget' => 'about', 'title' => '', 'menu' => 'footer_1', 'text' => ''],
+            ['widget' => 'menu', 'title' => '', 'menu' => 'footer_1', 'text' => ''],
+            ['widget' => 'menu', 'title' => '', 'menu' => 'footer_2', 'text' => ''],
+            ['widget' => 'contact', 'title' => '', 'menu' => 'footer_1', 'text' => ''],
+        ];
+    }
+    $out = [];
+    foreach (array_slice($saved, 0, 4) as $c) {
+        if (is_array($c) && array_key_exists((string) ($c['widget'] ?? ''), footer_widgets())) {
+            $out[] = ['widget' => (string) $c['widget'], 'title' => (string) ($c['title'] ?? ''), 'menu' => (string) ($c['menu'] ?? 'footer_1'), 'text' => (string) ($c['text'] ?? '')];
+        }
+    }
+    return $out;
+}
+
+/** Footer columns with the data each widget prints; empty widgets are dropped. */
+function footer_blocks(string $path, array $social): array
+{
+    $blocks = [];
+    foreach (footer_columns() as $c) {
+        $b = $c + ['items' => [], 'posts' => [], 'links' => []];
+        switch ($c['widget']) {
+            case 'menu':
+                $b['items'] = menu_tree($c['menu'], $path);
+                if ($b['items'] === []) {
+                    continue 2;
+                }
+                $b['title'] = $c['title'] !== '' ? $c['title'] : (string) q_val('SELECT name FROM menus WHERE location = ?', [$c['menu']]);
+                break;
+            case 'latest_posts':
+                $b['posts'] = posts_latest(3, current_user());
+                if ($b['posts'] === []) {
+                    continue 2;
+                }
+                $b['title'] = $c['title'] !== '' ? $c['title'] : 'Latest news';
+                break;
+            case 'social':
+                if ($social === []) {
+                    continue 2;
+                }
+                $b['title'] = $c['title'] !== '' ? $c['title'] : 'Follow us';
+                break;
+            case 'donate':
+                $b['links'] = donate_links();
+                $b['title'] = $c['title'] !== '' ? $c['title'] : 'Support us';
+                $b['text'] = $c['text'] !== '' ? $c['text'] : 'Your donation keeps our community activities going.';
+                break;
+            case 'join':
+                $b['title'] = $c['title'] !== '' ? $c['title'] : 'Become a member';
+                $b['text'] = $c['text'] !== '' ? $c['text'] : 'Join us for events, news and a digital member card.';
+                break;
+            case 'contact':
+                $b['title'] = $c['title'] !== '' ? $c['title'] : 'Contact';
+                break;
+            case 'about':
+                $b['text'] = $c['text'] !== '' ? $c['text'] : (string) setting('site.footer_about', '');
+                break;
+        }
+        $blocks[] = $b;
+    }
+    return $blocks;
+}
+
+/** "Listen live" header button: setting on and the station on air (phase 6). */
+function listen_live_visible(): bool
+{
+    return (bool) setting('header.listen_live', true) && (bool) setting('radio.enabled', false) && db_table_exists('radio_slots');
 }

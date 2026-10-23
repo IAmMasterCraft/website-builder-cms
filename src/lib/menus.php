@@ -11,10 +11,10 @@ function menu_locations(): array
     return [
         'main' => 'Main navigation',
         'topbar' => 'Top bar',
-        'footer_1' => 'Footer column 1',
-        'footer_2' => 'Footer column 2',
-        'footer_3' => 'Footer column 3',
-        'footer_4' => 'Footer column 4',
+        'footer_1' => 'Footer menu 1',
+        'footer_2' => 'Footer menu 2',
+        'footer_3' => 'Footer menu 3',
+        'footer_4' => 'Footer menu 4',
     ];
 }
 

@@ -43,7 +43,11 @@ final class Feeds
 
     public static function themeCss(array $p): void
     {
-        $css = theme_css();
+        // Any installed theme may be requested (the Design screen previews them);
+        // plain=1 leaves out the saved customisations.
+        $key = query_param("t");
+        $key = array_key_exists($key, theme_list()) ? $key : active_theme();
+        $css = theme_css($key, query_param("plain") !== "1");
         $etag = '"' . substr(sha1($css), 0, 16) . '"';
         header('Content-Type: text/css; charset=utf-8');
         header('Cache-Control: public, max-age=31536000, immutable');
@@ -53,5 +57,15 @@ final class Feeds
             return;
         }
         echo $css;
+    }
+
+    /** themes/<key>/preview.png (the themes folder itself is not web-reachable). */
+    public static function themePreview(array $p): void
+    {
+        $key = (string) $p['key'];
+        if (!array_key_exists($key, theme_list()) || !is_file(BASE . '/themes/' . $key . '/preview.png')) {
+            abort(404);
+        }
+        send_file(BASE . '/themes/' . $key . '/preview.png', 'image/png', $key . '.png', true, true);
     }
 }

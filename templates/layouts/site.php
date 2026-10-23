@@ -18,7 +18,7 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
 <meta property="og:site_name" content="<?= e($c['site_name']) ?>">
 <?php if (!empty($og_image)): ?><meta property="og:image" content="<?= e(base_url($og_image)) ?>"><?php endif ?>
 <?php if (!empty($noindex)): ?><meta name="robots" content="noindex"><?php endif ?>
-<meta name="theme-color" content="#12355b">
+<meta name="theme-color" content="<?= e(design_effective()['brand']) ?>">
 <meta name="csrf" content="<?= e(csrf_token()) ?>">
 <link rel="icon" href="<?= e(asset('assets/img/favicon.svg')) ?>" type="image/svg+xml">
 <link rel="alternate" type="application/rss+xml" title="<?= e($c['site_name']) ?> news" href="/feed.xml">
@@ -88,6 +88,7 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
       </ul>
     </nav>
     <div class="header-actions">
+      <?php if ($c['listen_live']): ?><a class="btn small ghost listen-live" href="/radio"><?= icon('radio') ?> Listen live</a><?php endif ?>
       <a class="search-link" href="/search"><?= icon('search') ?><span class="sr-only">Search</span></a>
       <?php if ($c['show_auth'] && $c['user'] === null): ?><a class="btn small accent header-cta" href="/join">Join us</a><?php endif ?>
       <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav"><?= icon('menu') ?> Menu</button>
@@ -103,37 +104,47 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
 <footer class="site-footer">
   <div class="container">
     <div class="footer-grid">
-      <div class="footer-about">
-        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><?= e($initial) ?></span><span><?= e($c['site_name']) ?></span></a>
-        <p><?= e($c['footer_about']) ?></p>
-        <?php if ($c['social']): ?>
-        <ul class="social" aria-label="Social media">
-          <?php foreach ($c['social'] as $network => $url): ?>
-            <li><a href="<?= e($url) ?>" rel="noopener" target="_blank"><?= icon($network) ?><span class="sr-only"><?= e($socialLabels[$network] ?? $network) ?> (opens in a new tab)</span></a></li>
-          <?php endforeach ?>
-        </ul>
+      <?php foreach ($c['footer_blocks'] as $i => $b): $headingId = 'footer-col-' . $i; ?>
+        <?php if ($b['widget'] === 'about'): ?>
+          <div class="footer-about">
+            <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><?= e($initial) ?></span><span><?= e($c['site_name']) ?></span></a>
+            <?php if ($b['text'] !== ''): ?><p><?= e($b['text']) ?></p><?php endif ?>
+            <?php if ($c['social']): ?>
+            <ul class="social" aria-label="Social media">
+              <?php foreach ($c['social'] as $network => $url): ?>
+                <li><a href="<?= e($url) ?>" rel="noopener" target="_blank"><?= icon($network) ?><span class="sr-only"><?= e($socialLabels[$network] ?? $network) ?> (opens in a new tab)</span></a></li>
+              <?php endforeach ?>
+            </ul>
+            <?php endif ?>
+          </div>
+        <?php elseif ($b['widget'] === 'menu'): ?>
+          <nav aria-labelledby="<?= $headingId ?>">
+            <h2 id="<?= $headingId ?>"><?= e($b['title']) ?></h2>
+            <ul><?php foreach ($b['items'] as $item): ?><li><a href="<?= e($item['href']) ?>"<?= $item['new_tab'] ? ' target="_blank" rel="noopener"' : '' ?>><?= e($item['label']) ?></a></li><?php endforeach ?></ul>
+          </nav>
+        <?php else: ?>
+          <div>
+            <h2><?= e($b['title']) ?></h2>
+            <?php if ($b['widget'] === 'latest_posts'): ?>
+              <ul><?php foreach ($b['posts'] as $p): ?><li><a href="<?= e(post_url($p)) ?>"><?= e($p['title']) ?></a></li><?php endforeach ?></ul>
+            <?php elseif ($b['widget'] === 'contact'): ?>
+              <ul>
+                <?php if ($c['address'] !== ''): ?><li><?= e($c['address']) ?></li><?php endif ?>
+                <?php if ($c['phone'] !== ''): ?><li><a href="tel:<?= e(preg_replace('/[^0-9+]/', '', $c['phone'])) ?>"><?= e($c['phone']) ?></a></li><?php endif ?>
+                <?php if ($c['email'] !== ''): ?><li><a href="mailto:<?= e($c['email']) ?>"><?= e($c['email']) ?></a></li><?php endif ?>
+              </ul>
+            <?php elseif ($b['widget'] === 'social'): ?>
+              <ul class="footer-social"><?php foreach ($c['social'] as $network => $url): ?><li><a href="<?= e($url) ?>" rel="noopener" target="_blank"><?= icon($network) ?> <?= e($socialLabels[$network] ?? $network) ?><span class="sr-only"> (opens in a new tab)</span></a></li><?php endforeach ?></ul>
+            <?php elseif ($b['widget'] === 'donate'): ?>
+              <p><?= e($b['text']) ?></p>
+              <?php foreach ($b['links'] as $l): ?><p><a class="btn small highlight" href="<?= e($l['url']) ?>" target="_blank" rel="noopener"><?= icon('heart') ?> <?= e($l['label']) ?><span class="sr-only"> (opens in a new tab)</span></a></p><?php endforeach ?>
+            <?php elseif ($b['widget'] === 'join'): ?>
+              <p><?= e($b['text']) ?></p>
+              <p><a class="btn small highlight" href="/join">Join us</a></p>
+            <?php endif ?>
+          </div>
         <?php endif ?>
-      </div>
-      <?php foreach ($c['footer_menus'] as $col): ?>
-        <nav aria-label="<?= e($col['title']) ?>">
-          <h2><?= e($col['title']) ?></h2>
-          <ul><?php foreach ($col['items'] as $item): ?><li><a href="<?= e($item['href']) ?>"><?= e($item['label']) ?></a></li><?php endforeach ?></ul>
-        </nav>
       <?php endforeach ?>
-      <?php if ($c['latest_posts']): ?>
-      <div>
-        <h2>Latest news</h2>
-        <ul><?php foreach ($c['latest_posts'] as $p): ?><li><a href="<?= e(post_url($p)) ?>"><?= e($p['title']) ?></a></li><?php endforeach ?></ul>
-      </div>
-      <?php endif ?>
-      <div>
-        <h2>Contact</h2>
-        <ul>
-          <?php if ($c['address'] !== ''): ?><li><?= e($c['address']) ?></li><?php endif ?>
-          <?php if ($c['phone'] !== ''): ?><li><a href="tel:<?= e(preg_replace('/[^0-9+]/', '', $c['phone'])) ?>"><?= e($c['phone']) ?></a></li><?php endif ?>
-          <?php if ($c['email'] !== ''): ?><li><a href="mailto:<?= e($c['email']) ?>"><?= e($c['email']) ?></a></li><?php endif ?>
-        </ul>
-      </div>
     </div>
     <div class="footer-bottom">
       <p>&copy; <?= e($c['year']) ?> <?= e($c['site_name']) ?><?= $c['charity_number'] !== '' ? ' · Registered charity ' . e($c['charity_number']) : '' ?></p>

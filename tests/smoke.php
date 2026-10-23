@@ -124,6 +124,12 @@ function check(string $label, bool $ok, string $detail = ''): void
         $failures[] = $label;
     }
 }
+/** Read a setting straight from the database (the server process changed it). */
+function setting_fresh(string $key): mixed
+{
+    settings_all([]);
+    return setting($key);
+}
 function status_is(Browser $b, string $path, int $want, string $contains = ''): void
 {
     $r = $b->get($path);
@@ -285,6 +291,75 @@ $regId = (int) q_val("SELECT id FROM event_registrations WHERE email = 'gwen@exa
 $r = $admin->submit("/admin/events/$eventId/registrations", "/admin/events/$eventId/registrations/$regId", ['status' => 'attended']);
 check('check-in toggles a registration to attended', $r['status'] === 303 && q_val('SELECT status FROM event_registrations WHERE id = ?', [$regId]) === 'attended');
 
+// ---- Page builder, design, header/footer (phase 3) ---------------------------
+$homeId = (int) setting('home.page_id');
+check('demo home page is a builder page', $homeId > 0 && q_val('SELECT sections FROM pages WHERE id = ?', [$homeId]) !== null);
+$r = $visitor->get('/');
+check('home renders builder sections (hero h1, stats, events)', str_contains($r['body'], 'class="hero-title"') && str_contains($r['body'], 'blk-stats') && str_contains($r['body'], 'blk-upcoming-events'));
+$r = $admin->get("/admin/pages/$homeId/builder");
+check('builder editor loads with its config and picker', $r['status'] === 200 && str_contains($r['body'], 'id="builder-config"') && substr_count($r['body'], 'data-add-type=') === 21);
+$token = preg_match('/name="_csrf" value="([a-f0-9]{64})"/', $r['body'], $m) ? $m[1] : '';
+$cfg = preg_match('#<script type="application/json" id="builder-config">(.*?)</script>#s', $r['body'], $m) ? json_decode($m[1], true) : null;
+check('builder config lists 21 section types with schemas', is_array($cfg) && count($cfg['types']) === 21 && isset($cfg['types']['hero']['schema']));
+$sections = $cfg['sections'];
+$sections[0]['settings']['heading'] = 'Smoke draft heading';
+$json = ['Content-Type: application/json', 'Accept: application/json', 'X-CSRF-Token: ' . $token];
+$r = $admin->post("/admin/pages/$homeId/builder", json_encode(['revision' => $cfg['page']['revision'], 'sections' => $sections]), $json);
+$saved = json_decode($r['body'], true);
+check('autosave stores the draft (JSON 200 with new revision)', $r['status'] === 200 && ($saved['revision'] ?? 0) === $cfg['page']['revision'] + 1, $r['body']);
+$r = $admin->post("/admin/pages/$homeId/builder", json_encode(['revision' => $cfg['page']['revision'], 'sections' => $sections]), $json);
+check('stale revision gets 409 "edited by … at hh:mm"', $r['status'] === 409 && (bool) preg_match('/edited by Sam Smoke at \d\d:\d\d/', $r['body']), $r['body']);
+$r = $admin->post("/admin/pages/$homeId/builder", json_encode(['revision' => $saved['revision'], 'sections' => $sections]), ['Content-Type: application/json']);
+check('autosave without CSRF token is rejected (419)', $r['status'] === 419);
+check('visitors still see the published version', !str_contains($visitor->get('/')['body'], 'Smoke draft heading'));
+check('preview shows the draft with section markers', str_contains(($p = $admin->get("/admin/pages/$homeId/preview?frame=1"))['body'], 'Smoke draft heading') && str_contains($p['body'], 'data-section-id='));
+status_is($visitor, "/admin/pages/$homeId/preview", 303);
+$r = $admin->post("/admin/pages/$homeId/publish", ['_csrf' => $token, 'revision' => (string) $saved['revision']]);
+check('publish redirects back to the builder', $r['status'] === 303 && str_contains($r['location'], '/builder'));
+check('after publishing, visitors see the new heading', str_contains($visitor->get('/')['body'], 'Smoke draft heading'));
+$oldRev = (int) q_val('SELECT id FROM page_revisions WHERE page_id = ? ORDER BY id ASC LIMIT 1', [$homeId]);
+$curRev = (int) q_val('SELECT revision FROM pages WHERE id = ?', [$homeId]);
+$r = $admin->submit("/admin/pages/$homeId/builder", "/admin/pages/$homeId/revisions/$oldRev/restore", ['revision' => (string) $curRev]);
+check('restore makes the old version the draft', $r['status'] === 303 && !str_contains($admin->get("/admin/pages/$homeId/preview")['body'], 'Smoke draft heading'));
+check('history tab lists revisions with restore buttons', str_contains($admin->get("/admin/pages/$homeId/builder")['body'], 'Restored from'));
+$r = $admin->post("/admin/pages/$homeId/templates", json_encode(['name' => 'Smoke band', 'kind' => 'section', 'sections' => [$sections[count($sections) - 1]]]), $json);
+check('a section can be saved as a template', $r['status'] === 200 && (json_decode($r['body'], true)['name'] ?? '') === 'Smoke band');
+status_is($admin, '/admin/templates', 200, 'Smoke band');
+$r = $admin->submit('/admin/pages/new', '/admin/pages', ['title' => 'Smoke events page', 'status' => 'published', 'visibility' => 'public', 'start_template' => 'starter:events']);
+check('a new page from a starter template opens in the builder', $r['status'] === 303 && str_ends_with($r['location'], '/builder'));
+status_is($visitor, '/smoke-events-page', 200, 'blk-event-calendar');
+status_is($admin, '/admin/design', 200, 'Contrast check');
+$r = $admin->submit('/admin/design', '/admin/design', ['theme' => 'harvest', 'brand' => '#1f5132', 'accent' => '#ffd84d', 'heading_font' => 'nunito', 'body_font' => 'nunito', 'radius' => 'round', 'button' => 'pill']);
+check('design saves with a contrast warning for a light accent', $r['status'] === 303 && str_contains($admin->get('/admin/design')['body'], 'fall below the 4.5:1'));
+$home = $visitor->get('/');
+check('the site uses the chosen theme and custom accent', (bool) preg_match('#/theme\.css\?t=harvest&amp;v=#', $home['body']));
+preg_match('#href="(/theme\.css\?[^"]+)"#', $home['body'], $m);
+check('theme.css carries the override tokens', str_contains($visitor->get(html_entity_decode($m[1] ?? ''))['body'], '--c-accent: #ffd84d;'));
+$r = $admin->submit('/admin/design', '/admin/design', ['theme' => 'civic', 'reset' => '1']);
+check('design reset returns to theme defaults', $r['status'] === 303 && setting_fresh('design') === []);
+status_is($admin, '/admin/layout', 200, 'Footer columns');
+$r = $admin->submit('/admin/layout', '/admin/layout', ['topbar' => '1', 'show_auth' => '1', 'sticky' => '1', 'col_widget[0]' => 'about', 'col_widget[1]' => 'join', 'col_widget[2]' => 'menu', 'col_widget[3]' => '', 'col_title[0]' => '', 'col_title[1]' => 'Join the association', 'col_title[2]' => '', 'col_title[3]' => '', 'col_menu[0]' => 'footer_1', 'col_menu[1]' => 'footer_1', 'col_menu[2]' => 'footer_2', 'col_menu[3]' => 'footer_1', 'col_text[0]' => '', 'col_text[1]' => '', 'col_text[2]' => '', 'col_text[3]' => '']);
+check('footer columns save and render', $r['status'] === 303 && str_contains($visitor->get('/news')['body'], 'Join the association'));
+$contactPage = $visitor->get('/contact');
+check('contact page has the guarded contact form', str_contains($contactPage['body'], 'name="form_ts"') && str_contains($contactPage['body'], 'name="website_url"'));
+$fields = ['name' => 'Cora Contact', 'email' => 'cora@example.test', 'message' => 'Hello from the smoke test', 'return' => '/contact'];
+$r = $visitor->submit('/contact', '/contact', $fields);
+check('a too-fast contact submission is refused', $r['status'] === 303 && (int) q_val("SELECT COUNT(*) FROM contact_messages WHERE email = 'cora@example.test'") === 0);
+$token = $visitor->csrf('/contact');
+$ts = preg_match('/name="form_ts" value="([^"]+)"/', $visitor->last['body'], $m) ? html_entity_decode($m[1]) : '';
+sleep(3);
+$mailBefore = count(glob(BASE . '/storage/mail/*.eml') ?: []);
+$r = $visitor->post('/contact', $fields + ['_csrf' => $token, 'form_ts' => $ts, 'website_url' => '']);
+check('contact message stored and emailed (org + copy)', $r['status'] === 303 && (int) q_val("SELECT COUNT(*) FROM contact_messages WHERE email = 'cora@example.test'") === 1
+    && count(glob(BASE . '/storage/mail/*.eml') ?: []) === $mailBefore + 2);
+check('thank-you message shown after the redirect', str_contains($visitor->get('/contact')['body'], 'your message has been sent'));
+$r = $visitor->post('/contact', $fields + ['_csrf' => $token, 'form_ts' => $ts, 'website_url' => 'http://spam.example']);
+check('honeypot submission is refused', (int) q_val("SELECT COUNT(*) FROM contact_messages WHERE email = 'cora@example.test'") === 1);
+foreach (['civic', 'heritage', 'harvest', 'monochrome'] as $t) {
+    $css = $visitor->get('/theme.css?t=' . $t . '&plain=1')['body'];
+    check("theme $t is served with its tokens and font faces", str_contains($css, "/* theme: $t */") && str_contains($css, '@font-face'));
+}
+
 // ---- Permissions -----------------------------------------------------------
 create_user('limited@example.test', 'limited-admin-password', 'admin', 'Lim Ited', 'active', ['events']);
 create_user('member@example.test', 'member-password-123', 'member', 'Mo Member', 'active');
@@ -296,12 +371,15 @@ status_is($limited, '/admin/events', 200);
 status_is($limited, '/admin/groups', 403);
 status_is($limited, '/admin/posts', 403);
 status_is($limited, '/admin/settings', 403);
+status_is($limited, '/admin/design', 403);
+status_is($limited, '/admin/pages/' . $homeId . '/builder', 403);
 check('limited admin sidebar hides other sections', !str_contains($limited->get('/admin')['body'], 'href="/admin/posts"'));
 $member = new Browser($base);
 $r = $member->submit('/login', '/login', ['email' => 'member@example.test', 'password' => 'member-password-123']);
 check('member logs in and lands on /account', $r['status'] === 303 && $r['location'] === '/account');
 status_is($member, '/admin', 403);
 status_is($member, '/admin/posts', 403);
+status_is($member, '/admin/design', 403);
 status_is($member, '/members-noticeboard', 200, 'Members');
 $r = $member->get('/downloads/' . $membersDl['id'] . '/file');
 check('members can download members-only files', $r['status'] === 200);

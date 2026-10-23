@@ -286,13 +286,35 @@ function demo_seed(int $userId): void
         'There are lots of ways to help: volunteer at an event, join a branch, or share your skills at the next skills fair.',
         '<ul><li>Volunteer a few hours a month</li><li>Become a member</li><li>Donate to our winter appeal</li></ul>'
     ), 'status' => 'published', 'visibility' => 'public'], $userId);
-    $contact = demo_save('pages', ['title' => 'Contact', 'summary' => 'Get in touch.', 'body' => demo_html(
-        'Email hello@example.org or call 020 7946 0321. Our office at 12 Quay Street is open on weekday mornings.'
-    ), 'status' => 'published', 'visibility' => 'public'], $userId);
     demo_save('pages', ['title' => 'Privacy policy', 'summary' => 'How we look after your information.', 'body' => demo_html(
         'This demo privacy page is a placeholder. Replace it with your organisation’s own policy.'
     ), 'status' => 'published', 'visibility' => 'public'], $userId);
     demo_save('pages', ['title' => 'Members’ noticeboard', 'summary' => 'Updates for members.', 'body' => demo_html('Only logged-in members can read this page.'), 'status' => 'published', 'visibility' => 'members'], $userId);
+
+    // Builder pages (§3.1): the home page, the contact page and a membership page.
+    setting_set('donate.bank_text', "Harbourside Community Association (demo)\nSort code 00-00-00 · Account 00000000\nReference: DONATION");
+    setting_set('donate.links', [['label' => 'Give online', 'url' => 'https://example.org/donate']]);
+    $home = demo_save('pages', ['title' => 'Home', 'summary' => 'Neighbours helping neighbours, by the water and beyond.', 'status' => 'published', 'visibility' => 'public', 'is_home' => '1'], $userId);
+    builder_initialise($home, [
+        builder_make('hero', ['eyebrow' => 'Welcome to Harbourside', 'heading' => 'Neighbours helping neighbours',
+            'text' => 'Events, learning and support for everyone who lives, works or grew up by the harbour.',
+            'slides' => [['media_id' => $img[0], 'caption' => 'Harbour festival'], ['media_id' => $img[1], 'caption' => 'Community garden'], ['media_id' => $img[9], 'caption' => 'Market stalls']]]),
+        builder_make('stats'),
+        builder_make('features', ['eyebrow' => 'What we do', 'heading' => 'Three ways we bring people together']),
+        builder_make('upcoming_events', ['eyebrow' => 'Get together'], ['background' => 'soft']),
+        builder_make('latest_posts', ['eyebrow' => 'Latest']),
+        builder_make('gallery', ['eyebrow' => 'Moments', 'count' => 8], ['background' => 'soft']),
+        builder_make('birthdays', ['hide_when_empty' => true]),
+        builder_make('cta'),
+    ], $userId);
+    $contact = demo_save('pages', ['title' => 'Contact', 'summary' => 'Get in touch.', 'status' => 'published', 'visibility' => 'public'], $userId);
+    builder_initialise($contact, [
+        builder_make('contact', ['show_map' => false]),
+        builder_make('faq', ['heading' => 'Before you write', 'count' => 4], ['background' => 'soft']),
+        builder_make('donate'),
+    ], $userId);
+    $membership = demo_save('pages', ['title' => 'Membership', 'summary' => 'Join our community.', 'status' => 'published', 'visibility' => 'public'], $userId);
+    builder_initialise($membership, builder_template_sections('starter:membership') ?? [], $userId);
 
     // Menus.
     $main = db_insert('menus', ['name' => 'Main navigation', 'location' => 'main']);

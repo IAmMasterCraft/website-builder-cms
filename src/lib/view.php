@@ -47,8 +47,10 @@ function render(string $template, array $data = [], string $layout = 'site', int
     } elseif ($layout === 'admin') {
         $layoutData['chrome'] = admin_chrome();
     }
-    http_response_code($status);
-    header('Content-Type: text/html; charset=utf-8');
+    if (!headers_sent()) {
+        http_response_code($status);
+        header('Content-Type: text/html; charset=utf-8');
+    }
     echo view('layouts/' . $layout, $layoutData);
 }
 

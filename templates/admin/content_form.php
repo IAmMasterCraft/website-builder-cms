@@ -1,6 +1,7 @@
 <?php /** @var array $type @var array $values @var array $errors @var ?array $row */
 $key = $type['key'];
-$main = array_filter($type['fields'], static fn ($f) => empty($f['side']) && empty($f['seo']));
+$isBuilderPage = $key === 'pages' && $row !== null && $row['sections'] !== null;
+$main = array_filter($type['fields'], static fn ($f) => empty($f['side']) && empty($f['seo']) && !($isBuilderPage && $f['name'] === 'body'));
 $side = array_filter($type['fields'], static fn ($f) => !empty($f['side']));
 $seo = array_filter($type['fields'], static fn ($f) => !empty($f['seo']));
 $fieldData = ['values' => $values, 'errors' => $errors, 'options' => $options, 'datalists' => $datalists];
@@ -14,6 +15,7 @@ $fieldData = ['values' => $values, 'errors' => $errors, 'options' => $options, '
     <?php if ($row && $key === 'events'): ?><a class="btn ghost" href="/admin/events/<?= (int) $row['id'] ?>/registrations"><?= icon('ticket') ?> Registrations</a><?php endif ?>
     <?php if ($row && $key === 'albums'): ?><a class="btn ghost" href="/admin/albums/<?= (int) $row['id'] ?>/photos"><?= icon('image') ?> Manage photos</a><?php endif ?>
     <?php if ($row && $key === 'leader-groups'): ?><a class="btn ghost" href="/admin/leaders/new?group=<?= (int) $row['id'] ?>"><?= icon('plus') ?> Add leader</a><?php endif ?>
+    <?php if ($row && $key === 'pages'): ?><a class="btn accent" href="/admin/pages/<?= (int) $row['id'] ?>/builder"><?= icon('layers') ?> <?= $isBuilderPage ? 'Open page builder' : 'Build with sections' ?></a><?php endif ?>
     <?php if ($public_url): ?><a class="btn ghost" href="<?= e($public_url) ?>" target="_blank" rel="noopener"><?= icon('eye') ?> View</a><?php endif ?>
   </div>
 </div>
@@ -24,6 +26,12 @@ $fieldData = ['values' => $values, 'errors' => $errors, 'options' => $options, '
   <div class="form-layout">
     <div class="panel"><div class="panel-body fields">
       <?php foreach ($main as $f): ?><?= view('admin/_field', ['f' => $f] + $fieldData) ?><?php endforeach ?>
+      <?php if ($isBuilderPage): ?><div class="notice"><p><strong>This page is built from sections.</strong> Edit its content in the page builder; this form holds the title, address, visibility and search settings.</p><a class="btn small" href="/admin/pages/<?= (int) $row['id'] ?>/builder"><?= icon('layers') ?> Open page builder</a></div><?php endif ?>
+      <?php if ($key === 'pages' && $row === null): ?>
+        <div class="field"><label for="f-start_template">Start from</label>
+          <select id="f-start_template" name="start_template" aria-describedby="f-start_template-hint"><?php foreach (builder_template_choices() as $tv => $tl): ?><option value="<?= e($tv) ?>"<?= (string) ($values['start_template'] ?? '') === $tv ? ' selected' : '' ?>><?= e($tl) ?></option><?php endforeach ?></select>
+          <p class="hint" id="f-start_template-hint">A starter layout opens the new page in the page builder with ready-made sections. “Blank page” gives a simple text page (you can switch it to sections later).</p></div>
+      <?php endif ?>
       <?php if ($seo): ?>
         <details class="seo"<?= isset($errors['seo_title']) || isset($errors['seo_description']) ? ' open' : '' ?>><summary>Search engine settings</summary><div class="fields">
           <?php foreach ($seo as $f): ?><?= view('admin/_field', ['f' => $f] + $fieldData) ?><?php endforeach ?>
@@ -50,10 +58,4 @@ $fieldData = ['values' => $values, 'errors' => $errors, 'options' => $options, '
     <button class="btn danger-ghost" type="submit"><?= icon('trash') ?> Delete <?= e(strtolower($type['label'])) ?></button>
   </form>
 <?php endif ?>
-<template id="media-picker-template">
-  <dialog class="picker-dialog" aria-labelledby="picker-title">
-    <div class="picker-head"><h2 id="picker-title">Choose an image</h2><label for="picker-q" class="sr-only">Search images</label><input type="search" id="picker-q" placeholder="Search…"><button type="button" class="btn small ghost" data-close>Close</button></div>
-    <ul class="picker-grid"></ul>
-    <p class="picker-status" role="status"></p>
-  </dialog>
-</template>
+<?= view('admin/_picker_template') ?>

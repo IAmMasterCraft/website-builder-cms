@@ -78,4 +78,76 @@ document.querySelectorAll('[data-countdown]').forEach((box) => {
   setInterval(tick, 1000);
 });
 
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Sliders and carousels: a scroll-snap list that works by swiping without
+// JavaScript; this adds previous/next buttons, a counter and optional autoplay.
+document.querySelectorAll('[data-slider]').forEach((slider) => {
+  const track = slider.querySelector('.slider-track');
+  const controls = slider.querySelector('.slider-controls');
+  if (!track || !controls) return;
+  const slides = [...track.children];
+  if (slides.length < 2) return;
+  controls.hidden = false;
+  const count = controls.querySelector('.slider-count');
+  const current = () => {
+    const left = track.scrollLeft;
+    let best = 0;
+    slides.forEach((s, i) => { if (Math.abs(s.offsetLeft - track.offsetLeft - left) < Math.abs(slides[best].offsetLeft - track.offsetLeft - left)) best = i; });
+    return best;
+  };
+  const go = (i) => {
+    const target = slides[(i + slides.length) % slides.length];
+    track.scrollTo({ left: target.offsetLeft - track.offsetLeft, behavior: reducedMotion ? 'auto' : 'smooth' });
+  };
+  const paint = () => { if (count) count.textContent = `${current() + 1} / ${slides.length}`; };
+  controls.querySelectorAll('[data-dir]').forEach((b) => b.addEventListener('click', () => go(current() + Number(b.dataset.dir))));
+  let t = null;
+  track.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(paint, 80); }, { passive: true });
+  track.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(current() + 1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); go(current() - 1); }
+  });
+  paint();
+  if (slider.hasAttribute('data-autoplay') && !reducedMotion) {
+    let paused = false;
+    let timer = setInterval(() => { if (!paused) go(current() + 1); }, 6000);
+    const toggle = controls.querySelector('[data-toggle]');
+    slider.addEventListener('mouseenter', () => { paused = true; });
+    slider.addEventListener('mouseleave', () => { paused = toggle?.getAttribute('aria-pressed') === 'true'; });
+    slider.addEventListener('focusin', () => { paused = true; });
+    toggle?.addEventListener('click', () => {
+      const stop = toggle.getAttribute('aria-pressed') !== 'true';
+      toggle.setAttribute('aria-pressed', String(stop));
+      toggle.querySelector('.sr-only').textContent = stop ? 'Play slideshow' : 'Pause slideshow';
+      paused = stop;
+      if (!stop) { clearInterval(timer); timer = setInterval(() => { if (!paused) go(current() + 1); }, 6000); }
+    });
+  } else {
+    controls.querySelector('[data-toggle]')?.remove();
+  }
+});
+
+// Stat counters count up once when they scroll into view.
+const counters = document.querySelectorAll('[data-count]');
+if (counters.length && !reducedMotion && 'IntersectionObserver' in window) {
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      io.unobserve(entry.target);
+      const el = entry.target;
+      const end = Number(el.dataset.count);
+      if (!Number.isFinite(end) || end <= 0) return;
+      const start = performance.now();
+      const step = (now) => {
+        const p = Math.min(1, (now - start) / 900);
+        el.textContent = String(Math.round(end * (1 - (1 - p) ** 3)));
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }, { threshold: 0.4 });
+  counters.forEach((c) => io.observe(c));
+}
+
 initLightbox();

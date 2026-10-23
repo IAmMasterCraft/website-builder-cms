@@ -45,6 +45,10 @@ final class Pages
         }
         $live = in_array($page['status'], ['published', 'scheduled'], true) && ($page['publish_at'] === null || $page['publish_at'] <= utc_now());
         $cover = media_find($page['cover_media_id'] ? (int) $page['cover_media_id'] : null);
+        if ($page['sections'] !== null) {
+            self::renderSections($page, builder_decode((string) $page['sections']), $isHome, false, !$live || $page['visibility'] === 'hidden');
+            return;
+        }
         render('site/page', [
             'title' => $isHome ? '' : ($page['seo_title'] ?: $page['title']),
             'meta_description' => $page['seo_description'] ?: excerpt($page['summary'] ?: $page['body'], 300),
@@ -54,6 +58,28 @@ final class Pages
             'is_preview' => !$live || $page['visibility'] === 'hidden',
             'canonical' => $isHome ? '/' : '/' . $page['slug'],
             'noindex' => $page['visibility'] !== 'public',
+        ]);
+    }
+
+    /**
+     * A builder page. $frame = rendered inside the editor's preview iframe
+     * (marks sections for click-to-select and shows hidden ones dimmed).
+     */
+    public static function renderSections(array $page, array $sections, bool $isHome, bool $frame, bool $isPreview): void
+    {
+        $viewer = current_user();
+        $ctx = ['viewer' => $viewer, 'page' => $page, 'preview' => $frame];
+        render('site/page_sections', [
+            'title' => $isHome ? '' : ($page['seo_title'] ?: $page['title']),
+            'meta_description' => $page['seo_description'] ?: excerpt($page['summary'] ?: $page['body'], 300),
+            'page' => $page,
+            'is_home' => $isHome,
+            'has_hero' => builder_has_title_hero($sections),
+            'sections_html' => builder_render($sections, $ctx),
+            'is_preview' => $isPreview && !$frame,
+            'canonical' => $isHome ? '/' : '/' . $page['slug'],
+            'noindex' => $frame || $page['visibility'] !== 'public',
+            'body_class' => $frame ? 'builder-frame' : '',
         ]);
     }
 }

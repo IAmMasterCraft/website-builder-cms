@@ -16,7 +16,7 @@ $u = $c['user'];
 <script src="<?= e(asset('assets/js/admin-boot.js')) ?>"></script>
 <script type="module" src="<?= e(asset('assets/js/admin.js')) ?>"></script>
 </head>
-<body class="admin">
+<body class="admin<?= !empty($body_class) ? ' ' . e($body_class) : '' ?>">
 <a class="skip-link" href="#main">Skip to content</a>
 <div class="shell">
   <aside class="sidebar" id="sidebar" aria-label="Admin navigation">

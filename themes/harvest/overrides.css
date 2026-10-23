@@ -1,0 +1,14 @@
+/* Harvest: sunny hero, rounded everything, wavy dividers. */
+.brand-mark { background: var(--c-highlight); color: var(--c-highlight-ink); border-radius: 14px; }
+.hero { background:
+  radial-gradient(36rem 36rem at 92% 8%, color-mix(in srgb, var(--c-highlight) 38%, transparent), transparent 62%),
+  radial-gradient(50rem 26rem at 0% 100%, color-mix(in srgb, var(--c-accent) 50%, transparent), transparent 60%),
+  var(--c-brand); }
+.eyebrow { color: var(--c-accent-text); }
+.hero .eyebrow, .bg-brand .eyebrow, .bg-image .eyebrow { color: var(--c-highlight); }
+.section.soft, .blk.bg-soft { background:
+  radial-gradient(30rem 14rem at 100% 0%, color-mix(in srgb, var(--c-highlight) 12%, transparent), transparent 70%),
+  var(--c-surface-2); }
+.stat strong { color: var(--c-accent-text); }
+.card { border-width: 2px; border-color: var(--c-surface-3); }
+.date-tile { border-radius: var(--radius-l); }

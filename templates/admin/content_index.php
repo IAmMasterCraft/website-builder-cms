@@ -36,7 +36,7 @@ $pages = (int) ceil($total / $per);
           <?php foreach ($cells[$i] as [$text, $kind, $href]): ?>
             <td<?= $kind === 'date' ? ' class="tabular"' : '' ?>><?php if ($kind === 'badge'): ?><span class="badge <?= e($text) ?>"><?= e($text) ?></span><?php elseif ($kind === 'link'): ?><a href="<?= e((string) $href) ?>" class="tabular"><?= e($text) ?></a><?php else: ?><?= e($text) ?><?php endif ?></td>
           <?php endforeach ?>
-          <td class="actions-cell"><a class="btn tiny ghost" href="/admin/<?= e($key) ?>/<?= (int) $r['id'] ?>/edit">Edit<span class="sr-only"> <?= e((string) $r[$type['title']]) ?></span></a></td>
+          <td class="actions-cell"><?php if ($key === 'pages'): ?><a class="btn tiny ghost" href="/admin/pages/<?= (int) $r['id'] ?>/builder">Build<span class="sr-only"> <?= e((string) $r['title']) ?></span></a> <?php endif ?><a class="btn tiny ghost" href="/admin/<?= e($key) ?>/<?= (int) $r['id'] ?>/edit">Edit<span class="sr-only"> <?= e((string) $r[$type['title']]) ?></span></a></td>
         </tr>
       <?php endforeach ?>
       </tbody>

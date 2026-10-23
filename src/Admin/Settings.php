@@ -6,7 +6,8 @@ namespace Admin;
 use Core\UploadException;
 
 /**
- * Site identity, contact, header/top bar and theme. The full super-admin
+ * Site identity, contact, donations and logo (design, header/footer and
+ * membership have their own screens). The full super-admin
  * settings area (membership rules, ID format, SMTP...) arrives in phase 7.
  */
 final class Settings
@@ -23,17 +24,20 @@ final class Settings
     {
         $current = [
             'site_name' => setting('site.name'), 'tagline' => setting('site.tagline'), 'timezone' => setting('site.timezone'),
-            'footer_about' => setting('site.footer_about'), 'theme' => active_theme(),
+            'footer_about' => setting('site.footer_about'), 'bank_text' => setting('donate.bank_text', ''),
             'contact_email' => setting('contact.email'), 'contact_phone' => setting('contact.phone'), 'contact_address' => setting('contact.address'),
             'charity_number' => setting('org.charity_number'),
-            'topbar' => setting('header.topbar') ? '1' : '', 'show_auth' => setting('header.show_auth') ? '1' : '', 'sticky' => setting('header.sticky') ? '1' : '',
         ];
+        foreach (array_values((array) setting('donate.links', [])) as $i => $l) {
+            $current['donate_label_' . ($i + 1)] = $l['label'] ?? '';
+            $current['donate_url_' . ($i + 1)] = $l['url'] ?? '';
+        }
         foreach ((array) setting('social', []) as $k => $v) {
             $current['social_' . $k] = $v;
         }
         render('admin/settings', [
             'title' => 'Site settings', 'values' => $values + $current, 'errors' => $errors,
-            'logo' => media_find((int) setting('site.logo_media_id', 0) ?: null), 'themes' => theme_list(),
+            'logo' => media_find((int) setting('site.logo_media_id', 0) ?: null),
         ], 'admin', $status);
     }
 
@@ -42,7 +46,7 @@ final class Settings
         csrf_check();
         $user = require_permission('super_admin');
         $v = [];
-        foreach (['site_name', 'tagline', 'timezone', 'footer_about', 'theme', 'contact_email', 'contact_phone', 'contact_address', 'charity_number', 'topbar', 'show_auth', 'sticky'] as $k) {
+        foreach (['site_name', 'tagline', 'timezone', 'footer_about', 'contact_email', 'contact_phone', 'contact_address', 'charity_number', 'bank_text'] as $k) {
             $v[$k] = input($k);
         }
         $errors = [];
@@ -55,13 +59,10 @@ final class Settings
         if (!in_array($v['timezone'], \DateTimeZone::listIdentifiers(), true)) {
             $errors['timezone'] = 'Choose a time zone.';
         }
-        if (!array_key_exists($v['theme'], theme_list())) {
-            $errors['theme'] = 'Choose an installed theme.';
-        }
         if ($v['contact_email'] !== '' && !filter_var($v['contact_email'], FILTER_VALIDATE_EMAIL)) {
             $errors['contact_email'] = 'Enter a valid email address.';
         }
-        foreach (['footer_about' => 600, 'contact_phone' => 40, 'contact_address' => 300, 'charity_number' => 60] as $k => $max) {
+        foreach (['bank_text' => 600, 'footer_about' => 600, 'contact_phone' => 40, 'contact_address' => 300, 'charity_number' => 60] as $k => $max) {
             if (mb_strlen($v[$k]) > $max) {
                 $errors[$k] = "Keep this under $max characters.";
             }
@@ -74,6 +75,23 @@ final class Settings
                 $errors['social_' . $k] = "$label must be a full https:// link.";
             }
             $social[$k] = $url;
+        }
+        $donate = [];
+        for ($i = 1; $i <= 3; $i++) {
+            $label = input('donate_label_' . $i);
+            $url = input('donate_url_' . $i);
+            $v['donate_label_' . $i] = $label;
+            $v['donate_url_' . $i] = $url;
+            if ($label === '' && $url === '') {
+                continue;
+            }
+            if ($label === '' || mb_strlen($label) > 40) {
+                $errors['donate_label_' . $i] = 'Give the button a short label (up to 40 characters).';
+            }
+            if (!preg_match('#^https://[^\s"<>]+$#i', $url) || mb_strlen($url) > 500) {
+                $errors['donate_url_' . $i] = 'Use a full https:// link to your donation page.';
+            }
+            $donate[] = ['label' => $label, 'url' => $url];
         }
         $logoId = null;
         $file = $_FILES['logo_upload'] ?? null;
@@ -93,15 +111,13 @@ final class Settings
         setting_set('site.tagline', $v['tagline']);
         setting_set('site.timezone', $v['timezone']);
         setting_set('site.footer_about', $v['footer_about']);
-        setting_set('site.theme', $v['theme']);
+        setting_set('donate.bank_text', $v['bank_text']);
+        setting_set('donate.links', $donate);
         setting_set('contact.email', $v['contact_email']);
         setting_set('contact.phone', $v['contact_phone']);
         setting_set('contact.address', $v['contact_address']);
         setting_set('org.charity_number', $v['charity_number']);
         setting_set('social', $social);
-        setting_set('header.topbar', $v['topbar'] === '1');
-        setting_set('header.show_auth', $v['show_auth'] === '1');
-        setting_set('header.sticky', $v['sticky'] === '1');
         if ($logoId !== null) {
             setting_set('site.logo_media_id', $logoId);
         } elseif (input('logo_remove') === '1') {

@@ -75,7 +75,7 @@ test('demo content seeds every content type and menus', function (): void {
     }
     q('DELETE FROM leader_groups');
     demo_seed(fixture_admin());
-    foreach (['posts' => 12, 'events' => 6, 'albums' => 3, 'album_photos' => 24, 'downloads' => 4, 'leaders' => 7, 'awards' => 4, 'faqs' => 6, 'branches' => 3, 'groups_orgs' => 3, 'pages' => 5] as $t => $n) {
+    foreach (['posts' => 12, 'events' => 6, 'albums' => 3, 'album_photos' => 24, 'downloads' => 4, 'leaders' => 7, 'awards' => 4, 'faqs' => 6, 'branches' => 3, 'groups_orgs' => 3, 'pages' => 7] as $t => $n) {
         same($n, (int) q_val('SELECT COUNT(*) FROM ' . db_ident($t)), $t);
     }
     ok(count(menu_tree('main')) >= 5);

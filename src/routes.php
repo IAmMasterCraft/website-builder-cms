@@ -15,6 +15,7 @@ function app_routes(): Router
     $r->get('/sitemap.xml', [Site\Feeds::class, 'sitemap']);
     $r->get('/robots.txt', [Site\Feeds::class, 'robots']);
     $r->get('/theme.css', [Site\Feeds::class, 'themeCss']);
+    $r->get('/theme-preview/{key:[a-z0-9-]+}.png', [Site\Feeds::class, 'themePreview']);
 
     // Media (protected originals and private variants)
     $r->get('/media/{id:\d+}/w/{w:\d+}', [Site\MediaFiles::class, 'variant']);
@@ -34,6 +35,8 @@ function app_routes(): Router
     $r->get('/join', [Site\Placeholder::class, 'join']);
     $r->get('/join/group', [Site\Placeholder::class, 'joinGroup']);
     $r->get('/account', [Site\Placeholder::class, 'account']);
+
+    $r->post('/contact', [Site\Contact::class, 'send']);
 
     // Public content
     $r->get('/', [Site\Home::class, 'show']);
@@ -95,6 +98,20 @@ function app_routes(): Router
     $r->post('/admin/albums/{id:\d+}/photos/{photo:\d+}/move', [Admin\Albums::class, 'move']);
     $r->post('/admin/albums/{id:\d+}/photos/{photo:\d+}/delete', [Admin\Albums::class, 'remove']);
 
+    // Page builder and design (before the generic content routes)
+    $r->get('/admin/pages/{id:\d+}/builder', [Admin\Builder::class, 'editor']);
+    $r->post('/admin/pages/{id:\d+}/builder', [Admin\Builder::class, 'save']);
+    $r->post('/admin/pages/{id:\d+}/publish', [Admin\Builder::class, 'publish']);
+    $r->get('/admin/pages/{id:\d+}/preview', [Admin\Builder::class, 'preview']);
+    $r->post('/admin/pages/{id:\d+}/revisions/{rev:\d+}/restore', [Admin\Builder::class, 'restore']);
+    $r->post('/admin/pages/{id:\d+}/templates', [Admin\Builder::class, 'saveTemplate']);
+    $r->get('/admin/templates', [Admin\Builder::class, 'templates']);
+    $r->post('/admin/templates/{id:\d+}/delete', [Admin\Builder::class, 'deleteTemplate']);
+    $r->get('/admin/design', [Admin\Design::class, 'edit']);
+    $r->post('/admin/design', [Admin\Design::class, 'update']);
+    $r->get('/admin/layout', [Admin\Layout::class, 'edit']);
+    $r->post('/admin/layout', [Admin\Layout::class, 'update']);
+
     // Generic content CRUD (type key validated against the registry)
     $type = '{type:[a-z-]+}';
     $r->get('/admin/' . $type, [Admin\Content::class, 'index']);
@@ -114,6 +131,7 @@ function install_routes(): Router
 {
     $r = new Router();
     $r->get('/install', [Install\Wizard::class, 'start']);
+    $r->get('/theme-preview/{key:[a-z0-9-]+}.png', [Site\Feeds::class, 'themePreview']);
     $r->post('/install/database', [Install\Wizard::class, 'database']);
     $r->get('/install/admin', [Install\Wizard::class, 'adminForm']);
     $r->post('/install/admin', [Install\Wizard::class, 'admin']);

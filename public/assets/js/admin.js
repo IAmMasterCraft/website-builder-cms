@@ -1,4 +1,7 @@
 // Admin enhancements. Every form works without this file; JS adds comfort.
+import { pickImage, pickerAvailable } from './media-picker.js';
+import { initRichText } from './rt.js';
+
 const csrf = document.querySelector('meta[name="csrf"]')?.content ?? '';
 const root = document.documentElement;
 
@@ -45,155 +48,24 @@ document.querySelectorAll('form[data-confirm]').forEach((form) => {
   });
 });
 
-// Rich text: a small toolbar over a contenteditable area synced to the textarea.
-// The server sanitises whatever is submitted (Core\Sanitizer).
-const RT_BUTTONS = [
-  ['B', 'bold', 'Bold'], ['I', 'italic', 'Italic'], ['H2', 'h2', 'Heading'], ['H3', 'h3', 'Subheading'],
-  ['• List', 'insertUnorderedList', 'Bulleted list'], ['1. List', 'insertOrderedList', 'Numbered list'],
-  ['“ ”', 'blockquote', 'Quote'], ['Link', 'link', 'Add link'], ['Unlink', 'unlink', 'Remove link'], ['HTML', 'source', 'Edit HTML'],
-];
-document.querySelectorAll('[data-rt]').forEach((wrap) => {
-  const editor = wrap.querySelector('.rt-editor');
-  const textarea = wrap.querySelector('textarea[data-richtext]');
-  if (!editor || !textarea) return;
-  editor.hidden = false;
-  wrap.classList.add('rt-ready');
-  let sourceMode = false;
-  const toolbar = document.createElement('div');
-  toolbar.className = 'rt-toolbar';
-  toolbar.setAttribute('role', 'toolbar');
-  toolbar.setAttribute('aria-label', 'Formatting');
-  const sync = () => { if (!sourceMode) textarea.value = editor.innerHTML; };
-  RT_BUTTONS.forEach(([text, cmd, label]) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = text;
-    b.title = label;
-    b.setAttribute('aria-label', label);
-    if (cmd === 'source') b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', () => {
-      if (cmd === 'source') {
-        sourceMode = !sourceMode;
-        b.setAttribute('aria-pressed', String(sourceMode));
-        if (sourceMode) {
-          textarea.value = editor.innerHTML;
-          textarea.style.display = 'block';
-          editor.hidden = true;
-          textarea.focus();
-        } else {
-          // Back to visual mode: parse the HTML inertly, drop anything active,
-          // then show it. The server sanitises again on save.
-          editor.replaceChildren(...safeNodes(textarea.value));
-          editor.hidden = false;
-          textarea.style.display = '';
-          editor.focus();
-        }
-        return;
-      }
-      if (sourceMode) return;
-      editor.focus();
-      if (cmd === 'h2' || cmd === 'h3' || cmd === 'blockquote') {
-        document.execCommand('formatBlock', false, cmd);
-      } else if (cmd === 'link') {
-        const url = window.prompt('Link address (https://… or /page)');
-        if (url && /^(https?:\/\/|\/(?!\/)|mailto:)/i.test(url.trim())) document.execCommand('createLink', false, url.trim());
-      } else {
-        document.execCommand(cmd, false);
-      }
-      sync();
-    });
-    toolbar.append(b);
-  });
-  wrap.prepend(toolbar);
-  editor.addEventListener('input', sync);
-  editor.addEventListener('blur', sync);
-  textarea.form?.addEventListener('submit', sync);
-});
+// Rich text editors (server sanitises whatever is submitted).
+document.querySelectorAll('[data-rt]').forEach((wrap) => initRichText(wrap));
 
-function safeNodes(html) {
-  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
-  doc.querySelectorAll('script,style,iframe,object,embed,form,input,button,textarea,select,link,meta,svg,math').forEach((el) => el.remove());
-  doc.body.querySelectorAll('*').forEach((el) => {
-    [...el.attributes].forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      const value = attr.value.trim().toLowerCase();
-      if (name.startsWith('on') || name === 'style' || ((name === 'href' || name === 'src') && /^(javascript|data|vbscript):/.test(value))) {
-        el.removeAttribute(attr.name);
-      }
-    });
-  });
-  return [...doc.body.childNodes].map((n) => document.importNode(n, true));
-}
-
-// Media picker for image fields: fetch the library and choose an image.
-const pickerTemplate = document.getElementById('media-picker-template');
+// Media picker for image fields.
 document.querySelectorAll('[data-media-field]').forEach((field) => {
   const pick = field.querySelector('[data-media-pick]');
-  if (!pick || !pickerTemplate) return;
+  if (!pick || !pickerAvailable()) return;
   pick.hidden = false;
-  pick.addEventListener('click', () => openPicker(field, pick));
-});
-
-function openPicker(field, opener) {
-  const dialog = pickerTemplate.content.firstElementChild.cloneNode(true);
-  document.body.append(dialog);
-  const grid = dialog.querySelector('.picker-grid');
-  const status = dialog.querySelector('.picker-status');
-  const search = dialog.querySelector('input[type="search"]');
-  let timer = null;
-
-  async function load(q = '') {
-    status.textContent = 'Loading…';
-    grid.replaceChildren();
-    try {
-      const res = await fetch(`/admin/media/picker?kind=image&q=${encodeURIComponent(q)}`, {
-        headers: { Accept: 'application/json', 'X-CSRF-Token': csrf }, credentials: 'same-origin',
-      });
-      if (!res.ok) throw new Error(`Request failed (${res.status})`);
-      const data = await res.json();
-      const items = Array.isArray(data.items) ? data.items : [];
-      status.textContent = items.length ? `${items.length} images` : 'No images found. Upload one with the file field instead.';
-      items.forEach((item) => {
-        const li = document.createElement('li');
-        const b = document.createElement('button');
-        b.type = 'button';
-        const img = document.createElement('img');
-        img.src = item.thumb ?? '';
-        img.alt = '';
-        img.loading = 'lazy';
-        const span = document.createElement('span');
-        span.textContent = item.title || `Image ${item.id}`;
-        b.setAttribute('aria-label', `Choose ${item.title || 'image ' + item.id}`);
-        b.append(img, span);
-        b.addEventListener('click', () => choose(item));
-        li.append(b);
-        grid.append(li);
-      });
-    } catch (err) {
-      status.textContent = err instanceof Error ? err.message : 'Could not load images.';
-    }
-  }
-
-  function choose(item) {
+  pick.addEventListener('click', async () => {
+    const item = await pickImage(pick);
+    if (!item) return;
     field.querySelector('[data-media-input]').value = String(item.id);
-    const preview = field.querySelector('[data-media-preview]');
     const img = document.createElement('img');
     img.src = item.thumb ?? '';
     img.alt = '';
-    preview.replaceChildren(img);
-    dialog.close();
-  }
-
-  search.addEventListener('input', () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => load(search.value.trim()), 250);
+    field.querySelector('[data-media-preview]').replaceChildren(img);
   });
-  dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => { dialog.remove(); opener.focus(); });
-  dialog.showModal();
-  search.focus();
-  load();
-}
+});
 
 // Event tickets: add more rows.
 document.querySelectorAll('[data-add-ticket]').forEach((btn) => {
@@ -245,4 +117,14 @@ document.querySelectorAll('form[data-checkin]').forEach((form) => {
       button.disabled = false;
     }
   });
+});
+
+// Header & footer screen: show only the inputs the chosen widget uses.
+document.querySelectorAll('[data-footer-col]').forEach((col) => {
+  const select = col.querySelector('[data-col-widget]');
+  const update = () => {
+    col.querySelectorAll('[data-col-show]').forEach((f) => { f.hidden = !(f.dataset.colShow ?? '').split(' ').includes(select.value); });
+  };
+  select?.addEventListener('change', update);
+  update();
 });

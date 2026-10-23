@@ -1,0 +1,15 @@
+/* Heritage: woven-pattern hero, serif italics, softer cards. */
+body { font-size: calc(var(--step-0) * 1.03); }
+.brand-mark { background: var(--c-brand); border-radius: 50%; font-family: var(--font-heading); }
+.hero { background:
+  repeating-linear-gradient(45deg, color-mix(in srgb, var(--c-highlight) 7%, transparent) 0 2px, transparent 2px 18px),
+  repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c-highlight) 7%, transparent) 0 2px, transparent 2px 18px),
+  linear-gradient(160deg, var(--c-brand) 0%, var(--c-brand-strong) 70%); }
+.hero h1, .blk h2 { font-optical-sizing: auto; }
+.eyebrow { color: var(--c-accent-text); font-style: italic; text-transform: none; letter-spacing: 0; font-family: var(--font-heading); font-size: var(--step-0); font-weight: 500; }
+.hero .eyebrow, .bg-brand .eyebrow, .bg-image .eyebrow { color: var(--c-highlight); }
+.card { box-shadow: none; }
+.card:hover { box-shadow: var(--shadow-2); }
+.section-head h2, .blk-head h2 { position: relative; }
+.site-footer { background: var(--c-brand-strong); }
+.cta-band { background: linear-gradient(135deg, var(--c-brand), var(--c-brand-strong)); }

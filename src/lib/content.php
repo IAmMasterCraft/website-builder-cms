@@ -683,6 +683,10 @@ function page_validate(array $data, array $input, array &$errors, ?array $existi
     if (isset($data['slug']) && in_array($data['slug'], RESERVED_SLUGS, true)) {
         $errors['slug'] = 'This URL is used by a built-in page. Choose another slug.';
     }
+    if ($existing !== null && $existing['sections'] !== null) {
+        // Builder pages keep their search text (generated on publish) in body.
+        unset($data['body']);
+    }
     return $data;
 }
 
@@ -1086,6 +1090,15 @@ function event_register(array $event, array $input, ?array $viewer): array
 
 function page_after_save(int $id, array $input): void
 {
+    // New page from a starter or saved template: give it sections straight away.
+    $choice = is_string($input['start_template'] ?? null) ? $input['start_template'] : '';
+    if ($choice !== '' && q_val('SELECT sections FROM pages WHERE id = ?', [$id]) === null && (int) q_val('SELECT COUNT(*) FROM page_revisions WHERE page_id = ?', [$id]) === 0) {
+        $sections = builder_template_sections($choice);
+        if ($sections !== null) {
+            builder_initialise($id, $sections, current_user()['id'] ?? null);
+            q('UPDATE pages SET template = ? WHERE id = ?', [mb_substr($choice, 0, 40), $id]);
+        }
+    }
     if (($input['is_home'] ?? '') === '1') {
         setting_set('home.page_id', $id);
     } elseif ((int) setting('home.page_id', 0) === $id) {
