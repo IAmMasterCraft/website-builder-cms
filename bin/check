@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Lint every PHP file, run the unit/DB tests, then the end-to-end smoke test.
+# Usage: bin/check   (PHP binary can be overridden with PHP=/path/to/php)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+PHP="${PHP:-php}"
+
+echo "== Lint"
+lint_errors=$(find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 "$PHP" -l 2>&1 | grep -v '^No syntax errors' || true)
+for f in bin/migrate bin/make-admin bin/cron bin/demo; do
+  out=$("$PHP" -l "$f" 2>&1) || lint_errors+=$'\n'"$out"
+done
+if [ -n "$lint_errors" ]; then echo "$lint_errors"; exit 1; fi
+echo "all PHP files lint"
+
+echo "== Unit and database tests"
+"$PHP" tests/run.php | tail -n 1
+
+echo "== Smoke test (php -S)"
+"$PHP" tests/smoke.php | tail -n 1
