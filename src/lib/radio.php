@@ -223,7 +223,7 @@ function radio_slot_validate(array $in, ?int $ignoreId = null, ?DateTimeZone $tz
     }
     $start = local_to_utc((string) ($in['start'] ?? ''), $tz);
     if ($start === null) {
-        $e['start'] = 'Enter the start date and time.';
+        $e['start'] = trim((string) ($in['start'] ?? '')) !== '' ? (string) local_time_problem((string) $in['start'], $tz) : 'Enter the start date and time.';
     }
     $rule = in_array($in['repeat_rule'] ?? 'none', ['none', 'daily', 'weekly'], true) ? (string) ($in['repeat_rule'] ?? 'none') : 'none';
     $days = array_map('intval', is_array($in['days'] ?? null) ? $in['days'] : []);
@@ -253,6 +253,62 @@ function radio_slot_validate(array $in, ?int $ignoreId = null, ?DateTimeZone $tz
         }
     }
     return [$row, $e];
+}
+
+/** Create the schedule lock row (outside any transaction). */
+function radio_schedule_lock_row(): void
+{
+    q("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('radio.schedule_lock', '0')");
+}
+
+/**
+ * Inside a transaction: serialise schedule changes, so two admins adding
+ * slots at the same moment cannot both pass the overlap check.
+ */
+function radio_schedule_lock(): void
+{
+    q("SELECT `value` FROM settings WHERE `key` = 'radio.schedule_lock' FOR UPDATE");
+}
+
+/**
+ * Validate and save a slot under the schedule lock (overlap check and write
+ * in one transaction). $id null creates a slot.
+ * @return array{0:?int,1:array,2:array<string,string>} [slot id or null, row, errors]
+ */
+function radio_slot_save(array $in, ?int $id = null, ?int $userId = null, ?DateTimeZone $tz = null): array
+{
+    radio_schedule_lock_row();
+    return db_tx(static function () use ($in, $id, $userId, $tz): array {
+        radio_schedule_lock();
+        [$row, $errors] = radio_slot_validate($in, $id, $tz);
+        if ($errors) {
+            return [null, $row, $errors];
+        }
+        if ($id === null) {
+            $id = db_insert('radio_slots', $row + ['created_by' => $userId]);
+        } else {
+            db_update('radio_slots', $id, $row);
+        }
+        return [$id, $row, []];
+    });
+}
+
+/**
+ * Slots that would overlap if the schedule were read in $tz (repeats keep
+ * their local wall-clock time, so changing the site time zone can create
+ * clashes). Returns human descriptions.
+ * @return list<string>
+ */
+function radio_schedule_conflicts(DateTimeZone $tz): array
+{
+    $out = [];
+    foreach (q_all('SELECT * FROM radio_slots ORDER BY start_at') as $slot) {
+        $c = radio_slot_conflicts($slot, (int) $slot['id'], $tz);
+        if ($c !== []) {
+            $out[] = '“' . radio_slot_label($slot) . '” overlaps ' . $c[0];
+        }
+    }
+    return $out;
 }
 
 /** Human labels of slots that overlap the candidate (and self-overlap of its repeats). */

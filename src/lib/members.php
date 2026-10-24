@@ -484,7 +484,7 @@ function account_verify(string $token, ?DateTimeImmutable $now = null): ?int
         }
         $s = member_settings();
         $number = $m['member_number'] ?: member_issue_number('member', $now);
-        $validUntil = ($now ?? new DateTimeImmutable('now', site_tz()))->setTimezone(site_tz())->modify('+' . max(1, (int) $s['card_months']) . ' months')->format('Y-m-d');
+        $validUntil = card_valid_until(($now ?? new DateTimeImmutable('now', site_tz()))->setTimezone(site_tz()), (int) $s['card_months']);
         $fee = null;
         if ((int) $s['free_first_n'] > 0) {
             $verified = (int) q_val('SELECT COUNT(*) FROM members WHERE verified_at IS NOT NULL');
@@ -494,6 +494,19 @@ function account_verify(string $token, ?DateTimeImmutable $now = null): ?int
             [$number, card_code_new(), $validUntil, $fee, $m['id']]);
     });
     return $userId;
+}
+
+/**
+ * "Valid until" date $months after $from, clamped to the end of the month
+ * (31 Jan + 1 month = 28/29 Feb, 29 Feb + 12 months = 28 Feb), where PHP's
+ * "+N months" would roll over into the next month.
+ */
+function card_valid_until(DateTimeImmutable $from, int $months): string
+{
+    $months = max(1, $months);
+    $first = $from->setDate((int) $from->format('Y'), (int) $from->format('n'), 1)->modify('+' . $months . ' months');
+    $day = min((int) $from->format('j'), (int) $first->format('t'));
+    return $first->setDate((int) $first->format('Y'), (int) $first->format('n'), $day)->format('Y-m-d');
 }
 
 /** Places left in the "free for the first N members" offer, or null when off. */
@@ -509,12 +522,21 @@ function free_places_left(): ?int
 /** Delete accounts that never verified their email within 14 days (cron). */
 function purge_unverified(?string $nowUtc = null): int
 {
-    $cutoff = (new DateTimeImmutable($nowUtc ?? utc_now(), utc()))->modify('-' . VERIFY_DAYS . ' days')->format('Y-m-d H:i:s');
-    $ids = array_map('intval', array_column(q_all("SELECT id FROM users WHERE status = 'unverified' AND role IN ('member','group') AND created_at < ?", [$cutoff]), 'id'));
+    $now = $nowUtc ?? utc_now();
+    $cutoff = (new DateTimeImmutable($now, utc()))->modify('-' . VERIFY_DAYS . ' days')->format('Y-m-d H:i:s');
+    // 14 days after sign-up AND no verification link still usable: a link sent again
+    // ("resend", email change) gives the account its full 14 days from that link.
+    $ids = array_map('intval', array_column(q_all(
+        "SELECT u.id FROM users u WHERE u.status = 'unverified' AND u.role IN ('member','group') AND u.created_at < ?
+            AND NOT EXISTS (SELECT 1 FROM user_tokens t WHERE t.user_id = u.id AND t.purpose = 'verify' AND t.used_at IS NULL AND t.expires_at > ?)",
+        [$cutoff, $now]
+    ), 'id'));
+    $n = 0;
     foreach ($ids as $id) {
-        account_delete($id);
+        // Re-checked under a row lock: someone verifying right now keeps their account.
+        $n += account_delete($id, true) ? 1 : 0;
     }
-    return count($ids);
+    return $n;
 }
 
 /**
@@ -522,24 +544,36 @@ function purge_unverified(?string $nowUtc = null): int
  * comments stay as "former member" (user_id set to NULL), photo files are
  * deleted, and the member number stays retired in issued_numbers.
  */
-function account_delete(int $userId): void
+function account_delete(int $userId, bool $onlyIfUnverified = false): bool
 {
-    $photos = array_map('intval', array_column(q_all('SELECT photo_media_id FROM members WHERE user_id = ? AND photo_media_id IS NOT NULL', [$userId]), 'photo_media_id'));
-    // Logos of groups that never verified go with them (verified groups stay listed, logo included).
-    $logos = array_map('intval', array_column(q_all('SELECT logo_media_id FROM groups_orgs WHERE user_id = ? AND verified_at IS NULL AND logo_media_id IS NOT NULL', [$userId]), 'logo_media_id'));
-    db_tx(static function () use ($userId): void {
+    $photos = [];
+    $logos = [];
+    $deleted = db_tx(static function () use ($userId, $onlyIfUnverified, &$photos, &$logos): bool {
+        $user = q_one('SELECT email, status FROM users WHERE id = ? FOR UPDATE', [$userId]);
+        if ($user === null || ($onlyIfUnverified && $user['status'] !== 'unverified')) {
+            return false;
+        }
+        $photos = array_map('intval', array_column(q_all('SELECT photo_media_id FROM members WHERE user_id = ? AND photo_media_id IS NOT NULL', [$userId]), 'photo_media_id'));
+        // Logos of groups that never verified go with them (verified groups stay listed, logo included).
+        $logos = array_map('intval', array_column(q_all('SELECT logo_media_id FROM groups_orgs WHERE user_id = ? AND verified_at IS NULL AND logo_media_id IS NOT NULL', [$userId]), 'logo_media_id'));
         // Emails still waiting in the queue for this address are dropped with the account.
-        $email = (string) q_val('SELECT email FROM users WHERE id = ?', [$userId]);
+        $email = (string) $user['email'];
         if ($email !== '') {
             q("DELETE FROM email_queue WHERE to_email = ? AND status = 'queued'", [$email]);
             q("DELETE FROM campaign_recipients WHERE email = ? AND status = 'queued'", [$email]);
+            // Guest registrations made with the same address (before joining, or logged out) are anonymised too.
+            q("UPDATE event_registrations SET name = 'Former member', email = '', phone = '' WHERE user_id IS NULL AND email = ?", [$email]);
         }
         q("UPDATE event_registrations SET name = 'Former member', email = '', phone = '', user_id = NULL WHERE user_id = ?", [$userId]);
         // A group that never verified was never listed: remove it with the account.
         q('DELETE FROM groups_orgs WHERE user_id = ? AND verified_at IS NULL', [$userId]);
         q('UPDATE groups_orgs SET user_id = NULL WHERE user_id = ?', [$userId]);
         q('DELETE FROM users WHERE id = ?', [$userId]);
+        return true;
     });
+    if (!$deleted) {
+        return false;
+    }
     foreach ($photos as $mediaId) {
         $m = media_find($mediaId);
         if ($m !== null) {
@@ -553,6 +587,7 @@ function account_delete(int $userId): void
             media_delete($mediaId);
         }
     }
+    return true;
 }
 
 /** Everything held about a member, for the JSON data export (§4.4, §11). */
@@ -683,6 +718,37 @@ function csv_safe(string $v): string
 }
 
 /**
+ * Undo csv_safe() on import: drop one leading ' when the rest is a value
+ * csv_safe() would have escaped (so "'+44 7700" comes back as "+44 7700",
+ * but a name like "'Ofa" is kept as typed).
+ */
+function csv_unsafe(string $v): string
+{
+    if (str_starts_with($v, "'")) {
+        $rest = substr($v, 1);
+        if ($rest !== '' && csv_safe($rest) === "'" . $rest) {
+            return $rest;
+        }
+    }
+    return $v;
+}
+
+/** Profile columns to update from an import row: only those whose CSV column is present. */
+function member_import_changes(array $profile, array $header): array
+{
+    $present = array_flip($header);
+    $out = [];
+    foreach ($profile as $col => $value) {
+        // A birthday needs its day and month columns together.
+        $needs = in_array($col, ['birth_day', 'birth_month'], true) ? ['birth_day', 'birth_month'] : [$col];
+        if (array_diff_key(array_flip($needs), $present) === []) {
+            $out[$col] = $value;
+        }
+    }
+    return $out;
+}
+
+/**
  * Import members from CSV (header row with column names as in the export;
  * email, first_name and last_name required). New rows become active members
  * with a number (unless member_number is given) and a random password: they
@@ -729,7 +795,7 @@ function members_import_csv(string $path, bool $update = false): array
         }
         $in = [];
         foreach ($header as $i => $col) {
-            $in[$col] = trim((string) ($row[$i] ?? ''));
+            $in[$col] = csv_unsafe(trim((string) ($row[$i] ?? '')));
         }
         $email = strtolower($in['email']);
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -771,8 +837,11 @@ function members_import_csv(string $path, bool $update = false): array
                     $report['skipped']++;
                     continue;
                 }
-                db_tx(static function () use ($existing, $profile, $type, $custom): void {
-                    db_update('members', (int) $existing['member_id'], $profile + ($type !== '' ? ['membership_type' => $type] : []));
+                // Only the columns the file has are changed: a CSV with just email + names
+                // must not wipe phone numbers, birthdays or addresses.
+                $changes = member_import_changes($profile, $header);
+                db_tx(static function () use ($existing, $changes, $type, $custom): void {
+                    db_update('members', (int) $existing['member_id'], $changes + ($type !== '' ? ['membership_type' => $type] : []));
                     custom_values_save('member_field_values', 'member_id', (int) $existing['member_id'], $custom);
                 });
                 $report['updated']++;
@@ -788,7 +857,7 @@ function members_import_csv(string $path, bool $update = false): array
                     $number = member_issue_number('member');
                 }
                 $valid = ($in['card_valid_until'] ?? '') !== '' && DateTimeImmutable::createFromFormat('!Y-m-d', $in['card_valid_until']) !== false
-                    ? $in['card_valid_until'] : (new DateTimeImmutable('now', site_tz()))->modify('+' . max(1, (int) $s['card_months']) . ' months')->format('Y-m-d');
+                    ? $in['card_valid_until'] : card_valid_until(new DateTimeImmutable('now', site_tz()), (int) $s['card_months']);
                 $memberId = db_insert('members', $profile + [
                     'user_id' => $userId, 'member_number' => $number, 'membership_type' => $type !== '' ? $type : ($s['types'][0] ?? 'Standard'),
                     'card_code' => card_code_new(), 'card_valid_until' => $valid, 'verified_at' => utc_now(), 'prefs' => json_encode(member_pref_defaults(), JSON_THROW_ON_ERROR),

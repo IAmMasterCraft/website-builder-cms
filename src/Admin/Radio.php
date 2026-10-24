@@ -346,7 +346,9 @@ final class Radio
             redirect('/admin/radio/playlists/' . $pl['id']);
         }
         try {
+            radio_schedule_lock_row();
             db_tx(static function () use ($pl, $ids, $name): void {
+                radio_schedule_lock();
                 db_update('radio_playlists', (int) $pl['id'], ['name' => $name, 'description' => mb_substr(input('description', (string) $pl['description']), 0, 500)]);
                 q('DELETE FROM radio_playlist_items WHERE playlist_id = ?', [$pl['id']]);
                 foreach ($ids as $sort => $rid) {
@@ -445,12 +447,11 @@ final class Radio
     {
         csrf_check();
         $user = require_permission('radio');
-        [$row, $errors] = radio_slot_validate($_POST);
-        if ($errors) {
+        [$id, $row, $errors] = radio_slot_save($_POST, null, (int) $user['id']);
+        if ($errors || $id === null) {
             remember_input($_POST, $errors);
             redirect('/admin/radio/schedule' . (input('week') !== '' ? '?week=' . rawurlencode(input('week')) : '') . '#slot-form');
         }
-        $id = db_insert('radio_slots', $row + ['created_by' => $user['id']]);
         audit('create', 'radio_slot', $id, radio_slot_label($row));
         flash('Added “' . radio_slot_label($row) . '” to the schedule.');
         redirect('/admin/radio/schedule?week=' . utc_to_local($row['start_at'])->format('Y-m-d'));
@@ -483,12 +484,11 @@ final class Radio
         csrf_check();
         require_permission('radio');
         $slot = self::findSlot((int) $p['id']);
-        [$row, $errors] = radio_slot_validate($_POST, (int) $slot['id']);
+        [, $row, $errors] = radio_slot_save($_POST, (int) $slot['id']);
         if ($errors) {
             remember_input($_POST, $errors);
             redirect('/admin/radio/schedule/' . $slot['id']);
         }
-        db_update('radio_slots', (int) $slot['id'], $row);
         audit('update', 'radio_slot', (int) $slot['id'], radio_slot_label($row));
         flash('Slot saved.');
         redirect('/admin/radio/schedule?week=' . utc_to_local($row['start_at'])->format('Y-m-d'));

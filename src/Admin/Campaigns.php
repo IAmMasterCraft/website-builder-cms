@@ -201,7 +201,8 @@ final class Campaigns
         if (input('mode') === 'schedule') {
             $at = local_to_utc(input('send_at'));
             if ($at === null || $at <= utc_now()) {
-                flash('Choose a date and time in the future to schedule the campaign.', 'error');
+                $gap = local_time_problem(input('send_at'));
+                flash($gap !== null && str_starts_with($gap, 'There is no') ? $gap : 'Choose a date and time in the future to schedule the campaign.', 'error');
                 redirect('/admin/campaigns/' . $c['id']);
             }
             q("UPDATE campaigns SET status = 'scheduled', send_at = ? WHERE id = ?", [$at, $c['id']]);

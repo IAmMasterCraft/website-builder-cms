@@ -516,8 +516,6 @@ test('likes: one per member per item, toggle, counts', function (): void {
     same(1, like_count('post', $post), 'the unique key blocks a duplicate like');
     throws(PDOException::class, fn () => q('INSERT INTO likes (user_id, item_type, item_id) VALUES (?, ?, ?)', [$b['user_id'], 'post', $post]));
     engagement_forget();
-    notices_forget();
-    setting_set('mail.pause', null);
     same(['likes' => 1, 'comments' => 0], engagement_counts('post', $post));
     $noLikes = fixture_post_id(['allow_likes' => '0']);
     same(null, engagement_item('post', $noLikes, 'likes', current_user_row($a['user_id'])), 'likes switched off on the post');
@@ -575,9 +573,11 @@ test('comments: pre-moderation, one reply level, 15-minute edit window, reports,
     account_delete($replier['user_id']);
     same('Former member', comment_author_name(q_one('SELECT * FROM comments WHERE id = ?', [$r1])));
     engagement_forget();
-    notices_forget();
-    setting_set('mail.pause', null);
-    same(1, engagement_counts('post', $post)['comments'], 'cards count approved comments only (c1 is back in the queue, r2 pending, c2 rejected)');
+    // r1 is approved but its parent c1 is back in the queue, so visitors cannot see it (review fix: not counted).
+    same(0, engagement_counts('post', $post)['comments'], 'cards count visible comments only (c1 is back in the queue so r1 is hidden, r2 pending, c2 rejected)');
+    comment_moderate($c1, 'approve', $admin);
+    engagement_forget();
+    same(2, engagement_counts('post', $post)['comments'], 'c1 approved again: c1 and r1 count');
     setting_set('comments.moderation', 'pre');
     mailer(null, true);
 });

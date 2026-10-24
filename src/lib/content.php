@@ -586,7 +586,8 @@ function content_validate(array $type, array $input, ?array $existing = null): a
                 }
                 $utcValue = local_to_utc($v, $tz);
                 if ($utcValue === null) {
-                    $errors[$name] = "$label must be a valid date and time.";
+                    $gap = local_time_problem($v, $tz);
+                    $errors[$name] = $gap !== null && str_starts_with($gap, 'There is no') ? "$label: $gap" : "$label must be a valid date and time.";
                     break;
                 }
                 $data[$name] = $utcValue;

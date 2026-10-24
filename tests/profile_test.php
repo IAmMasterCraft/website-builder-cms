@@ -107,6 +107,7 @@ test('purging an unverified group deletes its logo; orphaned logos are swept', f
     $path = media_file_path(media_find($logo));
     ok($path !== null && is_file($path), 'logo file exists');
     q('UPDATE users SET created_at = UTC_TIMESTAMP() - INTERVAL 15 DAY WHERE id = ?', [$r['user_id']]);
+    q('UPDATE user_tokens SET expires_at = UTC_TIMESTAMP() - INTERVAL 1 DAY WHERE user_id = ?', [$r['user_id']]);
     ok(purge_unverified() >= 1);
     media_forget($logo);
     same(null, media_find($logo), 'logo row deleted with the group');

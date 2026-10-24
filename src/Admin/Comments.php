@@ -20,7 +20,7 @@ final class Comments
                    LEFT JOIN comments par ON par.id = c.parent_id";
         $rows = $tab === 'reported'
             ? q_all("$base WHERE EXISTS (SELECT 1 FROM comment_reports r WHERE r.comment_id = c.id AND r.resolved_at IS NULL) ORDER BY c.created_at DESC LIMIT 200")
-            : q_all("$base WHERE c.status = ? ORDER BY c.created_at " . ($tab === 'pending' ? 'ASC' : 'DESC') . ' LIMIT 200', [$tab]);
+            : q_all("$base WHERE c.status = ? AND c.deleted_at IS NULL ORDER BY c.created_at " . ($tab === 'pending' ? 'ASC' : 'DESC') . ' LIMIT 200', [$tab]);
         $reports = [];
         foreach ($rows as $r) {
             if ((int) $r['open_reports'] > 0) {
@@ -28,7 +28,7 @@ final class Comments
             }
         }
         $counts = [];
-        foreach (q_all('SELECT status, COUNT(*) AS n FROM comments GROUP BY status') as $c) {
+        foreach (q_all('SELECT status, COUNT(*) AS n FROM comments WHERE deleted_at IS NULL GROUP BY status') as $c) {
             $counts[$c['status']] = (int) $c['n'];
         }
         $counts['reported'] = (int) q_val('SELECT COUNT(DISTINCT comment_id) FROM comment_reports WHERE resolved_at IS NULL');

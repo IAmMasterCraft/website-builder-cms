@@ -2,6 +2,9 @@
 /** @var string $type @var int $id @var ?array $viewer @var string $return @var ?array $error @var array $thread @var int $count */
 $isMember = viewer_is_member($viewer);
 $renderComment = static function (array $c, bool $isReply) use ($viewer, $isMember, $return, $type, $id, $error): string {
+    if ($c['deleted_at'] !== null) {
+        return '<article class="comment is-deleted" id="comment-' . (int) $c['id'] . '"><p class="comment-body muted">[deleted]</p></article>';
+    }
     ob_start(); ?>
     <article class="comment<?= $c['status'] === 'pending' ? ' is-pending' : '' ?>" id="comment-<?= (int) $c['id'] ?>">
       <header class="comment-head">

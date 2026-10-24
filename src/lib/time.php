@@ -38,6 +38,28 @@ function local_to_utc(string $local, ?DateTimeZone $tz = null): ?string
     return null;
 }
 
+/**
+ * Why a local date-time could not be used, for forms: a time that does not
+ * exist because the clocks go forward (daylight saving gap) gets its own
+ * message. Null when local_to_utc() accepts it or it is empty.
+ */
+function local_time_problem(string $local, ?DateTimeZone $tz = null): ?string
+{
+    $local = trim($local);
+    if ($local === '' || local_to_utc($local, $tz) !== null) {
+        return null;
+    }
+    $tz ??= site_tz();
+    foreach (['Y-m-d\TH:i', 'Y-m-d\TH:i:s', 'Y-m-d H:i', 'Y-m-d H:i:s'] as $format) {
+        $plain = DateTimeImmutable::createFromFormat('!' . $format, $local, utc());
+        if ($plain !== false && $plain->format($format) === $local) {
+            return 'There is no ' . $plain->format('H:i') . ' on ' . $plain->format('j M Y') . ' in ' . $tz->getName()
+                . ': the clocks go forward then. Choose a time after the change (for example an hour later).';
+        }
+    }
+    return 'Enter a valid date and time.';
+}
+
 /** UTC "Y-m-d H:i:s" to a DateTimeImmutable in $tz (site timezone by default). */
 function utc_to_local(?string $utc, ?DateTimeZone $tz = null): ?DateTimeImmutable
 {

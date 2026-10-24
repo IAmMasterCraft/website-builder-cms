@@ -126,6 +126,7 @@ final class Settings
         }
         setting_set('site.name', $v['site_name']);
         setting_set('site.tagline', $v['tagline']);
+        $oldTimezone = (string) setting('site.timezone');
         setting_set('site.timezone', $v['timezone']);
         setting_set('site.footer_about', $v['footer_about']);
         setting_set('donate.bank_text', $v['bank_text']);
@@ -142,6 +143,12 @@ final class Settings
             setting_set('site.logo_media_id', null);
         }
         audit('update', 'settings', null, 'site settings' . ($provider !== '' ? ' (analytics: ' . $provider . ')' : ''));
+        // Radio repeats keep their local time: a new time zone can make slots clash.
+        $clashes = $v['timezone'] !== $oldTimezone ? radio_schedule_conflicts(new \DateTimeZone($v['timezone'])) : [];
+        if ($clashes !== []) {
+            flash('Settings saved, but with the new time zone some radio slots overlap: ' . implode('; ', array_slice($clashes, 0, 3)) . (count($clashes) > 3 ? ' (and ' . (count($clashes) - 3) . ' more)' : '') . '. Check the radio schedule.', 'error');
+            redirect('/admin/settings');
+        }
         flash('Settings saved.');
         redirect('/admin/settings');
     }

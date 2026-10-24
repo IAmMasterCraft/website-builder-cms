@@ -148,6 +148,7 @@ test('unverified accounts are purged after 14 days; verified ones are kept', fun
     $verified = fixture_signup('kept-' . bin2hex(random_bytes(3)) . '@example.test');
     account_verify($verified['token']);
     q('UPDATE users SET created_at = UTC_TIMESTAMP() - INTERVAL 15 DAY WHERE id IN (?, ?)', [$old['user_id'], $verified['user_id']]);
+    q('UPDATE user_tokens SET expires_at = UTC_TIMESTAMP() - INTERVAL 1 DAY WHERE user_id = ?', [$old['user_id']]); // its link expired too
     q('UPDATE users SET created_at = UTC_TIMESTAMP() - INTERVAL 13 DAY WHERE id = ?', [$recent['user_id']]);
     $oldPhoto = media_find((int) member_for_user($old['user_id'])['photo_media_id']);
     $oldFile = media_file_path($oldPhoto);

@@ -95,8 +95,9 @@ function cron_is_due(array $job, ?int $lastRun, int $now, ?DateTimeZone $tz = nu
  */
 function cron_state_set(string $key, string $job, ?int $value): void
 {
+    // Create the row outside the transaction, so two processes never deadlock on the insert.
+    q('INSERT IGNORE INTO settings (`key`, `value`) VALUES (?, ?)', [$key, '{}']);
     db_tx(static function () use ($key, $job, $value): void {
-        q('INSERT IGNORE INTO settings (`key`, `value`) VALUES (?, ?)', [$key, '{}']);
         $state = json_decode((string) q_val('SELECT `value` FROM settings WHERE `key` = ? FOR UPDATE', [$key]), true);
         $state = is_array($state) ? $state : [];
         if ($value === null) {

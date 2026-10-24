@@ -93,7 +93,10 @@ function engagement_preload(string $type, array $ids): void
     foreach (q_all("SELECT item_id, COUNT(*) AS n FROM likes WHERE item_type = ? AND item_id IN ($in) GROUP BY item_id", array_merge([$type], $missing)) as $r) {
         $cache[$type][(int) $r['item_id']]['likes'] = (int) $r['n'];
     }
-    foreach (q_all("SELECT item_id, COUNT(*) AS n FROM comments WHERE item_type = ? AND status = 'approved' AND item_id IN ($in) GROUP BY item_id", array_merge([$type], $missing)) as $r) {
+    // Visible comments only: not deleted, and replies only when their parent is still published.
+    foreach (q_all("SELECT c.item_id, COUNT(*) AS n FROM comments c WHERE c.item_type = ? AND c.status = 'approved' AND c.deleted_at IS NULL AND c.item_id IN ($in)
+                     AND (c.parent_id IS NULL OR EXISTS (SELECT 1 FROM comments p WHERE p.id = c.parent_id AND p.status = 'approved'))
+                   GROUP BY c.item_id", array_merge([$type], $missing)) as $r) {
         $cache[$type][(int) $r['item_id']]['comments'] = (int) $r['n'];
     }
 }
@@ -135,7 +138,7 @@ function comment_add(array $user, string $type, int $itemId, string $body, ?int 
         return [null, 'Comments are not open here.'];
     }
     if ($parentId !== null) {
-        $parent = q_one("SELECT * FROM comments WHERE id = ? AND item_type = ? AND item_id = ? AND status = 'approved'", [$parentId, $type, $itemId]);
+        $parent = q_one("SELECT * FROM comments WHERE id = ? AND item_type = ? AND item_id = ? AND status = 'approved' AND deleted_at IS NULL", [$parentId, $type, $itemId]);
         if ($parent === null) {
             return [null, 'The comment you replied to is not available.'];
         }
@@ -185,12 +188,38 @@ function comment_edit(int $id, array $user, string $body, ?DateTimeImmutable $no
 
 function comment_delete_own(int $id, array $user): bool
 {
-    return q('DELETE FROM comments WHERE id = ? AND user_id = ?', [$id, $user['id']])->rowCount() === 1;
+    return comment_remove($id, (int) $user['id']);
+}
+
+/**
+ * Remove a comment. One that other members replied to is blanked and shown
+ * as "[deleted]" so their replies stay; others are deleted. With $ownerId
+ * only that member's comment can be removed. Returns false when not found.
+ */
+function comment_remove(int $id, ?int $ownerId = null): bool
+{
+    return db_tx(static function () use ($id, $ownerId): bool {
+        $c = q_one('SELECT id, user_id, parent_id FROM comments WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [$id]);
+        if ($c === null || ($ownerId !== null && (int) ($c['user_id'] ?? 0) !== $ownerId)) {
+            return false;
+        }
+        if ($c['parent_id'] === null && q_val('SELECT 1 FROM comments WHERE parent_id = ? LIMIT 1', [$id]) !== null) {
+            q("UPDATE comments SET body = '', user_id = NULL, deleted_at = UTC_TIMESTAMP() WHERE id = ?", [$id]);
+            q('UPDATE comment_reports SET resolved_at = UTC_TIMESTAMP() WHERE comment_id = ? AND resolved_at IS NULL', [$id]);
+            return true;
+        }
+        q('DELETE FROM comments WHERE id = ?', [$id]);
+        // A blanked parent whose last reply is gone has nothing left to show.
+        if ($c['parent_id'] !== null && q_val('SELECT 1 FROM comments WHERE parent_id = ? LIMIT 1', [$c['parent_id']]) === null) {
+            q('DELETE FROM comments WHERE id = ? AND deleted_at IS NOT NULL', [$c['parent_id']]);
+        }
+        return true;
+    });
 }
 
 function comment_report(int $id, int $userId, string $reason): bool
 {
-    if (q_val("SELECT 1 FROM comments WHERE id = ? AND status = 'approved'", [$id]) === null) {
+    if (q_val("SELECT 1 FROM comments WHERE id = ? AND status = 'approved' AND deleted_at IS NULL", [$id]) === null) {
         return false;
     }
     return q('INSERT IGNORE INTO comment_reports (comment_id, user_id, reason) VALUES (?, ?, ?)', [$id, $userId, mb_substr($reason, 0, 500)])->rowCount() === 1;
@@ -214,8 +243,7 @@ function comment_moderate(int $id, string $action, int $adminId): bool
             q('UPDATE comment_reports SET resolved_at = UTC_TIMESTAMP() WHERE comment_id = ? AND resolved_at IS NULL', [$id]);
             return true;
         case 'delete':
-            q('DELETE FROM comments WHERE id = ?', [$id]);
-            return true;
+            return comment_remove($id);
     }
     return false;
 }
@@ -275,7 +303,7 @@ function comment_thread(string $type, int $itemId, ?array $viewer): array
     $top = [];
     $replies = [];
     foreach ($rows as $r) {
-        $r['author'] = comment_author_name($r);
+        $r['author'] = $r['deleted_at'] !== null ? '' : comment_author_name($r);
         if ($r['parent_id'] === null) {
             $r['replies'] = [];
             $top[(int) $r['id']] = $r;
@@ -288,5 +316,6 @@ function comment_thread(string $type, int $itemId, ?array $viewer): array
             $top[(int) $r['parent_id']]['replies'][] = $r;
         }
     }
-    return array_values($top);
+    // A deleted comment is only shown (as "[deleted]") to keep its replies in context.
+    return array_values(array_filter($top, static fn (array $c): bool => $c['deleted_at'] === null || $c['replies'] !== []));
 }

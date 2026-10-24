@@ -34,7 +34,9 @@ function jobs_visible_to(?array $user): bool
 function job_poster_trusted(int $userId): bool
 {
     $r = q_one("SELECT SUM(status IN ('published','expired') AND reviewed_by IS NOT NULL) AS ok, SUM(status = 'rejected') AS bad FROM jobs WHERE user_id = ?", [$userId]);
-    return (int) ($r['ok'] ?? 0) > 0 && (int) ($r['bad'] ?? 0) === 0;
+    // Rejections are also counted on the account: deleting a rejected post does not restore trust.
+    $rejections = (int) q_val('SELECT job_rejections FROM users WHERE id = ?', [$userId]);
+    return (int) ($r['ok'] ?? 0) > 0 && (int) ($r['bad'] ?? 0) === 0 && $rejections === 0;
 }
 
 /**
@@ -166,12 +168,13 @@ function job_approve(int $id, int $adminId, ?DateTimeImmutable $now = null): boo
     if ($job === null || !in_array($job['status'], ['pending', 'rejected'], true)) {
         return false;
     }
-    $published = $job['published_at'] ?? $nowSql;
+    // Every approval (first, after an edit, or after a rejection) starts a fresh listing:
+    // published_at and the 60-day expiry both count from now, so the board order matches.
     $expires = job_expiry($nowSql, $job['closing_date']);
     if ($expires <= $nowSql) {
         return false;
     }
-    db_update('jobs', $id, ['status' => 'published', 'published_at' => $published ?: $nowSql, 'expires_at' => $expires, 'reviewed_by' => $adminId, 'reviewed_at' => $nowSql, 'reject_reason' => '']);
+    db_update('jobs', $id, ['status' => 'published', 'published_at' => $nowSql, 'expires_at' => $expires, 'reviewed_by' => $adminId, 'reviewed_at' => $nowSql, 'reject_reason' => '']);
     if (!empty($job['email']) && (int) $job['user_id'] !== $adminId) {
         send_template_mail((string) $job['email'], job_first_name($job), 'job_approved', [
             'job_title' => $job['title'], 'job_url' => base_url('/jobs/' . $id), 'expires' => fmt_date($expires, 'j F Y'),
@@ -188,6 +191,9 @@ function job_reject(int $id, int $adminId, string $reason, ?DateTimeImmutable $n
         return false;
     }
     db_update('jobs', $id, ['status' => 'rejected', 'reviewed_by' => $adminId, 'reviewed_at' => $nowSql, 'reject_reason' => mb_substr($reason, 0, 500)]);
+    if ($job['user_id'] !== null) {
+        q('UPDATE users SET job_rejections = job_rejections + 1 WHERE id = ?', [$job['user_id']]);
+    }
     q('UPDATE job_reports SET resolved_at = ? WHERE job_id = ? AND resolved_at IS NULL', [$nowSql, $id]);
     if (!empty($job['email']) && (int) $job['user_id'] !== $adminId) {
         send_template_mail((string) $job['email'], job_first_name($job), 'job_rejected', [
