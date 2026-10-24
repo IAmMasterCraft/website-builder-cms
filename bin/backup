@@ -2,7 +2,8 @@
 <?php
 declare(strict_types=1);
 
-// Write a backup into storage/backups now (same as "Back up to the server now").
+// Write a backup into storage/backups now (same as "Back up to the server now";
+// stored as a manual backup, pruned separately from the daily ones).
 //   php bin/backup [--uploads]
 if (PHP_SAPI !== 'cli') {
     exit(1);
@@ -12,6 +13,6 @@ if (!app_installed()) {
     fwrite(STDERR, "Not installed yet.\n");
     exit(1);
 }
-foreach (backup_run(in_array('--uploads', $argv, true)) as $name) {
+foreach (backup_run(in_array('--uploads', $argv, true), null, true) as $name) {
     echo 'storage/backups/' . $name . "\n";
 }

@@ -528,6 +528,12 @@ function account_delete(int $userId): void
     // Logos of groups that never verified go with them (verified groups stay listed, logo included).
     $logos = array_map('intval', array_column(q_all('SELECT logo_media_id FROM groups_orgs WHERE user_id = ? AND verified_at IS NULL AND logo_media_id IS NOT NULL', [$userId]), 'logo_media_id'));
     db_tx(static function () use ($userId): void {
+        // Emails still waiting in the queue for this address are dropped with the account.
+        $email = (string) q_val('SELECT email FROM users WHERE id = ?', [$userId]);
+        if ($email !== '') {
+            q("DELETE FROM email_queue WHERE to_email = ? AND status = 'queued'", [$email]);
+            q("DELETE FROM campaign_recipients WHERE email = ? AND status = 'queued'", [$email]);
+        }
         q("UPDATE event_registrations SET name = 'Former member', email = '', phone = '', user_id = NULL WHERE user_id = ?", [$userId]);
         // A group that never verified was never listed: remove it with the account.
         q('DELETE FROM groups_orgs WHERE user_id = ? AND verified_at IS NULL', [$userId]);

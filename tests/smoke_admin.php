@@ -159,7 +159,7 @@ $za->close();
 unlink($zipFile);
 $r = $admin->submit('/admin/backups', '/admin/backups/run', []);
 $stored = backup_list()[0]['name'] ?? '';
-check('back up to the server now stores a file', $r['status'] === 303 && $stored !== '');
+check('back up to the server now stores a manual backup file', $r['status'] === 303 && str_contains($stored, '-manual-'));
 $r = $admin->get('/admin/backups/files/' . $stored);
 check('stored backup downloads', $r['status'] === 200 && strlen($r['body']) === (int) filesize(backup_dir() . '/' . $stored));
 status_is($admin, '/admin/backups/files/gather-20200101-000000-db.sql.gz', 404);

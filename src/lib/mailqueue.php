@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use Core\Mail\Message;
+use Core\Mail\TransportException;
 
 /*
  * Email queue (§5): campaign recipients and queued messages are sent by
@@ -12,19 +13,31 @@ use Core\Mail\Message;
  * resume on the next run.
  */
 
-const MAIL_MAX_ATTEMPTS = 3;
+const MAIL_MAX_ATTEMPTS = 5;
+/** First retry delay; later ones follow mail_retry_delay(). */
 const MAIL_RETRY_SECONDS = 300;
 const MAIL_STUCK_SECONDS = 600;
+/** Pause after the mail server is unreachable: doubles up to an hour. */
+const MAIL_PAUSE_MIN_SECONDS = 300;
+const MAIL_PAUSE_MAX_SECONDS = 3600;
+/** Kinds in email_queue that are bulk mail (preferences and suppression re-checked at send time). */
+const MAIL_BULK_KINDS = ['notice'];
 
 function mail_per_minute(): int
 {
     return max(1, min(10000, (int) setting('mail.per_minute', 60)));
 }
 
+/** Delay before retry number $attempt (1-based): 5 min, 30 min, 2 h, 6 h. */
+function mail_retry_delay(int $attempt): int
+{
+    return [1 => MAIL_RETRY_SECONDS, 2 => 1800, 3 => 7200][$attempt] ?? 21600;
+}
+
 /** Put a ready message in the queue. Returns false when $dedupe was already queued. */
 function mail_queue_message(Message $m, string $kind = 'transactional', ?string $dedupe = null, int $attempts = 0, string $error = '', ?int $now = null): bool
 {
-    $at = gmdate('Y-m-d H:i:s', ($now ?? time()) + ($attempts > 0 ? MAIL_RETRY_SECONDS : 0));
+    $at = gmdate('Y-m-d H:i:s', ($now ?? time()) + ($attempts > 0 ? mail_retry_delay($attempts) : 0));
     $st = q(
         'INSERT IGNORE INTO email_queue (kind, dedupe_key, to_email, to_name, subject, text_body, html_body, headers, reply_to, attempts, last_error, next_attempt_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -42,27 +55,77 @@ function mail_sent_last_minute(int $now): int
 }
 
 /**
- * Send one batch. Returns counts: sent, failed, retry, interrupted, budget.
+ * Why a bulk email (campaign, notice copy) must not go to this address any
+ * more, or null. Checked when the row is sent, not only when it was queued:
+ * the person may have unsubscribed, switched newsletters off, or the account
+ * may have been suspended since.
+ */
+function mail_bulk_block_reason(string $email): ?string
+{
+    $email = strtolower($email);
+    if (email_suppressed($email)) {
+        return 'Not sent: the address unsubscribed after the email was queued.';
+    }
+    $u = q_one('SELECT u.status, u.role, m.prefs FROM users u LEFT JOIN members m ON m.user_id = u.id WHERE u.email = ?', [$email]);
+    if ($u === null) {
+        return null;
+    }
+    if ($u['status'] !== 'active') {
+        return 'Not sent: the account is no longer active.';
+    }
+    if ($u['role'] === 'member' && $u['prefs'] !== null && !member_pref($u, 'newsletters')) {
+        return 'Not sent: news emails were switched off after the email was queued.';
+    }
+    return null;
+}
+
+/** Current pause after a mail server failure: [until, seconds, error] or null. */
+function mail_pause_state(?int $now = null): ?array
+{
+    $p = setting('mail.pause');
+    if (!is_array($p) || (int) ($p['until'] ?? 0) <= 0) {
+        return null;
+    }
+    return ['until' => (int) $p['until'], 'seconds' => (int) ($p['seconds'] ?? MAIL_PAUSE_MIN_SECONDS), 'error' => (string) ($p['error'] ?? ''), 'active' => (int) $p['until'] > ($now ?? time())];
+}
+
+/**
+ * Send one batch. Returns counts: sent, failed, retry, interrupted,
+ * suppressed, budget, paused (1 when sending is paused after the mail
+ * server could not be reached).
  * @return array<string,int>
  */
 function mail_queue_run(?int $now = null, ?int $perMinute = null): array
 {
     $now ??= time();
     $nowSql = gmdate('Y-m-d H:i:s', $now);
-    $stats = ['sent' => 0, 'failed' => 0, 'retry' => 0, 'interrupted' => 0, 'budget' => 0];
+    $stats = ['sent' => 0, 'failed' => 0, 'retry' => 0, 'interrupted' => 0, 'suppressed' => 0, 'budget' => 0, 'paused' => 0];
 
-    // Rows a crashed run left in "sending": delivery unknown, never re-sent.
+    // Rows a crashed run left in "sending": delivery unknown, never re-sent (not even by "retry failed").
     $stuck = gmdate('Y-m-d H:i:s', $now - MAIL_STUCK_SECONDS);
     $msg = 'Interrupted while sending; not retried to avoid sending twice.';
-    $stats['interrupted'] += q("UPDATE email_queue SET status = 'failed', last_error = ? WHERE status = 'sending' AND claimed_at < ?", [$msg, $stuck])->rowCount();
-    $stats['interrupted'] += q("UPDATE campaign_recipients SET status = 'failed', error = ? WHERE status = 'sending' AND claimed_at < ?", [$msg, $stuck])->rowCount();
+    $stats['interrupted'] += q("UPDATE email_queue SET status = 'failed', interrupted = 1, last_error = ? WHERE status = 'sending' AND claimed_at < ?", [$msg, $stuck])->rowCount();
+    $stats['interrupted'] += q("UPDATE campaign_recipients SET status = 'failed', interrupted = 1, error = ? WHERE status = 'sending' AND claimed_at < ?", [$msg, $stuck])->rowCount();
+
+    $pause = mail_pause_state($now);
+    if ($pause !== null && $pause['active']) {
+        $stats['paused'] = 1;
+        campaigns_finish($now);
+        return $stats;
+    }
 
     $budget = max(0, ($perMinute ?? mail_per_minute()) - mail_sent_last_minute($now));
     $stats['budget'] = $budget;
+    $down = false;
     if ($budget > 0) {
         $rows = q_all("SELECT * FROM email_queue WHERE status = 'queued' AND next_attempt_at <= ? ORDER BY id LIMIT " . (int) $budget, [$nowSql]);
         foreach ($rows as $row) {
             if (!mail_claim('email_queue', (int) $row['id'], $nowSql)) {
+                continue;
+            }
+            if (in_array($row['kind'], MAIL_BULK_KINDS, true) && ($reason = mail_bulk_block_reason((string) $row['to_email'])) !== null) {
+                q("UPDATE email_queue SET status = 'suppressed', last_error = ? WHERE id = ?", [$reason, $row['id']]);
+                $stats['suppressed']++;
                 continue;
             }
             $headers = json_decode((string) ($row['headers'] ?? ''), true);
@@ -71,13 +134,18 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
                 mailer()->send($m);
                 q("UPDATE email_queue SET status = 'sent', sent_at = ?, last_error = '' WHERE id = ?", [$nowSql, $row['id']]);
                 $stats['sent']++;
+            } catch (TransportException $e) {
+                mail_release('email_queue', 'last_error', $row, $e, $now);
+                mail_pause($e, $now);
+                $down = true;
+                break;
             } catch (Throwable $e) {
                 $stats[mail_fail('email_queue', 'last_error', $row, $e, $now)]++;
             }
             $budget--;
         }
     }
-    if ($budget > 0) {
+    if ($budget > 0 && !$down) {
         $rows = q_all(
             "SELECT r.* FROM campaign_recipients r JOIN campaigns c ON c.id = r.campaign_id
               WHERE c.status = 'sending' AND r.status = 'queued' AND r.next_attempt_at <= ? ORDER BY r.campaign_id, r.id LIMIT " . (int) $budget,
@@ -88,16 +156,31 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
             if (!mail_claim('campaign_recipients', (int) $row['id'], $nowSql)) {
                 continue;
             }
+            if (($reason = mail_bulk_block_reason((string) $row['email'])) !== null) {
+                q("UPDATE campaign_recipients SET status = 'suppressed', error = ? WHERE id = ?", [$reason, $row['id']]);
+                $stats['suppressed']++;
+                continue;
+            }
             $cid = (int) $row['campaign_id'];
             $campaigns[$cid] ??= q_one('SELECT * FROM campaigns WHERE id = ?', [$cid]);
             try {
                 mailer()->send(campaign_message_for($campaigns[$cid], $row));
                 q("UPDATE campaign_recipients SET status = 'sent', sent_at = ?, error = '' WHERE id = ?", [$nowSql, $row['id']]);
                 $stats['sent']++;
+            } catch (TransportException $e) {
+                mail_release('campaign_recipients', 'error', $row, $e, $now);
+                mail_pause($e, $now);
+                $down = true;
+                break;
             } catch (Throwable $e) {
                 $stats[mail_fail('campaign_recipients', 'error', $row, $e, $now)]++;
             }
         }
+    }
+    if ($down) {
+        $stats['paused'] = 1;
+    } elseif ($stats['sent'] > 0 && $pause !== null) {
+        setting_set('mail.pause', null); // the server answers again
     }
     campaigns_finish($now);
     return $stats;
@@ -110,7 +193,7 @@ function mail_claim(string $table, int $id, string $nowSql): bool
     return q('UPDATE ' . db_ident($table) . " SET status = 'sending', claimed_at = ?, attempts = attempts + 1 WHERE id = ? AND status = 'queued'", [$nowSql, $id])->rowCount() === 1;
 }
 
-/** Record a failure: retry later, or give up after MAIL_MAX_ATTEMPTS. Returns the stats key. */
+/** Record a failure: retry later (5 min, 30 min, 2 h, 6 h), or give up after MAIL_MAX_ATTEMPTS. Returns the stats key. */
 function mail_fail(string $table, string $errorCol, array $row, Throwable $e, int $now): string
 {
     $attempts = (int) $row['attempts'] + 1;
@@ -122,8 +205,45 @@ function mail_fail(string $table, string $errorCol, array $row, Throwable $e, in
         return 'failed';
     }
     q('UPDATE ' . db_ident($table) . ' SET status = \'queued\', ' . db_ident($errorCol) . ' = ?, next_attempt_at = ? WHERE id = ?',
-        [$error, gmdate('Y-m-d H:i:s', $now + MAIL_RETRY_SECONDS * $attempts), $row['id']]);
+        [$error, gmdate('Y-m-d H:i:s', $now + mail_retry_delay($attempts)), $row['id']]);
     return 'retry';
+}
+
+/** The server was unreachable: put the row back without using up an attempt. */
+function mail_release(string $table, string $errorCol, array $row, Throwable $e, int $now): void
+{
+    q('UPDATE ' . db_ident($table) . ' SET status = \'queued\', attempts = GREATEST(attempts - 1, 0), ' . db_ident($errorCol) . ' = ? WHERE id = ?',
+        [mb_substr($e->getMessage(), 0, 500), $row['id']]);
+}
+
+/** Pause all sending after a transport failure; the pause doubles while the server stays down. */
+function mail_pause(Throwable $e, int $now): void
+{
+    $prev = mail_pause_state($now);
+    $seconds = $prev === null ? MAIL_PAUSE_MIN_SECONDS : min(MAIL_PAUSE_MAX_SECONDS, $prev['seconds'] * 2);
+    error_log('Mail server unreachable, sending paused for ' . $seconds . ' s: ' . $e->getMessage());
+    setting_set('mail.pause', ['until' => $now + $seconds, 'seconds' => $seconds, 'error' => mb_substr($e->getMessage(), 0, 300), 'since' => $prev['since'] ?? $now]);
+}
+
+/**
+ * "Retry failed recipients": failed rows that were never handed to the mail
+ * server go back to the queue. Rows interrupted mid-send stay failed, so
+ * nobody can get the campaign twice. Returns how many were re-queued.
+ */
+function campaign_retry_failed(int $campaignId, ?int $now = null): int
+{
+    $nowSql = gmdate('Y-m-d H:i:s', $now ?? time());
+    return db_tx(static function () use ($campaignId, $nowSql): int {
+        $c = q_one('SELECT status FROM campaigns WHERE id = ? FOR UPDATE', [$campaignId]);
+        if ($c === null || !in_array($c['status'], ['sending', 'sent'], true)) {
+            return 0;
+        }
+        $n = q("UPDATE campaign_recipients SET status = 'queued', attempts = 0, error = '', next_attempt_at = ? WHERE campaign_id = ? AND status = 'failed' AND interrupted = 0", [$nowSql, $campaignId])->rowCount();
+        if ($n > 0) {
+            q("UPDATE campaigns SET status = 'sending', completed_at = NULL WHERE id = ?", [$campaignId]);
+        }
+        return $n;
+    });
 }
 
 // ---- Unsubscribe (signed token) and suppression -----------------------------------------
@@ -203,7 +323,7 @@ function bulk_headers(string $email): array
 /** Delivery overview for the admin log. */
 function mail_queue_counts(): array
 {
-    $out = ['queued' => 0, 'sending' => 0, 'sent' => 0, 'failed' => 0];
+    $out = ['queued' => 0, 'sending' => 0, 'sent' => 0, 'failed' => 0, 'suppressed' => 0];
     foreach (q_all('SELECT status, COUNT(*) AS n FROM email_queue GROUP BY status') as $r) {
         $out[$r['status']] = (int) $r['n'];
     }

@@ -92,8 +92,23 @@ final class SmtpMailer implements Mailer
         } catch (MailerException $e) {
             // Drop the connection so the next message starts clean.
             $m->smtpClose();
+            if (self::isTransportProblem($e->getMessage())) {
+                throw new TransportException('SMTP: ' . $e->getMessage(), 0, $e);
+            }
             throw new \RuntimeException('SMTP: ' . $e->getMessage(), 0, $e);
         }
+    }
+
+    /**
+     * Connection, TLS and login failures (the server is down or the settings
+     * are wrong) as opposed to a problem with one message or recipient.
+     */
+    public static function isTransportProblem(string $error): bool
+    {
+        if (preg_match('/recipients? failed|data not accepted|invalid address/i', $error)) {
+            return false;
+        }
+        return (bool) preg_match('/connect|authenticat|timed? ?out|STARTTLS|TLS|SSL|connection (refused|reset|closed)|network|getaddrinfo|could not resolve|421 /i', $error);
     }
 
     public function __destruct()

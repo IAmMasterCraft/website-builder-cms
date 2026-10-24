@@ -106,7 +106,7 @@ test('uploads zip includes public variants, private originals and variants', fun
     $m = media_find($id);
     $zipFile = tmp_file('.zip');
     $fh = fopen($zipFile, 'wb');
-    $n = backup_zip_uploads($fh);
+    $n = backup_zip_uploads($fh)['files'];
     fclose($fh);
     ok($n > 0);
     $za = new ZipArchive();

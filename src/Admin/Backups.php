@@ -89,7 +89,7 @@ final class Backups
             set_time_limit(0);
         }
         try {
-            $files = backup_run(input('uploads') === '1');
+            $files = backup_run(input('uploads') === '1', null, true);
         } catch (\Throwable $e) {
             error_log('backup failed: ' . $e->getMessage());
             flash('The backup failed: ' . $e->getMessage(), 'error');

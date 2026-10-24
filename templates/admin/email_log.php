@@ -4,6 +4,7 @@ $all = array_sum($counts);
 ?>
 <div class="page-head"><div><h1>Delivery log</h1><p>Emails are sent by cron, up to <?= (int) $per_minute ?> a minute. Cron last ran: <strong><?= is_string($cron) ? e(fmt_datetime($cron)) : 'never' ?></strong>.</p></div>
   <?php if (user_can(current_user(), 'super_admin')): ?><div class="actions"><a class="btn ghost" href="/admin/settings/email"><?= icon('settings') ?> Email settings</a></div><?php endif ?></div>
+<?php if (($pause = mail_pause_state()) !== null && $pause['active']): ?><p class="flash error" role="status"><?= icon('alert') ?><span>Sending is paused until <?= e(fmt_date(gmdate('Y-m-d H:i:s', $pause['until']), 'H:i')) ?> because the mail server could not be reached: <?= e($pause['error']) ?>. Nothing is lost: waiting emails go out once it answers again.</span></p><?php endif ?>
 <?php if ($campaigns): ?>
 <section class="panel"><div class="panel-head"><h2>Recent campaigns</h2></div>
   <ul class="row-list">
@@ -15,7 +16,7 @@ $all = array_sum($counts);
 <?php endif ?>
 <div class="panel">
   <div class="panel-head"><h2>Other emails</h2><span class="muted small-text">Notices, birthday emails, digests and transactional emails that needed a retry</span></div>
-  <?= tabs_html('/admin/email-log', 'status', $status, ['' => ['All', $all], 'queued' => ['Waiting', $counts['queued']], 'sent' => ['Sent', $counts['sent']], 'failed' => ['Failed', $counts['failed']]]) ?>
+  <?= tabs_html('/admin/email-log', 'status', $status, ['' => ['All', $all], 'queued' => ['Waiting', $counts['queued']], 'sent' => ['Sent', $counts['sent']], 'failed' => ['Failed', $counts['failed']], 'suppressed' => ['Not sent (opted out)', $counts['suppressed']]]) ?>
   <div class="table-wrap"><table class="data">
     <thead><tr><th scope="col">To</th><th scope="col">Subject</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Sent</th></tr></thead>
     <tbody>

@@ -27,7 +27,7 @@
         <tbody>
         <?php if (!$stored): ?><tr><td colspan="4" class="empty-row">No stored backups yet.</td></tr><?php endif ?>
         <?php foreach ($stored as $b): ?>
-          <tr><td><code><?= e($b['name']) ?></code></td><td class="tabular"><?= e(human_bytes($b['size'])) ?></td><td class="tabular"><?= e(fmt_datetime(gmdate('Y-m-d H:i:s', $b['time']))) ?></td>
+          <tr><td><code><?= e($b['name']) ?></code> <span class="badge"><?= $b['manual'] ? 'manual' : 'daily' ?></span></td><td class="tabular"><?= e(human_bytes($b['size'])) ?></td><td class="tabular"><?= e(fmt_datetime(gmdate('Y-m-d H:i:s', $b['time']))) ?></td>
             <td class="actions-cell"><a class="btn tiny ghost" href="/admin/backups/files/<?= e($b['name']) ?>">Download<span class="sr-only"> <?= e($b['name']) ?></span></a>
               <form class="inline-form" method="post" action="/admin/backups/files/<?= e($b['name']) ?>/delete" data-confirm="Delete <?= e($b['name']) ?>?"><?= csrf_field() ?><button class="btn tiny danger-ghost" type="submit">Delete<span class="sr-only"> <?= e($b['name']) ?></span></button></form></td></tr>
         <?php endforeach ?>
@@ -36,6 +36,7 @@
         <?= csrf_field() ?>
         <label class="check"><input type="checkbox" name="uploads" value="1"> Include uploaded files</label>
         <button class="btn ghost small" type="submit"><?= icon('check') ?> Back up to the server now</button>
+        <span class="hint muted small-text">Manual backups are kept separately from the daily ones (the newest <?= (int) $settings['keep'] ?> of each).</span>
       </form>
     </section>
   </div>

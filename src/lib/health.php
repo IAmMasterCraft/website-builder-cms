@@ -72,14 +72,17 @@ function health_cron_jobs(?int $now = null): array
 {
     $now ??= time();
     $last = (array) setting('cron.jobs', []);
+    $failed = (array) setting('cron.failed', []);
     $out = [];
     foreach (cron_jobs() as $name => $job) {
         $ts = isset($last[$name]) ? (int) $last[$name] : null;
+        $failedAt = isset($failed[$name]) ? (int) $failed[$name] : null;
         $limit = isset($job['daily_at']) ? 26 * 3600 : ((int) $job['every'] * 3 + 5) * 60;
         $out[] = [
             'name' => $name,
             'every' => isset($job['daily_at']) ? 'daily at ' . $job['daily_at'] : ((int) $job['every'] === 1 ? 'every minute' : 'every ' . (int) $job['every'] . ' min'),
             'last' => $ts,
+            'failed' => $failedAt,
             'stale' => $ts === null || $now - $ts > $limit,
         ];
     }
@@ -163,7 +166,8 @@ function health_checks(?int $now = null): array
         ? 'last run ' . fmt_datetime($last) . ($running ? '' : ': not running. Add: * * * * * php ' . BASE . '/bin/cron')
         : 'never ran. Add to the crontab: * * * * * php ' . BASE . '/bin/cron');
     foreach (health_cron_jobs($now) as $job) {
-        $cron[] = health_item('Job ' . $job['name'], $job['stale'] ? 'warn' : 'ok', $job['every'] . ' · ' . ($job['last'] !== null ? 'last ' . fmt_datetime(gmdate('Y-m-d H:i:s', $job['last'])) : 'never'));
+        $cron[] = health_item('Job ' . $job['name'], $job['failed'] !== null ? 'bad' : ($job['stale'] ? 'warn' : 'ok'), $job['every'] . ' · ' . ($job['last'] !== null ? 'last ' . fmt_datetime(gmdate('Y-m-d H:i:s', $job['last'])) : 'never')
+            . ($job['failed'] !== null ? ' · failed at ' . fmt_datetime(gmdate('Y-m-d H:i:s', $job['failed'])) . ', retried every 15 minutes (see storage/logs/php-error.log)' : ''));
     }
     $overdue = health_overdue_scheduled();
     $cron[] = health_item('Scheduled publishing', $overdue === 0 ? 'ok' : 'warn', $overdue === 0
@@ -216,6 +220,10 @@ function health_checks(?int $now = null): array
     $m = [];
     $driver = mail_driver();
     $m[] = health_item('Mail transport', $driver === 'smtp' ? 'ok' : 'warn', $driver === 'smtp' ? 'SMTP (' . (string) (((array) setting('mail.smtp', []))['host'] ?? '') . ')' : 'file: emails are written to storage/mail and not delivered. Set up SMTP in Email settings');
+    $pause = mail_pause_state($now);
+    $m[] = health_item('Mail server', $pause === null ? 'ok' : ($pause['active'] ? 'bad' : 'warn'), $pause === null
+        ? 'reachable at the last send'
+        : ($pause['active'] ? 'unreachable: sending paused until ' . fmt_date(gmdate('Y-m-d H:i:s', $pause['until']), 'H:i') . ' (' . $pause['error'] . ')' : 'was unreachable recently (' . $pause['error'] . '); sending resumes on the next cron run'));
     $failed = (int) q_val("SELECT COUNT(*) FROM email_queue WHERE status = 'failed' AND created_at > UTC_TIMESTAMP() - INTERVAL 7 DAY");
     $m[] = health_item('Failed emails (7 days)', $failed === 0 ? 'ok' : 'warn', (string) $failed);
     $base = (string) config('base_url', '');

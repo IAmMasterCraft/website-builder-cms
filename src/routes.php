@@ -200,6 +200,7 @@ function app_routes(): Router
     $r->post('/admin/campaigns/{id:\d+}/duplicate', [Admin\Campaigns::class, 'duplicate']);
     $r->post('/admin/campaigns/{id:\d+}/delete', [Admin\Campaigns::class, 'delete']);
     $r->get('/admin/campaigns/{id:\d+}/log', [Admin\Campaigns::class, 'log']);
+    $r->post('/admin/campaigns/{id:\d+}/retry', [Admin\Campaigns::class, 'retry']);
     $r->get('/admin/email-templates', [Admin\EmailTemplates::class, 'index']);
     $r->get('/admin/email-templates/{key:[a-z_]+}', [Admin\EmailTemplates::class, 'edit']);
     $r->post('/admin/email-templates/{key:[a-z_]+}', [Admin\EmailTemplates::class, 'update']);
@@ -262,7 +263,7 @@ function app_routes(): Router
     $r->post('/admin/users/{id:\d+}/reset', [Admin\Users::class, 'resetLink']);
     $r->get('/admin/audit', [Admin\Audit::class, 'index']);
     $r->get('/admin/audit.csv', [Admin\Audit::class, 'csv']);
-    $backup = '{name:gather-\d{8}-\d{6}-(?:db\.sql\.gz|db\.sql|uploads\.zip)}';
+    $backup = '{name:gather-\d{8}-\d{6}-(?:manual-)?(?:db\.sql\.gz|db\.sql|uploads\.zip)}';
     $r->get('/admin/backups', [Admin\Backups::class, 'index']);
     $r->post('/admin/backups/database', [Admin\Backups::class, 'downloadDb']);
     $r->post('/admin/backups/uploads', [Admin\Backups::class, 'downloadUploads']);

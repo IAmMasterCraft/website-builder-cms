@@ -120,11 +120,15 @@ final class Campaigns
             $subject = $subject === '' ? (string) $c['subject'] : mb_substr($subject, 0, 200);
         }
         $pre = mb_substr(input('preheader'), 0, 200);
-        db_update('campaigns', (int) $c['id'], [
+        $saved = campaign_save_draft((int) $c['id'], [
             'subject' => $subject, 'preheader' => $pre,
             'blocks' => json_encode($blocks, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
             'audience' => json_encode($aud, JSON_THROW_ON_ERROR),
         ]);
+        if (!$saved) {
+            // Queued while this editor was open: the snapshot stays exactly as it was queued.
+            $json ? json_out(['ok' => false, 'error' => 'This campaign has been sent and can no longer be edited.'], 409) : redirect('/admin/campaigns/' . $c['id']);
+        }
         if ($json) {
             $reach = audience_resolve($aud);
             json_out(['ok' => true, 'errors' => $errors, 'saved_at' => fmt_date(utc_now(), 'H:i'), 'recipients' => count($reach['recipients']), 'excluded' => $reach['excluded']]);
@@ -250,6 +254,18 @@ final class Campaigns
         redirect('/admin/campaigns');
     }
 
+    /** Re-queue failed recipients that were never handed to the mail server (interrupted ones stay failed). */
+    public static function retry(array $p): void
+    {
+        csrf_check();
+        require_permission('communications');
+        $c = self::find((int) $p['id']);
+        $n = campaign_retry_failed((int) $c['id']);
+        audit('retry', 'campaign', (int) $c['id'], $c['subject'] . ': ' . $n . ' failed recipient(s) re-queued');
+        flash($n > 0 ? pluralise($n, 'failed recipient') . ' queued again.' : 'There are no failed recipients to retry.', $n > 0 ? 'success' : 'info');
+        redirect('/admin/campaigns/' . $c['id'] . '/log');
+    }
+
     /** Delivery log: every recipient with status. */
     public static function log(array $p): void
     {
@@ -259,7 +275,7 @@ final class Campaigns
         $pg = paging(50);
         $params = [$c['id']];
         $where = 'campaign_id = ?';
-        if (in_array($status, ['queued', 'sending', 'sent', 'failed'], true)) {
+        if (in_array($status, ['queued', 'sending', 'sent', 'failed', 'suppressed'], true)) {
             $where .= ' AND status = ?';
             $params[] = $status;
         } else {

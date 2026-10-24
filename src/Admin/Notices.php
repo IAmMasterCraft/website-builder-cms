@@ -98,6 +98,7 @@ final class Notices
         }
         if (input('action') === 'unpublish') {
             q("UPDATE notices SET status = 'draft' WHERE id = ?", [$id]);
+            audit('unpublish', 'notice', $id, $title);
             flash('Notice taken down from dashboards.');
             redirect('/admin/notices/' . $id);
         }

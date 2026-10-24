@@ -10,7 +10,7 @@ final class EmailLog
     {
         require_permission('communications');
         $status = query_param('status');
-        $status = in_array($status, ['queued', 'sending', 'sent', 'failed'], true) ? $status : '';
+        $status = in_array($status, ['queued', 'sending', 'sent', 'failed', 'suppressed'], true) ? $status : '';
         $pg = paging(50);
         $where = $status !== '' ? 'WHERE status = ?' : '';
         $params = $status !== '' ? [$status] : [];

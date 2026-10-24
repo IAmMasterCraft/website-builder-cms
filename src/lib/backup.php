@@ -39,23 +39,89 @@ function backup_dir(): string
     return BASE . BACKUP_DIR;
 }
 
-/** Writer that optionally gzips; returns [write(string), finish()] closures. */
+/** Write all of $data or throw (a full disk makes fwrite write less or nothing). */
+function backup_put($out, string $data): int
+{
+    $len = strlen($data);
+    $done = 0;
+    while ($done < $len) {
+        $n = fwrite($out, $done === 0 ? $data : substr($data, $done));
+        if ($n === false || $n === 0) {
+            throw new RuntimeException('Could not write the backup (disk full?).');
+        }
+        $done += $n;
+    }
+    return $len;
+}
+
+/**
+ * Writer that optionally gzips; returns [write(string), finish(): array] closures.
+ * finish() returns what was written: raw (uncompressed) bytes and their CRC-32,
+ * and the bytes that went to $out, so stored files can be checked afterwards.
+ */
 function backup_writer($out, bool $gzip): array
 {
     $ctx = $gzip ? deflate_init(ZLIB_ENCODING_GZIP, ['level' => 6]) : null;
-    $write = static function (string $s) use ($out, $ctx): void {
+    $crc = hash_init('crc32b');
+    $stats = ['raw' => 0, 'out' => 0];
+    $write = static function (string $s) use ($out, $ctx, $crc, &$stats): void {
+        hash_update($crc, $s);
+        $stats['raw'] += strlen($s);
         $data = $ctx !== null ? deflate_add($ctx, $s, ZLIB_NO_FLUSH) : $s;
-        if ($data !== '' && fwrite($out, $data) === false) {
-            throw new RuntimeException('Could not write the backup.');
+        if ($data === false) {
+            throw new RuntimeException('Could not compress the backup.');
+        }
+        if ($data !== '') {
+            $stats['out'] += backup_put($out, $data);
         }
     };
-    $finish = static function () use ($out, $ctx): void {
+    $finish = static function () use ($out, $ctx, $crc, &$stats): array {
         if ($ctx !== null) {
-            fwrite($out, deflate_add($ctx, '', ZLIB_FINISH));
+            $tail = deflate_add($ctx, '', ZLIB_FINISH);
+            if ($tail === false) {
+                throw new RuntimeException('Could not finish the compressed backup.');
+            }
+            $stats['out'] += backup_put($out, $tail);
         }
-        fflush($out);
+        if (!fflush($out)) {
+            throw new RuntimeException('Could not write the backup (flush failed).');
+        }
+        return ['raw_bytes' => $stats['raw'], 'crc32' => hash_final($crc), 'out_bytes' => $stats['out']];
     };
     return [$write, $finish];
+}
+
+/**
+ * Check a stored dump against what was written: size, and for gzip the
+ * trailer (CRC-32 and length of the uncompressed SQL) plus the end marker.
+ */
+function backup_verify_dump(string $path, array $written, bool $gzip): void
+{
+    clearstatcache(true, $path);
+    if ((int) filesize($path) !== (int) $written['out_bytes']) {
+        throw new RuntimeException('The backup file is shorter than what was written (disk full?).');
+    }
+    $fh = fopen($path, 'rb');
+    if ($fh === false) {
+        throw new RuntimeException('Cannot read the backup back.');
+    }
+    try {
+        if ($gzip) {
+            fseek($fh, -8, SEEK_END);
+            $trailer = unpack('Vcrc/Vsize', (string) fread($fh, 8));
+            $crc = sprintf('%08x', $trailer['crc'] ?? -1);
+            if ($crc !== $written['crc32'] || ($trailer['size'] ?? -1) !== ((int) $written['raw_bytes'] & 0xFFFFFFFF)) {
+                throw new RuntimeException('The compressed backup is incomplete (gzip trailer does not match).');
+            }
+        } else {
+            fseek($fh, -17, SEEK_END);
+            if (fread($fh, 17) !== "-- End of backup\n") {
+                throw new RuntimeException('The backup does not end with its end marker.');
+            }
+        }
+    } finally {
+        fclose($fh);
+    }
 }
 
 /** A second connection for dumping (unbuffered, consistent snapshot). */
@@ -132,8 +198,7 @@ function backup_dump_db($out, bool $gzip = false, ?PDO $pdo = null): array
     }
     $pdo->exec('COMMIT');
     $write("\nSET FOREIGN_KEY_CHECKS = 1;\nSET UNIQUE_CHECKS = 1;\n-- End of backup\n");
-    $finish();
-    return ['tables' => count($tables), 'rows' => $rowsTotal];
+    return ['tables' => count($tables), 'rows' => $rowsTotal] + $finish();
 }
 
 /**
@@ -229,36 +294,39 @@ function backup_uploads_size(): array
     return ['files' => $n, 'bytes' => $bytes];
 }
 
-/** Stream a ZIP of every uploaded file to $out. Returns the file count. */
-function backup_zip_uploads($out, bool $forceZip64 = false): int
+/** Stream a ZIP of every uploaded file to $out. Returns the file count and bytes written. */
+function backup_zip_uploads($out, bool $forceZip64 = false): array
 {
     $zip = new ZipStream($out, $forceZip64);
     foreach (backup_upload_files() as $name => $abs) {
         $zip->addFile($name, $abs);
     }
     $zip->finish();
-    return $zip->count();
+    return ['files' => $zip->count(), 'out_bytes' => $zip->bytesWritten()];
 }
 
-/** Stored backups, newest first. @return list<array{name:string,size:int,time:int,kind:string}> */
+/** Backup file names: gather-YYYYmmdd-HHMMSS-[manual-]db.sql[.gz] | uploads.zip */
+const BACKUP_NAME_PATTERN = '/^gather-\d{8}-\d{6}-(manual-)?(db\.sql\.gz|db\.sql|uploads\.zip)$/';
+
+/** Stored backups, newest first. @return list<array{name:string,size:int,time:int,kind:string,manual:bool}> */
 function backup_list(): array
 {
     $out = [];
     foreach (glob(backup_dir() . '/gather-*') ?: [] as $f) {
         $name = basename($f);
-        if (!preg_match('/^gather-\d{8}-\d{6}-(db\.sql\.gz|db\.sql|uploads\.zip)$/', $name, $m)) {
+        if (!preg_match(BACKUP_NAME_PATTERN, $name, $m)) {
             continue;
         }
-        $out[] = ['name' => $name, 'size' => (int) filesize($f), 'time' => (int) filemtime($f), 'kind' => str_starts_with($m[1], 'db') ? 'db' : 'uploads'];
+        $out[] = ['name' => $name, 'size' => (int) filesize($f), 'time' => (int) filemtime($f), 'kind' => str_starts_with($m[2], 'db') ? 'db' : 'uploads', 'manual' => $m[1] !== ''];
     }
-    usort($out, static fn (array $a, array $b): int => strcmp($b['name'], $a['name']));
+    usort($out, static fn (array $a, array $b): int => strcmp(substr($b['name'], 7, 15), substr($a['name'], 7, 15)) ?: strcmp($b['name'], $a['name']));
     return $out;
 }
 
 /** Absolute path of a stored backup by its exact name, or null. */
 function backup_path(string $name): ?string
 {
-    if (!preg_match('/^gather-\d{8}-\d{6}-(db\.sql\.gz|db\.sql|uploads\.zip)$/', $name)) {
+    if (!preg_match(BACKUP_NAME_PATTERN, $name)) {
         return null;
     }
     $path = backup_dir() . '/' . $name;
@@ -267,52 +335,93 @@ function backup_path(string $name): ?string
 }
 
 /**
- * Write a backup into storage/backups (the cron job and "Back up now").
+ * Write a backup into storage/backups (the cron job, "Back up now" and
+ * bin/backup). Only one backup runs at a time (own lock, separate from the
+ * cron lock); leftovers of an interrupted run (.part files) are removed
+ * first. Every file is checked after writing before it gets its final name.
+ * Manual backups are named ...-manual-... and pruned separately from
+ * scheduled ones.
  * @return list<string> file names written
  */
-function backup_run(bool $withUploads, ?int $now = null): array
+function backup_run(bool $withUploads, ?int $now = null, bool $manual = false): array
 {
     $dir = backup_dir();
     if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
         throw new RuntimeException('Cannot create storage/backups');
     }
-    $stamp = gmdate('Ymd-His', $now ?? time());
-    $gzip = function_exists('deflate_init');
-    $written = [];
-    $jobs = ['db' . ($gzip ? '.sql.gz' : '.sql') => static fn ($fh) => backup_dump_db($fh, $gzip)];
-    if ($withUploads) {
-        $jobs['uploads.zip'] = static fn ($fh) => backup_zip_uploads($fh);
+    $lock = fopen(BASE . '/storage/cache/backup.lock', 'c');
+    if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+        throw new RuntimeException('Another backup is running; try again when it has finished.');
     }
-    foreach ($jobs as $suffix => $fn) {
-        $name = "gather-$stamp-$suffix";
-        $part = $dir . '/.' . $name . '.part';
-        $fh = fopen($part, 'wb');
-        if ($fh === false) {
-            throw new RuntimeException('Cannot write ' . $name);
+    try {
+        // Holding the lock means no backup is in progress: any .part file is from a run that died.
+        foreach (glob($dir . '/.gather-*.part') ?: [] as $stale) {
+            unlink($stale);
         }
-        try {
-            $fn($fh);
-        } catch (Throwable $e) {
-            fclose($fh);
-            unlink($part);
-            throw $e;
+        $stamp = gmdate('Ymd-His', $now ?? time()) . ($manual ? '-manual' : '');
+        $gzip = function_exists('deflate_init');
+        $written = [];
+        $jobs = ['db' . ($gzip ? '.sql.gz' : '.sql') => static fn ($fh): array => backup_dump_db($fh, $gzip)];
+        if ($withUploads) {
+            $jobs['uploads.zip'] = static fn ($fh): array => backup_zip_uploads($fh);
         }
-        fclose($fh);
-        chmod($part, 0640);
-        rename($part, $dir . '/' . $name);
-        $written[] = $name;
+        foreach ($jobs as $suffix => $fn) {
+            $name = "gather-$stamp-$suffix";
+            $part = $dir . '/.' . $name . '.part';
+            $fh = fopen($part, 'wb');
+            if ($fh === false) {
+                throw new RuntimeException('Cannot write ' . $name);
+            }
+            try {
+                $info = $fn($fh);
+                if (!fclose($fh)) {
+                    throw new RuntimeException('Could not close ' . $name . ' (disk full?).');
+                }
+                $fh = null;
+                if ($suffix === 'uploads.zip') {
+                    clearstatcache(true, $part);
+                    if ((int) filesize($part) !== (int) $info['out_bytes']) {
+                        throw new RuntimeException('The uploads archive is incomplete (disk full?).');
+                    }
+                } else {
+                    backup_verify_dump($part, $info, $gzip);
+                }
+            } catch (Throwable $e) {
+                if (is_resource($fh)) {
+                    fclose($fh);
+                }
+                if (is_file($part)) {
+                    unlink($part);
+                }
+                throw $e;
+            }
+            chmod($part, 0640);
+            if (!rename($part, $dir . '/' . $name)) {
+                throw new RuntimeException('Could not store ' . $name);
+            }
+            $written[] = $name;
+        }
+        backup_prune(backup_settings()['keep']);
+        return $written;
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
     }
-    backup_prune(backup_settings()['keep']);
-    return $written;
 }
 
-/** Keep the newest $keep backups of each kind. Returns how many were deleted. */
+/**
+ * Keep the newest $keep backups of each kind, counting scheduled and manual
+ * backups separately (a burst of manual backups never pushes out the daily
+ * ones, and the other way round). Returns how many were deleted.
+ */
 function backup_prune(int $keep): int
 {
-    $seen = ['db' => 0, 'uploads' => 0];
+    $seen = [];
     $deleted = 0;
     foreach (backup_list() as $b) {
-        if (++$seen[$b['kind']] > $keep) {
+        $group = ($b['manual'] ? 'manual-' : '') . $b['kind'];
+        $seen[$group] = ($seen[$group] ?? 0) + 1;
+        if ($seen[$group] > $keep) {
             $p = backup_path($b['name']);
             if ($p !== null && unlink($p)) {
                 $deleted++;
@@ -368,6 +477,11 @@ final class ZipStream
     public function count(): int
     {
         return count($this->entries);
+    }
+
+    public function bytesWritten(): int
+    {
+        return $this->offset;
     }
 
     private function put(string $bytes): void

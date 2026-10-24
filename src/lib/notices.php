@@ -9,24 +9,47 @@ use Core\Mail\Message;
  * unsubscribes like any bulk email). notice_reads records who read what.
  */
 
-/** Published notices this user is in the audience of, newest first, with read state. */
+/**
+ * Published notices this user is in the audience of, newest first, with read state.
+ * Audience membership is checked once per distinct audience (most notices share a
+ * few), and the result is kept for the request: the badge, the dashboard widget and
+ * the list on one page cost one notices query plus one query per distinct audience.
+ */
 function notices_for_user(int $userId, int $limit = 50): array
 {
-    $rows = q_all(
-        "SELECT n.*, r.read_at FROM notices n LEFT JOIN notice_reads r ON r.notice_id = n.id AND r.user_id = ?
-          WHERE n.status = 'published' ORDER BY n.published_at DESC, n.id DESC LIMIT 200",
-        [$userId]
-    );
-    $out = [];
-    foreach ($rows as $n) {
-        if (audience_includes_user(audience_decode($n['audience']), $userId)) {
-            $out[] = $n;
-            if (count($out) >= $limit) {
-                break;
+    $cache = &notices_cache();
+    if (!isset($cache[$userId])) {
+        $rows = q_all(
+            "SELECT n.*, r.read_at FROM notices n LEFT JOIN notice_reads r ON r.notice_id = n.id AND r.user_id = ?
+              WHERE n.status = 'published' ORDER BY n.published_at DESC, n.id DESC LIMIT 200",
+            [$userId]
+        );
+        $inAudience = [];
+        $list = [];
+        foreach ($rows as $n) {
+            $a = audience_decode($n['audience']);
+            $key = json_encode($a, JSON_THROW_ON_ERROR);
+            $inAudience[$key] ??= audience_includes_user($a, $userId);
+            if ($inAudience[$key]) {
+                $list[] = $n;
             }
         }
+        $cache[$userId] = $list;
     }
-    return $out;
+    return array_slice($cache[$userId], 0, $limit);
+}
+
+/** Per-request cache of notices_for_user(); cleared when read state or notices change. */
+function &notices_cache(): array
+{
+    static $cache = [];
+    return $cache;
+}
+
+function notices_forget(): void
+{
+    $c = &notices_cache();
+    $c = [];
 }
 
 function notices_unread_count(int $userId): int
@@ -43,6 +66,7 @@ function notice_mark_read(int $userId, ?int $noticeId = null): int
             $n += q('INSERT IGNORE INTO notice_reads (notice_id, user_id) VALUES (?, ?)', [$notice['id'], $userId])->rowCount();
         }
     }
+    notices_forget();
     return $n;
 }
 
@@ -57,10 +81,10 @@ function notice_publish(int $id, ?int $now = null): int
     if ($n['status'] !== 'published') {
         q("UPDATE notices SET status = 'published', published_at = ? WHERE id = ?", [gmdate('Y-m-d H:i:s', $now), $id]);
     }
+    notices_forget();
     if (!(bool) $n['email_copy'] || $n['emailed_at'] !== null) {
         return 0;
     }
-    q('UPDATE notices SET emailed_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', $now), $id]);
     $c = email_colours();
     $bodyHtml = '<h2 class="email-h1" style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#14202e">' . e($n['title']) . '</h2>'
         . email_style_rich(rich($n['body']), $c)
@@ -75,8 +99,12 @@ function notice_publish(int $id, ?int $now = null): int
         } catch (InvalidArgumentException) {
             continue;
         }
-        $queued += mail_queue_message($m, 'notice', 'notice:' . $id . ':' . $r['email'], 0, '', $now) ? 1 : 0;
+        // The dedupe key makes a second publish (or a retry after a crash half-way) queue nobody twice;
+        // the address is hashed so long addresses fit the 190-character key.
+        $queued += mail_queue_message($m, 'notice', 'notice:' . $id . ':' . hash('sha256', strtolower($r['email'])), 0, '', $now) ? 1 : 0;
     }
+    // Only marked once every copy is queued, so an interrupted run is completed by the next publish.
+    q('UPDATE notices SET emailed_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', $now), $id]);
     return $queued;
 }
 

@@ -298,7 +298,8 @@ function campaign_personalise(array $parts, array $recipient): array
 /** The Message for one queued recipient (uses the snapshot taken when queued). */
 function campaign_message_for(array $campaign, array $recipient): Message
 {
-    $parts = ['subject' => (string) $campaign['subject'], 'html' => (string) $campaign['html_snapshot'], 'text' => (string) $campaign['text_snapshot']];
+    // Subject, HTML and text are all frozen when the campaign is queued.
+    $parts = ['subject' => (string) ($campaign['subject_snapshot'] ?? $campaign['subject']), 'html' => (string) $campaign['html_snapshot'], 'text' => (string) $campaign['text_snapshot']];
     if ($parts['html'] === '') {
         $parts = campaign_render($campaign);
     }
@@ -328,8 +329,8 @@ function campaign_queue(int $id, ?int $now = null): int
                 [$id, $r['user_id'], $r['email'], mb_substr($r['name'], 0, 120), mb_substr($r['first_name'], 0, 80), gmdate('Y-m-d H:i:s', $now)])->rowCount();
         }
         $total = (int) q_val('SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = ?', [$id]);
-        q("UPDATE campaigns SET status = ?, queued_at = ?, html_snapshot = ?, text_snapshot = ?, recipient_count = ?, completed_at = ? WHERE id = ?",
-            [$total > 0 ? 'sending' : 'sent', gmdate('Y-m-d H:i:s', $now), $snap['html'], $snap['text'], $total, $total > 0 ? null : gmdate('Y-m-d H:i:s', $now), $id]);
+        q("UPDATE campaigns SET status = ?, queued_at = ?, html_snapshot = ?, subject_snapshot = ?, text_snapshot = ?, recipient_count = ?, completed_at = ? WHERE id = ?",
+            [$total > 0 ? 'sending' : 'sent', gmdate('Y-m-d H:i:s', $now), $snap['html'], $snap['subject'], $snap['text'], $total, $total > 0 ? null : gmdate('Y-m-d H:i:s', $now), $id]);
         return $n;
     });
 }
@@ -357,11 +358,30 @@ function campaigns_finish(int $now): void
 /** Delivery counts per status for one campaign. */
 function campaign_counts(int $id): array
 {
-    $out = ['queued' => 0, 'sending' => 0, 'sent' => 0, 'failed' => 0];
+    $out = ['queued' => 0, 'sending' => 0, 'sent' => 0, 'failed' => 0, 'suppressed' => 0, 'retryable' => 0];
+    $out['retryable'] = (int) q_val("SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = ? AND status = 'failed' AND interrupted = 0", [$id]);
     foreach (q_all('SELECT status, COUNT(*) AS n FROM campaign_recipients WHERE campaign_id = ? GROUP BY status', [$id]) as $r) {
         $out[$r['status']] = (int) $r['n'];
     }
     return $out;
+}
+
+/**
+ * Save the editor's fields, but only while the campaign is still a draft or
+ * scheduled: the status check and the update happen under a row lock, so an
+ * autosave can never change a campaign that was queued in the meantime.
+ * Returns false when the campaign can no longer be edited.
+ */
+function campaign_save_draft(int $id, array $fields): bool
+{
+    return db_tx(static function () use ($id, $fields): bool {
+        $status = q_val('SELECT status FROM campaigns WHERE id = ? FOR UPDATE', [$id]);
+        if (!in_array($status, ['draft', 'scheduled'], true)) {
+            return false;
+        }
+        db_update('campaigns', $id, $fields);
+        return true;
+    });
 }
 
 /** Send a test copy now (not queued, not logged as a recipient). */

@@ -47,6 +47,8 @@ function reset_comms(): void
     setting_set('jobs', []);
     setting_set('comments.moderation', 'pre');
     engagement_forget();
+    notices_forget();
+    setting_set('mail.pause', null);
     settings_all([]);
 }
 
@@ -314,8 +316,14 @@ test('failed sends are retried and then marked failed', function (): void {
     campaign_queue($id, $t);
     same(1, mail_queue_run($t, 10)['retry']);
     same(0, mail_queue_run($t + 60, 10)['sent'], 'not retried before the back-off');
-    same(1, mail_queue_run($t + MAIL_RETRY_SECONDS + 1, 10)['retry']);
-    same(1, mail_queue_run($t + MAIL_RETRY_SECONDS * 4, 10)['failed']);
+    // Back-off grows: 5 min, 30 min, 2 h, 6 h; the 5th attempt gives up.
+    for ($attempt = 1; $attempt < MAIL_MAX_ATTEMPTS - 1; $attempt++) {
+        $t += mail_retry_delay($attempt) + 1;
+        same(0, mail_queue_run($t - 2, 10)['retry'] + mail_queue_run($t - 2, 10)['sent'], "not before back-off $attempt");
+        same(1, mail_queue_run($t, 10)['retry'], "retry $attempt");
+    }
+    $t += mail_retry_delay(MAIL_MAX_ATTEMPTS - 1) + 1;
+    same(1, mail_queue_run($t, 10)['failed']);
     $row = q_one('SELECT * FROM campaign_recipients WHERE campaign_id = ?', [$id]);
     same('failed', $row['status']);
     contains('451', $row['error']);
@@ -508,6 +516,8 @@ test('likes: one per member per item, toggle, counts', function (): void {
     same(1, like_count('post', $post), 'the unique key blocks a duplicate like');
     throws(PDOException::class, fn () => q('INSERT INTO likes (user_id, item_type, item_id) VALUES (?, ?, ?)', [$b['user_id'], 'post', $post]));
     engagement_forget();
+    notices_forget();
+    setting_set('mail.pause', null);
     same(['likes' => 1, 'comments' => 0], engagement_counts('post', $post));
     $noLikes = fixture_post_id(['allow_likes' => '0']);
     same(null, engagement_item('post', $noLikes, 'likes', current_user_row($a['user_id'])), 'likes switched off on the post');
@@ -565,6 +575,8 @@ test('comments: pre-moderation, one reply level, 15-minute edit window, reports,
     account_delete($replier['user_id']);
     same('Former member', comment_author_name(q_one('SELECT * FROM comments WHERE id = ?', [$r1])));
     engagement_forget();
+    notices_forget();
+    setting_set('mail.pause', null);
     same(1, engagement_counts('post', $post)['comments'], 'cards count approved comments only (c1 is back in the queue, r2 pending, c2 rejected)');
     setting_set('comments.moderation', 'pre');
     mailer(null, true);

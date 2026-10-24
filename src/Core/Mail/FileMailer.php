@@ -16,11 +16,11 @@ final class FileMailer implements Mailer
     public function send(Message $message): void
     {
         if (!is_dir($this->dir) && !mkdir($this->dir, 0775, true) && !is_dir($this->dir)) {
-            throw new \RuntimeException('Mail folder is not writable');
+            throw new TransportException('Mail folder is not writable');
         }
         $file = sprintf('%s/%s-%s.eml', rtrim($this->dir, '/'), (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Ymd-His-u'), bin2hex(random_bytes(4)));
         if (file_put_contents($file, self::toMime($message, $this->fromEmail, $this->fromName)) === false) {
-            throw new \RuntimeException('Could not write mail file');
+            throw new TransportException('Could not write mail file');
         }
     }
 
