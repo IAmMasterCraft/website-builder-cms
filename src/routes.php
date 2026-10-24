@@ -47,6 +47,10 @@ function app_routes(): Router
     $r->post('/account/photo', [Account\Account::class, 'photo']);
     $r->get('/account/password', [Account\Account::class, 'password']);
     $r->post('/account/password', [Account\Account::class, 'passwordSave']);
+    $r->post('/account/email', [Account\Account::class, 'emailRequest']);
+    $r->post('/account/email/cancel', [Account\Account::class, 'emailCancel']);
+    $r->get('/account/email/confirm/{token:[a-f0-9]{64}}', [Account\Account::class, 'emailConfirmForm']);
+    $r->post('/account/email/confirm/{token:[a-f0-9]{64}}', [Account\Account::class, 'emailConfirm']);
     $r->get('/account/card', [Account\Account::class, 'card']);
     $r->get('/account/card/print', [Account\Account::class, 'cardPrint']);
     $r->get('/account/events', [Account\Account::class, 'events']);

@@ -9,7 +9,7 @@ $links = [
     ['downloads', '/account/downloads', 'Downloads', 'download', $verified],
     ['notices', '/account/notices', 'Notices', 'bell', $verified],
     ['preferences', '/account/preferences', 'Email preferences', 'mail', $verified],
-    ['password', '/account/password', 'Password', 'lock', true],
+    ['password', '/account/password', 'Email and password', 'lock', true],
     ['privacy', '/account/privacy', 'Your data', 'file', true],
 ];
 ?>

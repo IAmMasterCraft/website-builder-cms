@@ -279,3 +279,22 @@ check('CSRF: wrong form and header tokens are rejected too', $badToken === [], i
 check('nothing was created by the CSRF probes', (int) q_val("SELECT COUNT(*) FROM posts WHERE title = 'csrf probe'") === 0);
 $r = (new Browser($base))->post('/unsubscribe/' . sample_path('{token:x\.y}'), ['List-Unsubscribe' => 'One-Click']);
 check('CSRF-exempt unsubscribe still refuses a forged token (404)', $r['status'] === 404);
+
+// ---- Members change their own email (with re-verification) -----------------------
+create_user('mover@example.test', 'mover-password-1', 'member', 'Mo Ver', 'active');
+$mover = login_as($base, 'mover@example.test', 'mover-password-1');
+status_is($mover, '/account/password', 200, 'Email address');
+$r = $mover->submit('/account/password', '/account/email', ['new_email' => 'moved@example.test', 'email_password' => 'wrong-password']);
+check('email change needs the current password', $r['status'] === 303 && q_val("SELECT pending_email FROM users WHERE email = 'mover@example.test'") === null);
+$before = count(mail_files());
+$r = $mover->submit('/account/password', '/account/email', ['new_email' => 'moved@example.test', 'email_password' => 'mover-password-1']);
+$confirmMail = newest_mail_to('moved@example.test', $before);
+check('email change sends a confirmation to the new address', $r['status'] === 303 && $confirmMail !== null && (bool) preg_match('#/account/email/confirm/([a-f0-9]{64})#', $confirmMail, $cm));
+check('the old address is told about the change', newest_mail_to('mover@example.test', $before) !== null);
+check('account page shows the pending change', str_contains($mover->get('/account/password')['body'], 'Waiting for confirmation'));
+status_is(new Browser($base), '/account/email/confirm/' . $cm[1], 200, 'Yes, confirm');
+$r = (new Browser($base))->submit('/account/email/confirm/' . $cm[1], '/account/email/confirm/' . $cm[1], []);
+check('confirming switches the login email', $r['status'] === 303 && (int) q_val("SELECT COUNT(*) FROM users WHERE email = 'moved@example.test'") === 1);
+$r = login_as($base, 'moved@example.test', 'mover-password-1')->get('/account');
+check('member logs in with the new address', $r['status'] === 200);
+status_is(new Browser($base), '/account/email/confirm/' . $cm[1], 404);

@@ -523,6 +523,8 @@ function purge_unverified(?string $nowUtc = null): int
 function account_delete(int $userId): void
 {
     $photos = array_map('intval', array_column(q_all('SELECT photo_media_id FROM members WHERE user_id = ? AND photo_media_id IS NOT NULL', [$userId]), 'photo_media_id'));
+    // Logos of groups that never verified go with them (verified groups stay listed, logo included).
+    $logos = array_map('intval', array_column(q_all('SELECT logo_media_id FROM groups_orgs WHERE user_id = ? AND verified_at IS NULL AND logo_media_id IS NOT NULL', [$userId]), 'logo_media_id'));
     db_tx(static function () use ($userId): void {
         q("UPDATE event_registrations SET name = 'Former member', email = '', phone = '', user_id = NULL WHERE user_id = ?", [$userId]);
         // A group that never verified was never listed: remove it with the account.
@@ -535,6 +537,12 @@ function account_delete(int $userId): void
         if ($m !== null) {
             media_delete_files($m);
             q('DELETE FROM media WHERE id = ?', [$mediaId]);
+        }
+    }
+    foreach ($logos as $mediaId) {
+        media_forget($mediaId);
+        if (media_find($mediaId) !== null && media_usage($mediaId) === []) {
+            media_delete($mediaId);
         }
     }
 }
@@ -792,4 +800,117 @@ function members_import_csv(string $path, bool $update = false): array
     }
     fclose($fh);
     return $report;
+}
+
+// ---- Changing the login email (members and groups) ---------------------------
+
+const EMAIL_CHANGE_DAYS = 2;
+
+/** Partly hidden address for notices sent to the old one: am***@example.org */
+function email_mask(string $email): string
+{
+    [$local, $domain] = array_pad(explode('@', $email, 2), 2, '');
+    return mb_substr($local, 0, 2) . str_repeat('*', max(3, mb_strlen($local) - 2)) . '@' . $domain;
+}
+
+/** Problem with a requested new address, or null. */
+function email_change_problem(int $userId, string $newEmail): ?string
+{
+    if (!filter_var($newEmail, FILTER_VALIDATE_EMAIL) || mb_strlen($newEmail) > 190) {
+        return 'Enter a valid email address.';
+    }
+    $current = (string) q_val('SELECT email FROM users WHERE id = ?', [$userId]);
+    if ($newEmail === $current) {
+        return 'That is already your email address.';
+    }
+    if (q_val('SELECT id FROM users WHERE email = ? AND id <> ?', [$newEmail, $userId]) !== null) {
+        // Same wording whether or not the address exists elsewhere would hide accounts, but a
+        // logged-in member needs to know why it failed; they had to give their password first.
+        return 'Another account already uses that address.';
+    }
+    return null;
+}
+
+/**
+ * Start an email change. Verified accounts keep the old address until the
+ * link sent to the new one is confirmed (and the old address is told).
+ * Unverified accounts switch at once and get a fresh verification link,
+ * so someone who mistyped their address at sign-up can fix it.
+ * @return string 'pending' or 'changed'
+ */
+function email_change_request(array $user, string $newEmail): string
+{
+    $newEmail = strtolower(trim($newEmail));
+    if (($p = email_change_problem((int) $user['id'], $newEmail)) !== null) {
+        throw new InvalidArgumentException($p);
+    }
+    $name = $user['role'] === 'group'
+        ? (string) q_val('SELECT contact_person FROM groups_orgs WHERE user_id = ?', [$user['id']])
+        : (string) (member_for_user((int) $user['id'])['first_name'] ?? $user['display_name']);
+    if ($user['status'] === 'unverified') {
+        q('UPDATE users SET email = ?, pending_email = NULL WHERE id = ?', [$newEmail, $user['id']]);
+        send_template_mail($newEmail, $name, 'verify_email', ['verify_url' => base_url('/join/verify/' . user_token_create((int) $user['id'], 'verify')), 'days' => VERIFY_DAYS, 'account_label' => $user['role'] === 'group' ? 'your group account' : 'your membership']);
+        return 'changed';
+    }
+    q('UPDATE users SET pending_email = ? WHERE id = ?', [$newEmail, $user['id']]);
+    $token = user_token_create((int) $user['id'], 'email_change', EMAIL_CHANGE_DAYS);
+    send_template_mail($newEmail, $name, 'email_change', ['new_email' => $newEmail, 'confirm_url' => base_url('/account/email/confirm/' . $token), 'days' => (string) EMAIL_CHANGE_DAYS]);
+    send_template_mail((string) $user['email'], $name, 'email_change_notice', ['new_email' => email_mask($newEmail)]);
+    return 'pending';
+}
+
+/** Account id for a usable email-change link, or null. */
+function email_change_find(string $token): ?int
+{
+    $id = user_token_find($token, 'email_change');
+    return $id !== null && q_val('SELECT pending_email FROM users WHERE id = ?', [$id]) !== null ? $id : null;
+}
+
+/**
+ * Confirm the change: the pending address becomes the login. Outstanding
+ * password reset links (sent to the old address) stop working.
+ * @return array{id:int, old:string, new:string}|null
+ */
+function email_change_confirm(string $token): ?array
+{
+    $id = email_change_find($token);
+    if ($id === null) {
+        return null;
+    }
+    return db_tx(static function () use ($id, $token): ?array {
+        $u = q_one('SELECT id, email, pending_email FROM users WHERE id = ? FOR UPDATE', [$id]);
+        $new = (string) ($u['pending_email'] ?? '');
+        if ($new === '' || q_val('SELECT id FROM users WHERE email = ? AND id <> ?', [$new, $id]) !== null) {
+            q('UPDATE users SET pending_email = NULL WHERE id = ?', [$id]);
+            return null;
+        }
+        q('UPDATE users SET email = ?, pending_email = NULL WHERE id = ?', [$new, $id]);
+        q('UPDATE user_tokens SET used_at = UTC_TIMESTAMP() WHERE token_hash = ?', [hash('sha256', $token)]);
+        q('DELETE FROM password_resets WHERE user_id = ?', [$id]);
+        return ['id' => $id, 'old' => (string) $u['email'], 'new' => $new];
+    });
+}
+
+/**
+ * Group logos uploaded at sign-up that no group uses any more (sign-up that
+ * failed half-way, or a group purged before an earlier fix). Admin uploads
+ * are never touched: only files with no uploader or a group uploader.
+ */
+function purge_orphan_group_logos(?string $nowUtc = null): int
+{
+    $cutoff = (new DateTimeImmutable($nowUtc ?? utc_now(), utc()))->modify('-1 day')->format('Y-m-d H:i:s');
+    $ids = array_map('intval', array_column(q_all(
+        "SELECT m.id FROM media m LEFT JOIN users u ON u.id = m.uploaded_by
+          WHERE m.folder = 'groups' AND m.created_at < ? AND (m.uploaded_by IS NULL OR u.role = 'group')
+            AND NOT EXISTS (SELECT 1 FROM groups_orgs g WHERE g.logo_media_id = m.id)",
+        [$cutoff]
+    ), 'id'));
+    $n = 0;
+    foreach ($ids as $id) {
+        if (media_usage($id) === []) {
+            media_delete($id);
+            $n++;
+        }
+    }
+    return $n;
 }

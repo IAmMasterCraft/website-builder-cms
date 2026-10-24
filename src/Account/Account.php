@@ -216,7 +216,8 @@ final class Account
     {
         $user = self::user();
         $old = take_old_input();
-        self::page('password', 'Change password', 'password', ['user' => $user, 'errors' => $old['errors']]);
+        $pending = q_val('SELECT pending_email FROM users WHERE id = ?', [$user['id']]);
+        self::page('password', 'Email and password', 'password', ['user' => $user, 'errors' => $old['errors'], 'values' => $old['values'], 'pending_email' => is_string($pending) ? $pending : null]);
     }
 
     public static function passwordSave(array $p): void
@@ -246,6 +247,72 @@ final class Account
     }
 
     // ---- ID card ---------------------------------------------------------------
+
+    /** POST /account/email: ask to change the login email (password confirmed). */
+    public static function emailRequest(array $p): void
+    {
+        csrf_check();
+        $user = self::user();
+        $errors = [];
+        $current = is_string($_POST['email_password'] ?? null) ? $_POST['email_password'] : '';
+        if (!password_verify($current, (string) q_val('SELECT password_hash FROM users WHERE id = ?', [$user['id']]))) {
+            $errors['email_password'] = 'That is not your current password.';
+        }
+        $bucket = 'email-change:' . $user['id'];
+        if (!$errors && rate_limited($bucket, 5, 3600)) {
+            $errors['new_email'] = 'You have asked several times in the last hour. Please try again later.';
+        }
+        $new = strtolower(input('new_email'));
+        if (!$errors && ($problem = email_change_problem((int) $user['id'], $new)) !== null) {
+            $errors['new_email'] = $problem;
+        }
+        if ($errors) {
+            remember_input(['new_email' => $new], $errors);
+            redirect('/account/password#email');
+        }
+        rate_hit($bucket);
+        $result = email_change_request($user, $new);
+        audit('email_change_request', $user['role'], (int) $user['id'], $result === 'changed' ? 'unverified account now uses a new address' : 'confirmation sent to the new address');
+        flash($result === 'changed'
+            ? 'Your email is now ' . $new . '. We sent a new verification link there.'
+            : 'Nearly done: open the link we sent to ' . $new . ' to confirm it. Until then you keep logging in with ' . $user['email'] . '.', 'info');
+        redirect('/account/password');
+    }
+
+    /** POST /account/email/cancel: drop a pending change. */
+    public static function emailCancel(array $p): void
+    {
+        csrf_check();
+        $user = self::user();
+        q('UPDATE users SET pending_email = NULL WHERE id = ?', [$user['id']]);
+        q("DELETE FROM user_tokens WHERE user_id = ? AND purpose = 'email_change'", [$user['id']]);
+        flash('The email change was cancelled.');
+        redirect('/account/password');
+    }
+
+    /** GET /account/email/confirm/{token}: a button, so mail scanners cannot confirm. */
+    public static function emailConfirmForm(array $p): void
+    {
+        $id = email_change_find($p['token']);
+        $pending = $id !== null ? (string) q_val('SELECT pending_email FROM users WHERE id = ?', [$id]) : null;
+        header('Cache-Control: no-store');
+        render('site/confirm_email_change', ['title' => 'Confirm your new email', 'token' => $id !== null ? $p['token'] : null, 'pending' => $pending, 'noindex' => true], 'site', $id !== null ? 200 : 404);
+    }
+
+    public static function emailConfirm(array $p): void
+    {
+        csrf_check();
+        $done = email_change_confirm($p['token']);
+        if ($done === null) {
+            render('site/confirm_email_change', ['title' => 'Confirm your new email', 'token' => null, 'pending' => null, 'noindex' => true], 'site', 404);
+            return;
+        }
+        $role = (string) q_val('SELECT role FROM users WHERE id = ?', [$done['id']]);
+        q('INSERT INTO audit_log (user_id, action, item_type, item_id, summary, ip) VALUES (?, ?, ?, ?, ?, ?)', [$done['id'], 'email_change', $role, $done['id'], email_mask($done['old']) . ' -> ' . email_mask($done['new']), client_ip()]);
+        flash('Your email address is now ' . $done['new'] . '. Use it the next time you log in.');
+        $me = current_user();
+        redirect($me !== null && (int) $me['id'] === $done['id'] ? '/account/password' : '/login');
+    }
 
     private static function memberWithCard(): array
     {

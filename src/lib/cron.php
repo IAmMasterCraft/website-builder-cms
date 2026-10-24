@@ -38,7 +38,7 @@ function cron_cleanup(): string
 /** Accounts that did not verify their email within 14 days are deleted (D7). */
 function cron_purge_unverified(): string
 {
-    return purge_unverified() . ' unverified account(s) removed';
+    return purge_unverified() . ' unverified account(s) removed, ' . purge_orphan_group_logos() . ' orphaned group logo(s) deleted';
 }
 
 function cron_campaigns_due(): string

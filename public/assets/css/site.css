@@ -826,3 +826,6 @@ details.report[open] summary { margin-bottom: var(--s-3); }
 .account-nav ul { position: relative; }
 .size-mini:not(.is-playing) .rp-play { display: none; }
 .size-mini .rp-next { padding-top: var(--s-2); margin-top: 0; }
+.narrow-card + .narrow-card { margin-top: var(--s-5); }
+.pending-email { display: grid; gap: var(--s-2); margin-bottom: var(--s-4); }
+.pending-email p { margin: 0; }
