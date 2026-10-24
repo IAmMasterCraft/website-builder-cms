@@ -59,6 +59,8 @@ function app_routes(): Router
     $r->get('/account/notices', [Account\Account::class, 'notices']);
     $r->get('/account/preferences', [Account\Account::class, 'preferences']);
     $r->post('/account/preferences', [Account\Account::class, 'preferencesSave']);
+    $r->post('/account/newsletter/opt-in', [Account\Account::class, 'newsletterOptIn']);
+    $r->post('/account/newsletter/dismiss', [Account\Account::class, 'newsletterDismiss']);
     $r->get('/account/privacy', [Account\Account::class, 'privacy']);
     $r->get('/account/privacy/export', [Account\Account::class, 'export']);
     $r->post('/account/privacy/delete', [Account\Account::class, 'deletionRequest']);

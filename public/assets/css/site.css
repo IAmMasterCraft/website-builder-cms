@@ -626,6 +626,13 @@ input[type="date"] { width: 100%; min-height: 46px; padding: 0.6rem 0.85rem; bor
 .verify-banner { display: flex; gap: var(--s-4); align-items: flex-start; padding: var(--s-5); border-radius: var(--radius-l); background: var(--c-warn-soft); border: 1px solid #f2d7a2; color: var(--c-ink); margin-bottom: var(--s-4); }
 .verify-banner h2 { font-size: var(--step-1); margin-bottom: var(--s-2); }
 .verify-icon { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--c-surface); color: var(--c-warn); }
+.optin-card { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: center; margin-bottom: var(--s-4); background: var(--c-brand-soft); }
+.optin-card h2 { font-size: var(--step-1); margin: 0 0 var(--s-1); }
+.optin-card p { margin: 0; }
+.optin-icon { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--c-surface); color: var(--c-brand); }
+.optin-text { flex: 1 1 18rem; min-width: 0; }
+.optin-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.bounce-banner { margin-bottom: var(--s-4); }
 .birthday-banner { display: flex; gap: var(--s-3); align-items: center; padding: var(--s-4) var(--s-5); border-radius: var(--radius-l); background: linear-gradient(120deg, var(--c-accent-soft), var(--c-brand-soft)); color: var(--c-ink); font-weight: 600; margin-bottom: var(--s-4); }
 .birthday-banner .icon { color: var(--c-danger); }
 .group-id { display: grid; gap: var(--s-1); margin-bottom: var(--s-3); }

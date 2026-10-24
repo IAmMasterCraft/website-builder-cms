@@ -272,15 +272,25 @@ function campaign_render(array $campaign, ?array $recipient = null, ?DateTimeImm
 {
     $c = email_colours();
     $body = campaign_render_blocks(campaign_blocks_decode($campaign['blocks'] ?? null), $c, $now);
+    $note = campaign_footer_note($campaign);
     $html = email_layout($body['html'], [
         'colours' => $c,
         'preheader' => (string) ($campaign['preheader'] ?? ''),
         'unsubscribe_url' => CAMPAIGN_UNSUB_TOKEN,
-        'footer_note' => 'You are receiving this because you are on the mailing list of ' . setting('site.name') . '.',
+        'footer_note' => $note,
     ]);
-    $text = $body['text'] . "\n\n--\n" . setting('site.name') . "\nUnsubscribe: " . CAMPAIGN_UNSUB_TOKEN . "\n";
+    $text = $body['text'] . "\n\n--\n" . $note . "\n" . setting('site.name') . "\nUnsubscribe: " . CAMPAIGN_UNSUB_TOKEN . "\n" . email_prefs_text() . "\n";
     $out = ['subject' => (string) $campaign['subject'], 'html' => $html, 'text' => $text];
     return $recipient === null ? $out : campaign_personalise($out, $recipient);
+}
+
+/** Why the recipient got this campaign (essential notices explain that preferences do not apply). */
+function campaign_footer_note(array $campaign): string
+{
+    if (!empty($campaign['essential'])) {
+        return 'This is an essential membership notice from ' . setting('site.name') . '. It goes to all members, including those who do not receive news emails, because it concerns your membership.';
+    }
+    return 'You are receiving this because you are on the mailing list of ' . setting('site.name') . '.';
 }
 
 /** Fill {first_name} and the unsubscribe link for one recipient. */
@@ -322,7 +332,7 @@ function campaign_queue(int $id, ?int $now = null): int
         }
         $nowDt = new DateTimeImmutable('@' . $now);
         $snap = campaign_render($c, null, $nowDt);
-        $aud = audience_resolve(audience_decode($c['audience']), true, $nowDt);
+        $aud = audience_resolve(audience_decode($c['audience']), true, $nowDt, (bool) $c['essential']);
         $n = 0;
         foreach ($aud['recipients'] as $r) {
             $n += q('INSERT IGNORE INTO campaign_recipients (campaign_id, user_id, email, name, first_name, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?)',

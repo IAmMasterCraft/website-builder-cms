@@ -60,11 +60,11 @@ function mail_sent_last_minute(int $now): int
  * the person may have unsubscribed, switched newsletters off, or the account
  * may have been suspended since.
  */
-function mail_bulk_block_reason(string $email): ?string
+function mail_bulk_block_reason(string $email, bool $essential = false): ?string
 {
     $email = strtolower($email);
-    if (email_suppressed($email)) {
-        return 'Not sent: the address unsubscribed after the email was queued.';
+    if (($sup = email_suppression($email)) !== null) {
+        return 'Not sent: ' . email_suppression_label((string) $sup['reason']) . '.';
     }
     $u = q_one('SELECT u.status, u.role, m.prefs FROM users u LEFT JOIN members m ON m.user_id = u.id WHERE u.email = ?', [$email]);
     if ($u === null) {
@@ -73,7 +73,8 @@ function mail_bulk_block_reason(string $email): ?string
     if ($u['status'] !== 'active') {
         return 'Not sent: the account is no longer active.';
     }
-    if ($u['role'] === 'member' && $u['prefs'] !== null && !member_pref($u, 'newsletters')) {
+    // Essential membership notices (A2) ignore the newsletter preference, nothing else.
+    if (!$essential && $u['role'] === 'member' && $u['prefs'] !== null && !member_pref($u, 'newsletters')) {
         return 'Not sent: news emails were switched off after the email was queued.';
     }
     return null;
@@ -156,13 +157,13 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
             if (!mail_claim('campaign_recipients', (int) $row['id'], $nowSql)) {
                 continue;
             }
-            if (($reason = mail_bulk_block_reason((string) $row['email'])) !== null) {
+            $cid = (int) $row['campaign_id'];
+            $campaigns[$cid] ??= q_one('SELECT * FROM campaigns WHERE id = ?', [$cid]);
+            if (($reason = mail_bulk_block_reason((string) $row['email'], (bool) $campaigns[$cid]['essential'])) !== null) {
                 q("UPDATE campaign_recipients SET status = 'suppressed', error = ? WHERE id = ?", [$reason, $row['id']]);
                 $stats['suppressed']++;
                 continue;
             }
-            $cid = (int) $row['campaign_id'];
-            $campaigns[$cid] ??= q_one('SELECT * FROM campaigns WHERE id = ?', [$cid]);
             try {
                 mailer()->send(campaign_message_for($campaigns[$cid], $row));
                 q("UPDATE campaign_recipients SET status = 'sent', sent_at = ?, error = '' WHERE id = ?", [$nowSql, $row['id']]);
@@ -292,6 +293,41 @@ function email_suppressed(string $email): bool
     return q_val('SELECT 1 FROM email_suppressions WHERE email = ?', [strtolower($email)]) !== null;
 }
 
+/** The suppression row for an address, or null. */
+function email_suppression(string $email): ?array
+{
+    return q_one('SELECT * FROM email_suppressions WHERE email = ?', [strtolower($email)]);
+}
+
+/**
+ * Suppression reasons. The person's own choices (unsubscribe, complaint) are
+ * lifted only by the person switching news emails on again; bounce
+ * suppressions are lifted by an admin once the address is fixed.
+ */
+function email_suppression_reasons(): array
+{
+    return [
+        'unsubscribe' => 'the address unsubscribed',
+        'complaint' => 'the recipient reported an email as spam',
+        'hard_bounce' => 'the address bounced (it does not exist or cannot receive mail)',
+        'soft_bounce' => 'the address bounced repeatedly (for example a full mailbox)',
+    ];
+}
+
+function email_suppression_label(string $reason): string
+{
+    return email_suppression_reasons()[$reason] ?? 'the address is on the suppression list';
+}
+
+/** Reasons that mean mail cannot be delivered at all (also skips most transactional mail). */
+const EMAIL_UNDELIVERABLE_REASONS = ['hard_bounce', 'soft_bounce'];
+
+/** Footer line with the preferences link (A2: in every email, transactional too). */
+function email_prefs_text(): string
+{
+    return 'Manage email preferences: ' . base_url('/account/preferences');
+}
+
 /** Stop newsletters/campaigns/notice copies to this address. */
 function email_unsubscribe(string $email): void
 {
@@ -305,9 +341,10 @@ function email_unsubscribe(string $email): void
     }
 }
 
+/** The person opted in again: lifts their own unsubscribe or complaint (never a bounce). */
 function email_resubscribe(string $email): void
 {
-    q('DELETE FROM email_suppressions WHERE email = ?', [strtolower($email)]);
+    q("DELETE FROM email_suppressions WHERE email = ? AND reason IN ('unsubscribe','complaint')", [strtolower($email)]);
 }
 
 /** Headers for bulk (non-transactional) mail: one-click unsubscribe (RFC 8058). */

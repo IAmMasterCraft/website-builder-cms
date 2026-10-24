@@ -13,6 +13,19 @@
 <?php else: ?>
   <?php if (!empty($is_birthday)): ?><div class="birthday-banner" role="status"><?= icon('heart') ?> Happy birthday, <?= e($member['first_name']) ?>! Warm wishes from everyone at <?= e(setting('site.name')) ?>.</div><?php endif ?>
   <p class="lede">Welcome back, <?= e($member ? $member['first_name'] : $user['display_name']) ?>.</p>
+  <?php if (!empty($optin_prompt)): ?>
+    <section class="dash-card optin-card" aria-labelledby="optin-title">
+      <span class="optin-icon" aria-hidden="true"><?= icon('mail') ?></span>
+      <div class="optin-text">
+        <h2 id="optin-title">Get news and event updates by email</h2>
+        <p class="muted">Hear about new events, news and opportunities from <?= e(setting('site.name')) ?>. Occasional emails; switch them off at any time in <a href="/account/preferences">Email preferences</a>.</p>
+      </div>
+      <div class="optin-actions">
+        <form method="post" action="/account/newsletter/opt-in"><?= csrf_field() ?><button class="btn accent" type="submit"><?= icon('check') ?> Yes, send me updates</button></form>
+        <form method="post" action="/account/newsletter/dismiss"><?= csrf_field() ?><button class="btn ghost" type="submit">No thanks</button></form>
+      </div>
+    </section>
+  <?php endif ?>
   <div class="dash-grid">
     <?php if ($member && !empty($card)): ?>
       <section class="dash-card">

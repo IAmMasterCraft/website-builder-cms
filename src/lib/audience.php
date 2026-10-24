@@ -130,9 +130,11 @@ function audience_sql(array $a, ?DateTimeImmutable $now = null): array
 
 /**
  * Who receives a bulk email (campaign, notice copy). Deduplicated by email.
+ * $essential: an essential membership notice (members receive it whatever
+ * their newsletter preference; suppressed addresses are still left out).
  * @return array{recipients:list<array{user_id:?int,email:string,name:string,first_name:string}>, excluded:int, total:int}
  */
-function audience_resolve(array $a, bool $bulk = true, ?DateTimeImmutable $now = null): array
+function audience_resolve(array $a, bool $bulk = true, ?DateTimeImmutable $now = null, bool $essential = false): array
 {
     [$sql, $params] = audience_sql($a, $now);
     $suppressed = array_flip(array_column(q_all('SELECT email FROM email_suppressions'), 'email'));
@@ -145,7 +147,8 @@ function audience_resolve(array $a, bool $bulk = true, ?DateTimeImmutable $now =
             continue;
         }
         $seen[$email] = true;
-        if ($bulk && (isset($suppressed[$email]) || ((int) $r['is_member'] === 1 && !member_pref($r, 'newsletters')))) {
+        // Essential membership notices (A2) skip the newsletter preference but never suppressed addresses.
+        if ($bulk && (isset($suppressed[$email]) || (!$essential && (int) $r['is_member'] === 1 && !member_pref($r, 'newsletters')))) {
             $excluded++;
             continue;
         }

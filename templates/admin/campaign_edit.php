@@ -10,6 +10,7 @@ $statusLabel = ['draft' => 'Draft', 'scheduled' => 'Scheduled', 'sending' => 'Se
   <div><p class="crumbs"><a href="/admin/campaigns">Campaigns</a></p><h1><?= e($c['subject']) ?></h1>
     <p><span class="badge <?= e(['sent' => 'ok', 'sending' => 'members', 'scheduled' => 'scheduled'][$c['status']] ?? 'draft') ?>"><?= e($statusLabel) ?></span>
       <?php if ($c['status'] === 'scheduled'): ?> for <strong class="tabular"><?= e(fmt_datetime($c['send_at'])) ?></strong><?php endif ?>
+      <?php if ($c['essential']): ?> <span class="badge warn">Essential notice</span><?php endif ?>
       <?php if (!$editable): ?> · <?= (int) $counts['sent'] ?> of <?= (int) $c['recipient_count'] ?> delivered<?= $counts['failed'] ? ', ' . (int) $counts['failed'] . ' failed' : '' ?><?php endif ?>
       <span class="save-state muted" data-save-state aria-live="polite"></span></p></div>
   <div class="actions">
@@ -29,7 +30,12 @@ $statusLabel = ['draft' => 'Draft', 'scheduled' => 'Scheduled', 'sending' => 'Se
       <section class="panel"><div class="panel-head"><h2>Message</h2></div><div class="panel-body fields">
         <?= field_html('subject', 'Subject line', 'text', $c['subject'], $err('subject'), ['max' => 200, 'required' => true, 'hint' => 'Use {first_name} to personalise it.']) ?>
         <?= field_html('preheader', 'Preview text', 'text', $c['preheader'], null, ['max' => 200, 'hint' => 'Shown after the subject in most inboxes.']) ?>
-        <?= view('admin/_audience', ['audience' => $audience, 'choices' => $choices, 'error' => $err('audience'), 'reach' => $reach]) ?>
+        <?= view('admin/_audience', ['audience' => $audience, 'choices' => $choices, 'error' => $err('audience'), 'reach' => $reach, 'essential' => (bool) $c['essential']]) ?>
+        <div class="field essential-field">
+          <label class="check-line"><input type="checkbox" name="essential" value="1" aria-describedby="essential-warning"<?= $c['essential'] ? ' checked' : '' ?>> <span><strong>Essential membership notice</strong><br><span class="muted">Sent to every active member in the audience, even those who switched news emails off.</span></span></label>
+          <div class="notice warn small-text" id="essential-warning"><p><?= icon('alert') ?> <strong>Only for essential membership business:</strong> notice of meetings (such as the AGM), changes to the constitution or governance, membership renewal and similar messages members must receive. Never for news, events, fundraising or promotions: those need the member’s consent.</p>
+            <p>Addresses that bounced, complained or unsubscribed from all emails are still left out. The email explains why the member received it, and marking a campaign as essential is recorded in the audit log.</p></div>
+        </div>
       </div></section>
 
       <section class="panel"><div class="panel-head"><h2>Content</h2><span class="muted small-text"><?= count($blocks) ?> block<?= count($blocks) === 1 ? '' : 's' ?></span></div>

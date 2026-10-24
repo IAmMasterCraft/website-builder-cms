@@ -18,7 +18,8 @@ final class Join
         if (($u = current_user()) !== null) {
             redirect(home_for($u));
         }
-        self::render([], [], 200);
+        // A2: the newsletter box starts unticked unless the super admin chose otherwise.
+        self::render(member_settings()['newsletter_default'] ? ['newsletters' => '1'] : [], [], 200);
     }
 
     private static function render(array $values, array $errors, int $status): void

@@ -64,7 +64,7 @@ final class Campaigns
         $aud = audience_decode($c['audience']);
         render('admin/campaign_edit', [
             'title' => $c['subject'], 'c' => $c, 'blocks' => campaign_blocks_decode($c['blocks']), 'audience' => $aud,
-            'choices' => audience_choices(), 'reach' => self::editable($c) ? audience_resolve($aud) : null, 'errors' => $old['errors'],
+            'choices' => audience_choices(), 'reach' => self::editable($c) ? audience_resolve($aud, true, null, (bool) $c['essential']) : null, 'errors' => $old['errors'],
             'counts' => campaign_counts((int) $c['id']), 'editable' => self::editable($c), 'user' => $user,
             'images' => q_all("SELECT id, title, original_name FROM media WHERE kind = 'image' AND visibility = 'public' ORDER BY id DESC LIMIT 80"),
             'body_class' => 'wide-mode',
@@ -120,8 +120,10 @@ final class Campaigns
             $subject = $subject === '' ? (string) $c['subject'] : mb_substr($subject, 0, 200);
         }
         $pre = mb_substr(input('preheader'), 0, 200);
+        // A2: "Essential membership notice" ignores newsletter preferences, so every change is audited.
+        $essential = input('essential') === '1';
         $saved = campaign_save_draft((int) $c['id'], [
-            'subject' => $subject, 'preheader' => $pre,
+            'subject' => $subject, 'preheader' => $pre, 'essential' => $essential ? 1 : 0,
             'blocks' => json_encode($blocks, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
             'audience' => json_encode($aud, JSON_THROW_ON_ERROR),
         ]);
@@ -129,8 +131,11 @@ final class Campaigns
             // Queued while this editor was open: the snapshot stays exactly as it was queued.
             $json ? json_out(['ok' => false, 'error' => 'This campaign has been sent and can no longer be edited.'], 409) : redirect('/admin/campaigns/' . $c['id']);
         }
+        if ($essential !== (bool) $c['essential']) {
+            audit($essential ? 'essential_on' : 'essential_off', 'campaign', (int) $c['id'], $subject . ($essential ? ': marked as an essential membership notice' : ': no longer an essential notice'));
+        }
         if ($json) {
-            $reach = audience_resolve($aud);
+            $reach = audience_resolve($aud, true, null, $essential);
             json_out(['ok' => true, 'errors' => $errors, 'saved_at' => fmt_date(utc_now(), 'H:i'), 'recipients' => count($reach['recipients']), 'excluded' => $reach['excluded']]);
         }
         // Autosave (JSON) is not logged: it runs every few seconds. Form saves are.
@@ -193,7 +198,7 @@ final class Campaigns
             flash('Fix the campaign content before sending (every block needs its details, and there must be at least one block).', 'error');
             redirect('/admin/campaigns/' . $c['id']);
         }
-        $reach = audience_resolve(audience_decode($c['audience']));
+        $reach = audience_resolve(audience_decode($c['audience']), true, null, (bool) $c['essential']);
         if ($reach['recipients'] === []) {
             flash('Nobody in this audience can receive the campaign (no one has email newsletters switched on). Choose another audience.', 'error');
             redirect('/admin/campaigns/' . $c['id']);
@@ -206,12 +211,12 @@ final class Campaigns
                 redirect('/admin/campaigns/' . $c['id']);
             }
             q("UPDATE campaigns SET status = 'scheduled', send_at = ? WHERE id = ?", [$at, $c['id']]);
-            audit('schedule', 'campaign', (int) $c['id'], $c['subject']);
+            audit('schedule', 'campaign', (int) $c['id'], ($c['essential'] ? '[essential notice] ' : '') . $c['subject']);
             flash('Scheduled for ' . fmt_datetime($at) . '. It will go to about ' . pluralise(count($reach['recipients']), 'recipient') . '.');
             redirect('/admin/campaigns/' . $c['id']);
         }
         $n = campaign_queue((int) $c['id']);
-        audit('send', 'campaign', (int) $c['id'], $c['subject'] . ' to ' . $n);
+        audit('send', 'campaign', (int) $c['id'], ($c['essential'] ? '[essential notice] ' : '') . $c['subject'] . ' to ' . $n);
         flash('Sending to ' . pluralise($n, 'recipient') . '. Emails go out in batches of ' . mail_per_minute() . ' a minute.');
         redirect('/admin/campaigns/' . $c['id'] . '/log');
     }

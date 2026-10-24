@@ -38,6 +38,7 @@ final class MembershipSettings
         foreach (['prefix', 'group_prefix', 'number_format', 'card_months', 'free_first_n', 'terms_url', 'signatory', 'regions', 'genders', 'types'] as $k) {
             $v[$k] = input($k);
         }
+        $v['newsletter_default'] = input('newsletter_default') === '1';
         $v['prefix'] = strtoupper($v['prefix']);
         $v['group_prefix'] = strtoupper($v['group_prefix']);
         $errors = [];
@@ -92,6 +93,7 @@ final class MembershipSettings
         setting_set('members', [
             'prefix' => $v['prefix'], 'group_prefix' => $v['group_prefix'], 'number_format' => $v['number_format'],
             'card_months' => (int) $v['card_months'], 'free_first_n' => (int) $v['free_first_n'], 'terms_url' => $v['terms_url'], 'signatory' => $v['signatory'],
+            'newsletter_default' => input('newsletter_default') === '1',
         ] + $lists);
         foreach ($uploads as $key => $id) {
             setting_set($key, $id);

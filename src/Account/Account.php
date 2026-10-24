@@ -65,6 +65,7 @@ final class Account
             $data['is_birthday'] = $member !== null && in_array([(int) $member['birth_month'], (int) $member['birth_day']], birthday_days('today'), true);
             $data['notices'] = array_values(array_filter(notices_for_user((int) $user['id'], 20), static fn (array $n): bool => $n['read_at'] === null));
             $data['upcoming_birthdays'] = birthday_celebrants('week');
+            $data['optin_prompt'] = $member !== null && newsletter_prompt_due($member, (string) $user['email']);
         }
         self::page('home', 'My account', 'home', $data);
     }
@@ -430,6 +431,32 @@ final class Account
         }
         flash('Preferences saved.');
         redirect('/account/preferences');
+    }
+
+    /** A2: one-click "switch news emails on" from the dashboard card. */
+    public static function newsletterOptIn(array $p): void
+    {
+        csrf_check();
+        $user = self::activeUser();
+        $member = member_for_user((int) $user['id']);
+        if ($member !== null) {
+            newsletter_opt_in($member, (string) $user['email']);
+            audit('consent', 'member', (int) $member['id'], 'switched news and event emails on from the dashboard');
+            flash('Thank you! You will now get news and event updates by email. You can switch them off at any time in Email preferences.');
+        }
+        redirect('/account');
+    }
+
+    /** A2: hide the card; it may come back after NEWSLETTER_PROMPT_DAYS. */
+    public static function newsletterDismiss(array $p): void
+    {
+        csrf_check();
+        $user = self::activeUser();
+        $member = member_for_user((int) $user['id']);
+        if ($member !== null) {
+            q('UPDATE members SET optin_prompt_dismissed_at = UTC_TIMESTAMP() WHERE id = ?', [$member['id']]);
+        }
+        redirect('/account');
     }
 
     public static function privacy(array $p): void

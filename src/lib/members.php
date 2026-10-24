@@ -80,6 +80,37 @@ function member_pref(array $memberRow, string $key): bool
     return member_prefs($memberRow)[$key] ?? false;
 }
 
+/** The newsletter card comes back at most this often after it was dismissed (A2). */
+const NEWSLETTER_PROMPT_DAYS = 90;
+
+/**
+ * Should the dashboard ask this member to switch news emails on? Only when
+ * they have not opted in, did not dismiss the card in the last 90 days, and
+ * their address is not suppressed for a complaint or bounce (they would not
+ * get the emails; the bounce banner asks them to fix the address instead).
+ */
+function newsletter_prompt_due(array $member, string $email, ?int $now = null): bool
+{
+    if (member_pref($member, 'newsletters')) {
+        return false;
+    }
+    $dismissed = $member['optin_prompt_dismissed_at'] ?? null;
+    if ($dismissed !== null && strtotime($dismissed . ' UTC') > ($now ?? time()) - NEWSLETTER_PROMPT_DAYS * 86400) {
+        return false;
+    }
+    $sup = email_suppression($email);
+    return $sup === null || $sup['reason'] === 'unsubscribe';
+}
+
+/** Switch news emails on (explicit consent): also lifts the member's own unsubscribe. */
+function newsletter_opt_in(array $member, string $email): void
+{
+    $prefs = member_prefs($member);
+    $prefs['newsletters'] = true;
+    q('UPDATE members SET prefs = ?, optin_prompt_dismissed_at = NULL WHERE id = ?', [json_encode($prefs, JSON_THROW_ON_ERROR), $member['id']]);
+    email_resubscribe($email);
+}
+
 // ---- Settings -------------------------------------------------------------------
 
 /** Membership rules and ID format (super admin, Membership settings). */
@@ -91,6 +122,9 @@ function member_settings(): array
         'regions' => ['England', 'Scotland', 'Wales', 'Northern Ireland', 'Outside the UK'],
         'genders' => ['Female', 'Male', 'Non-binary', 'I describe myself another way'],
         'types' => ['Standard', 'Life', 'Student', 'Honorary'],
+        // A2: whether the sign-up newsletter box starts ticked. Off by default: a pre-ticked
+        // box is not valid consent under UK GDPR/PECR.
+        'newsletter_default' => false,
     ];
     $saved = setting('members', []);
     $out = $d;

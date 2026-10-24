@@ -24,6 +24,10 @@ $f = static function (string $k, string $label, string $type = 'text', string $h
       <section class="panel"><div class="panel-head"><h2>Sign-up form</h2></div><div class="panel-body fields">
         <div class="field-row"><?= $f('card_months', 'Membership valid for (months)', 'number', 'Sets “valid until” on new cards.', ' min="1" max="120"') ?><?= $f('free_first_n', 'Free for the first N members', 'number', '0 turns the offer off. Shown as a banner on /join.', ' min="0"') ?></div>
         <?= $f('terms_url', 'Terms and privacy page', 'text', 'Linked from the consent box, e.g. /privacy-policy') ?>
+        <div class="field">
+          <label class="check-line"><input type="checkbox" name="newsletter_default" value="1" aria-describedby="ms-newsletter-hint"<?= !empty($values['newsletter_default']) ? ' checked' : '' ?>> <span><strong>Tick the “news and event updates” box on the sign-up form by default</strong></span></label>
+          <p class="hint" id="ms-newsletter-hint">Recommended: leave this off. Under UK GDPR and PECR a pre-ticked box is not valid consent for marketing emails; members can opt in later from their dashboard or Email preferences.</p>
+        </div>
         <div class="field-row"><?= $f('regions', 'Regions (one per line)', 'textarea') ?><?= $f('genders', 'Gender options (one per line)', 'textarea', 'Gender is always optional.') ?></div>
         <?= $f('types', 'Membership types (one per line)', 'textarea', 'The first one is given to new members.') ?>
         <p class="hint">Extra questions (for example a district of origin) are managed under <a href="/admin/custom-fields">Custom fields</a>.</p>

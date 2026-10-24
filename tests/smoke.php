@@ -597,6 +597,9 @@ require __DIR__ . '/smoke_comms.php';
 // ---- Phase 7: users & roles, audit, backups, health, permission matrix, CSRF --
 require __DIR__ . '/smoke_admin.php';
 
+// ---- Addendum A: newsletter opt-in, essential notices, bounce handling ------
+require __DIR__ . '/smoke_addendum.php';
+
 // ---- Login safety ----------------------------------------------------------
 $r = $visitor->post('/login', ['email' => 'sam@example.test', 'password' => 'x']);
 check('login POST without CSRF token is rejected (419)', $r['status'] === 419);

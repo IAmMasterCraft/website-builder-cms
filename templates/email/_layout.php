@@ -43,7 +43,7 @@ $font = "-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
       <tr><td class="email-pad" style="padding:20px 32px 26px;background:<?= e($c['soft']) ?>;color:#4a5668;font-size:13px;line-height:1.55">
         <p style="margin:0 0 6px"><?= e($footer_note) ?></p>
         <p style="margin:0"><strong style="color:#14202e"><?= e($site_name) ?></strong><?= $address !== '' ? ' · ' . e($address) : '' ?><?= $charity_number !== '' ? ' · Registered charity ' . e($charity_number) : '' ?></p>
-        <?php if ($unsubscribe_url !== ''): ?><p style="margin:10px 0 0"><a href="<?= e($unsubscribe_url) ?>" style="color:#4a5668;text-decoration:underline">Unsubscribe from these emails</a> · <a href="<?= e(base_url('/account/preferences')) ?>" style="color:#4a5668;text-decoration:underline">Email preferences</a></p><?php endif ?>
+        <p style="margin:10px 0 0"><?php if ($unsubscribe_url !== ''): ?><a href="<?= e($unsubscribe_url) ?>" style="color:#4a5668;text-decoration:underline">Unsubscribe from these emails</a> · <?php endif ?><a href="<?= e(base_url('/account/preferences')) ?>" style="color:#4a5668;text-decoration:underline">Manage email preferences</a></p>
       </td></tr>
     </table>
   </td></tr>

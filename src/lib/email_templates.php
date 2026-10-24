@@ -376,6 +376,7 @@ function email_template_render(string $key, array $vars, ?array $override = null
         }
     }
     $replyTo = isset($t['reply_to']) && filter_var($vars[$t['reply_to']] ?? '', FILTER_VALIDATE_EMAIL) ? $vars[$t['reply_to']] : null;
+    $text = trim($text) . "\n\n--\n" . email_prefs_text();
     return ['subject' => $subject !== '' ? $subject : (string) setting('site.name'), 'text' => trim($text) . "\n", 'html' => email_layout($html, ['colours' => $c]), 'reply_to' => $replyTo];
 }
 
