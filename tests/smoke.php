@@ -546,6 +546,9 @@ check('members can download members-only files', $r['status'] === 200);
 $r = $member->submit('/logout', '/logout', []);
 check('logout works', $r['status'] === 303 && $member->get('/admin')['status'] === 303);
 
+// ---- Phases 5-6: communications, jobs, comments, radio --------------------
+require __DIR__ . '/smoke_comms.php';
+
 // ---- Login safety ----------------------------------------------------------
 $r = $visitor->post('/login', ['email' => 'sam@example.test', 'password' => 'x']);
 check('login POST without CSRF token is rejected (419)', $r['status'] === 419);

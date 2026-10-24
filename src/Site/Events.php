@@ -208,11 +208,13 @@ final class Events
             redirect($back);
         }
         $ticket = $input['ticket_id'] !== '' ? q_one('SELECT name, price_label FROM event_tickets WHERE id = ?', [(int) $input['ticket_id']]) : null;
+        $where = trim(implode(', ', array_filter([(string) $event['venue_name'], (string) $event['venue_address']])));
         send_template_mail($input['email'], $input['name'], 'event_registration', [
-            'name' => $input['name'],
-            'event' => $event,
-            'quantity' => (int) $input['quantity'],
-            'ticket' => $ticket,
+            'event_title' => (string) $event['title'],
+            'event_when' => fmt_datetime($event['start_at']) . ' (' . site_tz()->getName() . ')',
+            'event_where' => $where !== '' ? $where : ((string) $event['online_url'] !== '' ? 'Online' : 'See the event page'),
+            'ticket' => $ticket ? $ticket['name'] . ($ticket['price_label'] !== '' ? ' (' . $ticket['price_label'] . ')' : '') : 'General admission',
+            'quantity' => (string) (int) $input['quantity'],
             'event_url' => base_url(event_url($event)),
             'ics_url' => base_url('/events/' . $event['slug'] . '.ics'),
         ]);

@@ -12,11 +12,14 @@
             <p class="tabular"><?= e($ext) ?> · <?= e(number_format(((int) $d['size']) / 1024, 0)) ?> KB<?= $d['category'] !== '' ? ' · ' . e($d['category']) : '' ?> · <?= e(pluralise((int) $d['download_count'], 'download')) ?>
               <?php if ($d['visibility'] === 'members'): ?> · <span class="lock"><?= icon('lock') ?> <?= e(t('members.only')) ?></span><?php endif ?></p>
           </div>
+          <div class="file-actions">
+          <?= view('partials/like_button', ['type' => 'download', 'id' => (int) $d['id'], 'viewer' => $viewer, 'return' => '/downloads' . ($category !== '' ? '?category=' . rawurlencode($category) : ''), 'label' => 'Useful']) ?>
           <?php if ($locked): ?>
             <a class="btn ghost small" href="/login?next=%2Fdownloads"><?= icon('lock') ?> Log in<span class="sr-only"> to download <?= e($d['title']) ?></span></a>
           <?php else: ?>
             <a class="btn small" href="/downloads/<?= (int) $d['id'] ?>/file"><?= icon('download') ?> Download<span class="sr-only"> <?= e($d['title']) ?></span></a>
           <?php endif ?>
+          </div>
         </div>
       <?php endforeach ?>
     <?php else: ?>

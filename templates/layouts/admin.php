@@ -2,6 +2,16 @@
 /** @var array $chrome @var string $content @var string $title */
 $c = $chrome;
 $u = $c['user'];
+// Highlight only the most specific matching link (e.g. /admin/radio/playlists, not /admin/radio too).
+$activeHref = '';
+foreach ($c['nav'] as $links) {
+    foreach ($links as [$href]) {
+        $match = $href === '/admin' ? $c['path'] === '/admin' : ($c['path'] === $href || str_starts_with($c['path'], $href . '/'));
+        if ($match && strlen($href) > strlen($activeHref)) {
+            $activeHref = $href;
+        }
+    }
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -27,8 +37,7 @@ $u = $c['user'];
       <?php foreach ($c['nav'] as $section => $links): ?>
         <p class="nav-section"><?= e($section) ?></p>
         <ul>
-          <?php foreach ($links as [$href, $label, $iconName]):
-              $active = $href === '/admin' ? $c['path'] === '/admin' : ($c['path'] === $href || str_starts_with($c['path'], $href . '/')); ?>
+          <?php foreach ($links as [$href, $label, $iconName]): $active = $href === $activeHref; ?>
             <li><a href="<?= e($href) ?>"<?= $active ? ' aria-current="page"' : '' ?>><?= icon($iconName) ?><span><?= e($label) ?></span></a></li>
           <?php endforeach ?>
         </ul>

@@ -28,7 +28,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     ]);
 }
 
-header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; font-src 'self'; frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://www.facebook.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'");
+header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; font-src 'self'; media-src 'self' blob:; frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://www.facebook.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'");
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Frame-Options: SAMEORIGIN');

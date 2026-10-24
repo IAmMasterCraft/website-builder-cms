@@ -41,6 +41,7 @@ final class Account
     {
         $user = $data['user'];
         $data += ['title' => $title, 'active' => $active, 'noindex' => true, 'is_group' => $user['role'] === 'group', 'extra_css' => ['assets/css/card.css']];
+        $data['unread_notices'] = $user['status'] === 'active' ? notices_unread_count((int) $user['id']) : 0;
         render('account/_shell', $data + ['inner' => view('account/' . $template, $data)], 'site', $status);
     }
 
@@ -62,6 +63,8 @@ final class Account
             $data['celebrants'] = birthday_celebrants('today');
             $data['card'] = $member !== null ? card_data($member) : null;
             $data['is_birthday'] = $member !== null && in_array([(int) $member['birth_month'], (int) $member['birth_day']], birthday_days('today'), true);
+            $data['notices'] = array_values(array_filter(notices_for_user((int) $user['id'], 20), static fn (array $n): bool => $n['read_at'] === null));
+            $data['upcoming_birthdays'] = birthday_celebrants('week');
         }
         self::page('home', 'My account', 'home', $data);
     }
@@ -313,7 +316,21 @@ final class Account
     public static function notices(array $p): void
     {
         $user = self::activeUser();
-        self::page('notices', 'Notices', 'notices', ['user' => $user]);
+        self::page('notices', 'Notices', 'notices', ['user' => $user, 'notices' => notices_for_user((int) $user['id'])]);
+    }
+
+    /** POST: mark one notice (id) or all notices read. JSON for the auto-mark from notices.js. */
+    public static function noticesRead(array $p): void
+    {
+        csrf_check();
+        $user = self::activeUser();
+        $id = input_int('id');
+        $n = notice_mark_read((int) $user['id'], $id > 0 ? $id : null);
+        if (str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')) {
+            json_out(['ok' => true, 'marked' => $n, 'unread' => notices_unread_count((int) $user['id'])]);
+        }
+        flash($id > 0 ? 'Marked as read.' : 'All notices marked as read.');
+        redirect('/account/notices');
     }
 
     // ---- Preferences and privacy -------------------------------------------------
@@ -339,6 +356,9 @@ final class Account
             $prefs[$k] = input($k) === '1';
         }
         q('UPDATE members SET prefs = ? WHERE id = ?', [json_encode($prefs, JSON_THROW_ON_ERROR), $member['id']]);
+        if ($prefs['newsletters']) {
+            email_resubscribe((string) $user['email']);
+        }
         flash('Preferences saved.');
         redirect('/account/preferences');
     }

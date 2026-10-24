@@ -37,6 +37,7 @@ final class LatestPosts extends Section
             $params
         );
         media_preload(array_column($rows, 'cover_media_id'));
+        engagement_preload('post', array_map('intval', array_column($rows, 'id')));
         return ['posts' => $rows];
     }
 }

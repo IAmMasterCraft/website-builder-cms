@@ -11,3 +11,5 @@ if (!is_file(__DIR__ . '/config.test.php')) {
 require __DIR__ . '/../src/load.php';
 $_SESSION = [];
 $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
+// Expected failures (simulated SMTP errors) are logged here, not printed.
+ini_set('error_log', BASE . '/storage/logs/test-error.log');

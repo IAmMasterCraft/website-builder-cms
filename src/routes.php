@@ -61,6 +61,30 @@ function app_routes(): Router
 
     $r->post('/contact', [Site\Contact::class, 'send']);
 
+    // Communications (§5), jobs (§4.6), likes and comments (§4.7)
+    $unsub = '{token:[A-Za-z0-9_-]{4,300}\.[a-f0-9]{32}}';
+    $r->get('/unsubscribe/' . $unsub, [Site\Unsubscribe::class, 'show']);
+    $r->post('/unsubscribe/' . $unsub, [Site\Unsubscribe::class, 'confirm']);
+    $r->post('/account/notices/read', [Account\Account::class, 'noticesRead']);
+    $r->get('/jobs', [Site\Jobs::class, 'index']);
+    $r->get('/jobs/{id:\d+}', [Site\Jobs::class, 'show']);
+    $r->post('/jobs/{id:\d+}/report', [Site\Jobs::class, 'report']);
+    $r->get('/account/jobs', [Account\Jobs::class, 'mine']);
+    $r->get('/account/jobs/new', [Account\Jobs::class, 'create']);
+    $r->post('/account/jobs', [Account\Jobs::class, 'store']);
+    $r->get('/account/jobs/{id:\d+}/edit', [Account\Jobs::class, 'edit']);
+    $r->post('/account/jobs/{id:\d+}', [Account\Jobs::class, 'update']);
+    $r->post('/account/jobs/{id:\d+}/delete', [Account\Jobs::class, 'delete']);
+    $r->post('/like', [Site\Engagement::class, 'like']);
+    $r->post('/comments', [Site\Engagement::class, 'comment']);
+    $r->post('/comments/{id:\d+}/edit', [Site\Engagement::class, 'edit']);
+    $r->post('/comments/{id:\d+}/delete', [Site\Engagement::class, 'delete']);
+    $r->post('/comments/{id:\d+}/report', [Site\Engagement::class, 'report']);
+
+    // Radio (§6)
+    $r->get('/radio', [Site\Radio::class, 'page']);
+    $r->get('/api/radio/now-playing', [Site\Radio::class, 'nowPlaying']);
+
     // Public content
     $r->get('/', [Site\Home::class, 'show']);
     $r->get('/search', [Site\Search::class, 'show']);
@@ -156,6 +180,73 @@ function app_routes(): Router
     $r->post('/admin/custom-fields/{id:\d+}/delete', [Admin\CustomFields::class, 'delete']);
     $r->get('/admin/settings/membership', [Admin\MembershipSettings::class, 'edit']);
     $r->post('/admin/settings/membership', [Admin\MembershipSettings::class, 'update']);
+
+    // Communications
+    $r->get('/admin/settings/email', [Admin\EmailSettings::class, 'edit']);
+    $r->post('/admin/settings/email', [Admin\EmailSettings::class, 'update']);
+    $r->post('/admin/settings/email/test', [Admin\EmailSettings::class, 'test']);
+    $r->get('/admin/campaigns', [Admin\Campaigns::class, 'index']);
+    $r->post('/admin/campaigns', [Admin\Campaigns::class, 'store']);
+    $r->get('/admin/campaigns/{id:\d+}', [Admin\Campaigns::class, 'edit']);
+    $r->post('/admin/campaigns/{id:\d+}', [Admin\Campaigns::class, 'save']);
+    $r->get('/admin/campaigns/{id:\d+}/preview', [Admin\Campaigns::class, 'preview']);
+    $r->post('/admin/campaigns/{id:\d+}/test', [Admin\Campaigns::class, 'test']);
+    $r->post('/admin/campaigns/{id:\d+}/send', [Admin\Campaigns::class, 'send']);
+    $r->post('/admin/campaigns/{id:\d+}/cancel', [Admin\Campaigns::class, 'cancel']);
+    $r->post('/admin/campaigns/{id:\d+}/duplicate', [Admin\Campaigns::class, 'duplicate']);
+    $r->post('/admin/campaigns/{id:\d+}/delete', [Admin\Campaigns::class, 'delete']);
+    $r->get('/admin/campaigns/{id:\d+}/log', [Admin\Campaigns::class, 'log']);
+    $r->get('/admin/email-templates', [Admin\EmailTemplates::class, 'index']);
+    $r->get('/admin/email-templates/{key:[a-z_]+}', [Admin\EmailTemplates::class, 'edit']);
+    $r->post('/admin/email-templates/{key:[a-z_]+}', [Admin\EmailTemplates::class, 'update']);
+    $r->get('/admin/email-templates/{key:[a-z_]+}/preview', [Admin\EmailTemplates::class, 'preview']);
+    $r->post('/admin/email-templates/{key:[a-z_]+}/reset', [Admin\EmailTemplates::class, 'reset']);
+    $r->post('/admin/email-templates/{key:[a-z_]+}/test', [Admin\EmailTemplates::class, 'test']);
+    $r->get('/admin/email-log', [Admin\EmailLog::class, 'index']);
+    $r->get('/admin/notices', [Admin\Notices::class, 'index']);
+    $r->get('/admin/notices/new', [Admin\Notices::class, 'create']);
+    $r->post('/admin/notices', [Admin\Notices::class, 'store']);
+    $r->get('/admin/notices/{id:\d+}', [Admin\Notices::class, 'edit']);
+    $r->post('/admin/notices/{id:\d+}', [Admin\Notices::class, 'update']);
+    $r->post('/admin/notices/{id:\d+}/delete', [Admin\Notices::class, 'delete']);
+    $r->get('/admin/inbox', [Admin\Inbox::class, 'index']);
+    $r->get('/admin/inbox/{id:\d+}', [Admin\Inbox::class, 'show']);
+    $r->post('/admin/inbox/{id:\d+}/read', [Admin\Inbox::class, 'read']);
+    $r->post('/admin/inbox/{id:\d+}/reply', [Admin\Inbox::class, 'reply']);
+    $r->post('/admin/inbox/{id:\d+}/delete', [Admin\Inbox::class, 'delete']);
+
+    // Jobs and comments moderation
+    $r->get('/admin/jobs', [Admin\Jobs::class, 'index']);
+    $r->get('/admin/jobs/new', [Admin\Jobs::class, 'create']);
+    $r->post('/admin/jobs', [Admin\Jobs::class, 'store']);
+    $r->post('/admin/jobs/settings', [Admin\Jobs::class, 'settings']);
+    $r->post('/admin/jobs/{id:\d+}/approve', [Admin\Jobs::class, 'approve']);
+    $r->post('/admin/jobs/{id:\d+}/reject', [Admin\Jobs::class, 'reject']);
+    $r->post('/admin/jobs/{id:\d+}/resolve', [Admin\Jobs::class, 'resolve']);
+    $r->post('/admin/jobs/{id:\d+}/delete', [Admin\Jobs::class, 'delete']);
+    $r->get('/admin/comments', [Admin\Comments::class, 'index']);
+    $r->post('/admin/comments/settings', [Admin\Comments::class, 'settings']);
+    $r->post('/admin/comments/{id:\d+}', [Admin\Comments::class, 'moderate']);
+
+    // Radio
+    $r->get('/admin/radio', [Admin\Radio::class, 'library']);
+    $r->post('/admin/radio', [Admin\Radio::class, 'upload']);
+    $r->post('/admin/radio/station', [Admin\Radio::class, 'station']);
+    $r->post('/admin/radio/categories', [Admin\Radio::class, 'addCategory']);
+    $r->post('/admin/radio/categories/{id:\d+}/delete', [Admin\Radio::class, 'deleteCategory']);
+    $r->get('/admin/radio/media/{id:\d+}', [Admin\Radio::class, 'editMedia']);
+    $r->post('/admin/radio/media/{id:\d+}', [Admin\Radio::class, 'updateMedia']);
+    $r->post('/admin/radio/media/{id:\d+}/delete', [Admin\Radio::class, 'deleteMedia']);
+    $r->get('/admin/radio/playlists', [Admin\Radio::class, 'playlists']);
+    $r->post('/admin/radio/playlists', [Admin\Radio::class, 'createPlaylist']);
+    $r->get('/admin/radio/playlists/{id:\d+}', [Admin\Radio::class, 'playlist']);
+    $r->post('/admin/radio/playlists/{id:\d+}', [Admin\Radio::class, 'updatePlaylist']);
+    $r->post('/admin/radio/playlists/{id:\d+}/delete', [Admin\Radio::class, 'deletePlaylist']);
+    $r->get('/admin/radio/schedule', [Admin\Radio::class, 'schedule']);
+    $r->post('/admin/radio/schedule', [Admin\Radio::class, 'createSlot']);
+    $r->get('/admin/radio/schedule/{id:\d+}', [Admin\Radio::class, 'editSlot']);
+    $r->post('/admin/radio/schedule/{id:\d+}', [Admin\Radio::class, 'updateSlot']);
+    $r->post('/admin/radio/schedule/{id:\d+}/delete', [Admin\Radio::class, 'deleteSlot']);
 
     // Generic content CRUD (type key validated against the registry)
     $type = '{type:[a-z-]+}';

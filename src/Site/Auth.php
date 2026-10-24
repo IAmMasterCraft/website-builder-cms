@@ -87,8 +87,7 @@ final class Auth
             $user = q_one("SELECT id, email, display_name FROM users WHERE email = ? AND status <> 'suspended'", [$email]);
             if ($user !== null) {
                 $token = create_password_reset((int) $user['id']);
-                send_template_mail($user['email'], $user['display_name'], 'password_reset', [
-                    'name' => $user['display_name'],
+                send_template_mail($user['email'], explode(' ', (string) $user['display_name'])[0], 'password_reset', [
                     'reset_url' => base_url('/reset/' . $token),
                 ]);
             }

@@ -327,6 +327,7 @@ function demo_seed(int $userId): void
             'text' => 'Events, learning and support for everyone who lives, works or grew up by the harbour.',
             'slides' => [['media_id' => $img[0], 'caption' => 'Harbour festival'], ['media_id' => $img[1], 'caption' => 'Community garden'], ['media_id' => $img[9], 'caption' => 'Market stalls']]]),
         builder_make('stats'),
+        builder_make('radio_player', ['heading' => 'Harbourside Radio', 'size' => 'mini'], ['spacing' => 'compact']),
         builder_make('features', ['eyebrow' => 'What we do', 'heading' => 'Three ways we bring people together']),
         builder_make('upcoming_events', ['eyebrow' => 'Get together'], ['background' => 'soft']),
         builder_make('latest_posts', ['eyebrow' => 'Latest']),
@@ -361,11 +362,15 @@ function demo_seed(int $userId): void
     $add($main, 'Projects', 'list', 'projects', null, null, $newsItem);
     $add($main, 'Events', 'list', 'events');
     $add($main, 'Gallery', 'list', 'gallery');
+    $add($main, 'Radio', 'url', null, null, '/radio');
     $inv = $add($main, 'Get involved', 'page', null, $involved);
     $add($main, 'Get involved', 'page', null, $involved, null, $inv);
     $add($main, 'Downloads', 'list', 'downloads', null, null, $inv);
     $add($main, 'Groups', 'list', 'groups', null, null, $inv);
     $add($main, 'FAQ', 'list', 'faq', null, null, $inv);
+    $add($main, 'Job board', 'url', null, null, '/jobs', $inv);
+
+    demo_seed_community($userId);
 
     $top = db_insert('menus', ['name' => 'Top bar', 'location' => 'topbar']);
     $add($top, 'FAQ', 'list', 'faq');
@@ -380,4 +385,117 @@ function demo_seed(int $userId): void
     $add($f2, 'Leaders', 'list', 'leaders');
     $add($f2, 'Branches', 'list', 'branches');
     $add($f2, 'Contact', 'page', null, $contact);
+}
+
+
+/** Exact duration of an .m4a/.mp4 file from its movie header (mvhd), or null. */
+function demo_mp4_duration(string $file): ?float
+{
+    $fh = fopen($file, 'rb');
+    if ($fh === false) {
+        return null;
+    }
+    $size = (int) filesize($file);
+    $find = static function (int $start, int $end, string $type) use ($fh): ?array {
+        $pos = $start;
+        while ($pos + 8 <= $end) {
+            fseek($fh, $pos);
+            $h = (string) fread($fh, 8);
+            $len = unpack('N', substr($h, 0, 4))[1];
+            if ($len < 8) {
+                return null;
+            }
+            if (substr($h, 4, 4) === $type) {
+                return [$pos + 8, $pos + $len];
+            }
+            $pos += $len;
+        }
+        return null;
+    };
+    $moov = $find(0, $size, 'moov');
+    $mvhd = $moov ? $find($moov[0], $moov[1], 'mvhd') : null;
+    if ($mvhd === null) {
+        fclose($fh);
+        return null;
+    }
+    fseek($fh, $mvhd[0]);
+    $v = ord((string) fread($fh, 1));
+    fseek($fh, $mvhd[0] + ($v === 1 ? 20 : 12));
+    $scale = unpack('N', (string) fread($fh, 4))[1];
+    $dur = $v === 1 ? unpack('J', (string) fread($fh, 8))[1] : unpack('N', (string) fread($fh, 4))[1];
+    fclose($fh);
+    return $scale > 0 ? round($dur / $scale, 3) : null;
+}
+
+/** Store one demo radio file (demo-assets/radio) with its programme row. */
+function demo_radio_item(string $file, string $title, string $artist, string $description, string $category, int $userId, ?int $coverSeed = null): int
+{
+    $src = BASE . '/demo-assets/radio/' . $file;
+    $tmp = tempnam(sys_get_temp_dir(), 'gradio');
+    $copy = $tmp . '.' . pathinfo($file, PATHINFO_EXTENSION);
+    rename($tmp, $copy);
+    copy($src, $copy);
+    $mediaId = media_store($copy, $file, (int) filesize($copy), $userId, false, ['folder' => 'radio', 'visibility' => 'public', 'title' => $title]);
+    is_file($copy) && unlink($copy);
+    // Durations are normally measured by the admin's browser at upload; the
+    // demo files' lengths are read from their headers instead.
+    $duration = str_ends_with($file, '.webm') ? 15.0 : demo_mp4_duration($src);
+    q('UPDATE media SET duration = ? WHERE id = ?', [$duration, $mediaId]);
+    $cover = $coverSeed !== null ? demo_media_image($coverSeed, $title . ' cover', '', $userId, 800, 800, 'radio') : null;
+    return db_insert('radio_media', [
+        'media_id' => $mediaId, 'title' => $title, 'artist' => $artist, 'description' => $description, 'cover_media_id' => $cover,
+        'category_id' => q_val('SELECT id FROM radio_categories WHERE slug = ?', [$category]), 'duration' => $duration, 'created_by' => $userId,
+    ]);
+}
+
+/** Phase 5-6 demo content: radio station, a notice, a draft campaign, jobs. */
+function demo_seed_community(int $userId): void
+{
+    if (!is_dir(BASE . '/demo-assets/radio')) {
+        return;
+    }
+    $morning = demo_radio_item('harbour-morning.m4a', 'Harbour Morning', 'The Quayside Ensemble', 'A bright tune to start the day, recorded for our station.', 'music', $userId, 41);
+    $market = demo_radio_item('market-day.m4a', 'Market Day', 'The Quayside Ensemble', 'Upbeat music for Saturday mornings at the market.', 'music', $userId, 42);
+    $evening = demo_radio_item('evening-calm.m4a', 'Evening Calm', 'Lantern Trio', 'Slow and gentle, for the end of a long day.', 'music', $userId, 43);
+    $ident = demo_radio_item('station-ident.m4a', 'Station ident', 'Harbourside Radio', 'Our short station jingle.', 'music', $userId);
+    $notices = demo_radio_item('community-notices.m4a', 'Community notices', 'Harbourside Radio', 'This week\'s volunteering, clubs and meetings.', 'news', $userId, 44);
+    $studio = demo_radio_item('studio-session.webm', 'Studio session (video)', 'Harbourside Radio', 'A short video from the radio studio.', 'talk', $userId);
+
+    $loop = db_insert('radio_playlists', ['name' => 'All-day music', 'description' => 'Plays whenever no show is scheduled.']);
+    foreach ([$morning, $ident, $market, $evening, $ident] as $i => $m) {
+        q('INSERT INTO radio_playlist_items (playlist_id, radio_media_id, sort) VALUES (?, ?, ?)', [$loop, $m, $i]);
+    }
+    $midday = db_insert('radio_playlists', ['name' => 'Midday magazine', 'description' => 'Notices and a studio video.']);
+    foreach ([$ident, $notices, $studio] as $i => $m) {
+        q('INSERT INTO radio_playlist_items (playlist_id, radio_media_id, sort) VALUES (?, ?, ?)', [$midday, $m, $i]);
+    }
+    $start = (new DateTimeImmutable('now', site_tz()))->modify('-1 day')->format('Y-m-d');
+    $dur = radio_source_duration(null, $midday)[0] ?? 180;
+    q('INSERT INTO radio_slots (title, start_at, duration, repeat_rule, days_mask, playlist_id, created_by) VALUES (?, ?, ?, ?, 0, ?, ?)',
+        ['Midday magazine', local_to_utc($start . 'T12:00'), $dur, 'daily', $midday, $userId]);
+    q('INSERT INTO radio_slots (title, start_at, duration, repeat_rule, days_mask, media_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ['Evening wind-down', local_to_utc($start . 'T21:00'), (int) ceil((float) q_val('SELECT duration FROM radio_media WHERE id = ?', [$evening])), 'weekly', radio_days_mask([5, 6, 7]), $evening, $userId]);
+    setting_set('radio.loop_playlist_id', $loop);
+    setting_set('radio.enabled', true);
+
+    db_insert('notices', [
+        'title' => 'Welcome to your new member dashboard',
+        'body' => demo_html('Notices from the committee appear here. You can also find your member card, your event places and the job board in your account.', 'Questions? Use the contact form and a volunteer will reply.'),
+        'audience' => json_encode(audience_default()), 'status' => 'published', 'published_at' => utc_now(), 'created_by' => $userId,
+    ]);
+    db_insert('campaigns', [
+        'subject' => 'News from Harbourside this month', 'preheader' => 'Events, projects and ways to help',
+        'blocks' => json_encode(campaign_starter_blocks(), JSON_UNESCAPED_UNICODE), 'audience' => json_encode(audience_default()), 'created_by' => $userId,
+    ]);
+    $admin = q_one('SELECT * FROM users WHERE id = ?', [$userId]);
+    if ($admin !== null) {
+        $admin['permissions'] = [];
+        foreach ([
+            ['title' => 'Volunteer coordinator', 'organisation' => 'Harbourside Community Association', 'location' => 'Harbourside', 'job_type' => 'volunteer', 'description' => "Help us welcome and support new volunteers.\n\nAbout four hours a week; training provided.", 'apply_email' => 'hello@example.org'],
+            ['title' => 'Youth club assistant', 'organisation' => 'Quay Street Youth Club (demo)', 'location' => 'Harbourside', 'job_type' => 'part_time', 'salary_text' => '£12.50 an hour', 'description' => "Support Tuesday and Thursday sessions for 11 to 16 year olds.", 'apply_url' => 'https://example.org/apply'],
+        ] as $in) {
+            [$data] = job_validate($in);
+            job_create($data, $admin);
+        }
+    }
 }

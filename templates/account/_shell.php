@@ -5,6 +5,7 @@ $links = [
     ['profile', '/account/profile', $is_group ? 'Group profile' : 'Profile and photo', 'user', true],
     ['card', '/account/card', 'Member card', 'award', !$is_group && $verified],
     ['events', '/account/events', 'My events', 'calendar', $verified],
+    ['jobs', '/account/jobs', 'Jobs', 'flag', $verified],
     ['downloads', '/account/downloads', 'Downloads', 'download', $verified],
     ['notices', '/account/notices', 'Notices', 'bell', $verified],
     ['preferences', '/account/preferences', 'Email preferences', 'mail', $verified],
@@ -23,7 +24,7 @@ $links = [
     <nav class="account-nav" aria-label="Account">
       <ul>
         <?php foreach ($links as [$key, $href, $label, $ic, $show]): if (!$show) { continue; } ?>
-          <li><a href="<?= e($href) ?>"<?= $active === $key ? ' aria-current="page"' : '' ?>><?= icon($ic) ?> <?= e($label) ?></a></li>
+          <li><a href="<?= e($href) ?>"<?= $active === $key ? ' aria-current="page"' : '' ?>><?= icon($ic) ?> <?= e($label) ?><?php if ($key === 'notices' && !empty($unread_notices)): ?> <span class="count-pill tabular"><?= (int) $unread_notices ?><span class="sr-only"> unread</span></span><?php endif ?></a></li>
         <?php endforeach ?>
       </ul>
       <form method="post" action="/logout"><?= csrf_field() ?><button class="btn ghost small" type="submit"><?= icon('logout') ?> Log out</button></form>

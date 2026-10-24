@@ -104,7 +104,7 @@ final class Join
             return;
         }
         send_template_mail(strtolower((string) $_POST['email']), $profile['first_name'], 'verify_email', [
-            'name' => $profile['first_name'], 'verify_url' => base_url('/join/verify/' . $r['token']), 'days' => VERIFY_DAYS,
+            'verify_url' => base_url('/join/verify/' . $r['token']), 'days' => VERIFY_DAYS, 'account_label' => 'your membership',
         ]);
         login_user($r['user_id']);
         flash('Almost done! We have emailed you a link: open it to verify your address and get your member number.', 'info');
@@ -168,7 +168,7 @@ final class Join
             q('UPDATE media SET uploaded_by = ? WHERE id = ?', [$r['user_id'], $logoId]);
         }
         send_template_mail(strtolower((string) $_POST['email']), $g['contact_person'], 'verify_email', [
-            'name' => $g['contact_person'], 'verify_url' => base_url('/join/verify/' . $r['token']), 'days' => VERIFY_DAYS, 'group' => $g['name'],
+            'verify_url' => base_url('/join/verify/' . $r['token']), 'days' => VERIFY_DAYS, 'account_label' => 'the account for ' . $g['name'],
         ]);
         login_user($r['user_id']);
         flash('Almost done! We have emailed a link to verify the address. Once verified, your group gets its ID and appears in the directory.', 'info');
@@ -195,12 +195,12 @@ final class Join
         audit('verify', $user['role'], $userId, (string) $user['email']);
         if ($user['role'] === 'group') {
             $g = q_one('SELECT * FROM groups_orgs WHERE user_id = ?', [$userId]);
-            send_template_mail((string) $user['email'], (string) $user['display_name'], 'welcome_group', ['name' => (string) ($g['contact_person'] ?? ''), 'group' => (string) ($g['name'] ?? ''), 'number' => (string) ($g['group_number'] ?? '')]);
+            send_template_mail((string) $user['email'], (string) $user['display_name'], 'welcome_group', ['first_name' => (string) ($g['contact_person'] ?? ''), 'group_name' => (string) ($g['name'] ?? ''), 'group_number' => (string) ($g['group_number'] ?? '')]);
             flash('Email verified. Your group ID is ' . ($g['group_number'] ?? '') . ' and your group is now listed in the directory.');
         } else {
             $m = member_for_user($userId);
             send_template_mail((string) $user['email'], (string) ($m['first_name'] ?? ''), 'welcome_member', [
-                'name' => (string) ($m['first_name'] ?? ''), 'member_number' => (string) ($m['member_number'] ?? ''), 'card_url' => base_url('/account/card'),
+                'member_number' => (string) ($m['member_number'] ?? ''), 'card_url' => base_url('/account/card'),
             ]);
             flash('Email verified: welcome! Your member number is ' . ($m['member_number'] ?? '') . '. Your digital member card is ready.');
         }
@@ -222,7 +222,7 @@ final class Join
         }
         rate_hit($bucket);
         $name = $user['role'] === 'group' ? (string) q_val('SELECT contact_person FROM groups_orgs WHERE user_id = ?', [$user['id']]) : (string) (member_for_user((int) $user['id'])['first_name'] ?? '');
-        send_template_mail((string) $user['email'], $name, 'verify_email', ['name' => $name, 'verify_url' => base_url('/join/verify/' . user_token_create((int) $user['id'], 'verify')), 'days' => VERIFY_DAYS]);
+        send_template_mail((string) $user['email'], $name, 'verify_email', ['verify_url' => base_url('/join/verify/' . user_token_create((int) $user['id'], 'verify')), 'days' => VERIFY_DAYS, 'account_label' => $user['role'] === 'group' ? 'your group account' : 'your membership']);
         flash('A new verification link is on its way to ' . $user['email'] . '.', 'info');
         redirect('/account');
     }

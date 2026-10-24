@@ -7,7 +7,8 @@ alumni bodies. Clean-room build from
 `targets/` and `evidence/` are never read).
 
 Status: phases 1 (skeleton), 2 (media, content types, menus), 3 (page builder,
-themes, design controls) and 4 (membership, ID cards) are built.
+themes, design controls), 4 (membership, ID cards), 5 (communications, birthdays,
+jobs, likes and comments) and 6 (online radio) are built.
 See [BUILD-NOTES.md](BUILD-NOTES.md) for what is done and what is left.
 
 ## Requirements
@@ -31,7 +32,10 @@ php bin/demo you@example.org              # optional demo content
 php -S 127.0.0.1:8080 -t public public/index.php
 ```
 
-Emails are written to `storage/mail/*.eml` (open them in any mail client).
+Emails are written to `storage/mail/*.eml` (open them in any mail client) until
+the super admin switches Email settings to SMTP (vendored PHPMailer). Campaigns,
+notice copies and birthday emails are sent by cron, so run `php bin/cron`
+every minute (or by hand while testing).
 
 ## Test
 
@@ -51,7 +55,7 @@ The tests drop and recreate every table in the test database.
 | `php bin/migrate [--status]` | Apply pending SQL migrations in `migrations/` |
 | `php bin/make-admin <email> [--role=super_admin\|admin] [--perm=content,events,...]` | Create or update an admin |
 | `php bin/demo <admin-email>` | Load demo content into an empty site |
-| `php bin/cron [--force\|--list]` | Run due scheduled jobs (publishing, cleanup, purge of unverified sign-ups after 14 days); crontab: `* * * * * php /path/bin/cron` |
+| `php bin/cron [--force\|--list]` | Run due scheduled jobs: publishing, cleanup, purge of unverified sign-ups (14 days), scheduled campaigns, the email queue (per-minute limit), birthdays (daily at the configured time), job expiry; crontab: `* * * * * php /path/bin/cron` |
 | `bin/check` | Lint, tests and smoke test |
 
 ## Layout
@@ -63,6 +67,8 @@ src/               bootstrap, lib/ (helpers), Core/ (router, sanitiser, mail), S
 templates/         layouts/, site/, account/, admin/, sections/, install/, email/, partials/  (print only)
 themes/<name>/     civic, heritage, harvest, monochrome: theme.json (design defaults), tokens.css, overrides.css, preview.png
 public/assets/     css/, js/ (ES modules), img/ (icon + section-thumbnail sprites), fonts/ (OFL, self-hosted), vendor/ (qrcode-generator, MIT)
+vendor/phpmailer/  PHPMailer 6.9.3 (LGPL 2.1, unmodified src/ files + LICENSE), loaded by src/Core/Mail/SmtpMailer.php
+demo-assets/       original demo radio media (synthesised music, speech, generated video) + the dev script that made them
 migrations/        numbered SQL files
 storage/           originals/, variants/ (private), mail/, logs/, cache/, backups/  (not web-reachable)
 bin/               migrate, make-admin, demo, cron, check

@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 /*
  * One crontab entry (`* * * * * php bin/cron`) dispatches every due job.
- * Each job: interval in minutes and a function name. Later phases add the
- * email queue, birthdays (daily at the configured hour), job expiry and backups.
+ * Each job: an interval in minutes ('every') or a local time of day
+ * ('daily_at', site time zone), and a function name. Backups arrive in phase 7.
  */
 function cron_jobs(): array
 {
@@ -12,9 +12,10 @@ function cron_jobs(): array
         'publish_scheduled' => ['every' => 1, 'run' => 'cron_publish_scheduled'],
         'cleanup' => ['every' => 60, 'run' => 'cron_cleanup'],
         'purge_unverified' => ['every' => 60, 'run' => 'cron_purge_unverified'],
-        // 'email_queue' => ['every' => 1, 'run' => ...],       phase 5
-        // 'birthdays'   => ['daily_at' => '07:00', 'run' => ...], phase 5
-        // 'job_expiry'  => ['every' => 60, 'run' => ...],      phase 5
+        'campaigns_due' => ['every' => 1, 'run' => 'cron_campaigns_due'],
+        'email_queue' => ['every' => 1, 'run' => 'cron_email_queue'],
+        'birthdays' => ['daily_at' => birthday_time(), 'run' => 'cron_birthdays'],
+        'job_expiry' => ['every' => 15, 'run' => 'cron_job_expiry'],
         // 'backups'     => ['daily_at' => '03:00', 'run' => ...], phase 7
     ];
 }
@@ -30,6 +31,7 @@ function cron_cleanup(): string
     $b = q('DELETE FROM rate_hits WHERE hit_at < UTC_TIMESTAMP() - INTERVAL 1 DAY')->rowCount();
     $c = q('DELETE FROM password_resets WHERE expires_at < UTC_TIMESTAMP() - INTERVAL 1 DAY')->rowCount();
     q('DELETE FROM user_tokens WHERE expires_at < UTC_TIMESTAMP() - INTERVAL 1 DAY');
+    q("DELETE FROM settings WHERE `key` LIKE 'birthdays.digest.%' AND updated_at < UTC_TIMESTAMP() - INTERVAL 30 DAY");
     return "removed $a attempts, $b rate hits, $c expired resets";
 }
 
@@ -39,9 +41,33 @@ function cron_purge_unverified(): string
     return purge_unverified() . ' unverified account(s) removed';
 }
 
-/** Is a job due, given its last run (unix time) and now? */
-function cron_is_due(array $job, ?int $lastRun, int $now): bool
+function cron_campaigns_due(): string
 {
+    return campaigns_due() . ' scheduled campaign(s) queued';
+}
+
+function cron_email_queue(): string
+{
+    $s = mail_queue_run();
+    return "{$s['sent']} sent, {$s['retry']} to retry, {$s['failed']} failed";
+}
+
+function cron_job_expiry(): string
+{
+    return jobs_expire() . ' job(s) expired';
+}
+
+/** Is a job due, given its last run (unix time) and now? */
+function cron_is_due(array $job, ?int $lastRun, int $now, ?DateTimeZone $tz = null): bool
+{
+    if (isset($job['daily_at'])) {
+        $tz ??= site_tz();
+        $local = (new DateTimeImmutable('@' . $now))->setTimezone($tz);
+        if ($local->format('H:i') < (string) $job['daily_at']) {
+            return false;
+        }
+        return $lastRun === null || (new DateTimeImmutable('@' . $lastRun))->setTimezone($tz)->format('Y-m-d') < $local->format('Y-m-d');
+    }
     if ($lastRun === null) {
         return true;
     }

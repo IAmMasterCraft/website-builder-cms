@@ -20,9 +20,10 @@ final class Downloads
         }
         // Members-only files are listed for everyone (with a lock) so visitors know they exist.
         $rows = q_all("SELECT d.*, m.mime, m.size, m.path FROM downloads d JOIN media m ON m.id = d.file_media_id WHERE $where ORDER BY d.category, d.title", $params);
+        engagement_preload('download', array_map('intval', array_column($rows, 'id')));
         render('site/downloads', [
             'title' => 'Downloads', 'rows' => $rows, 'categories' => array_combine($cats, $cats) ?: [], 'category' => $category,
-            'is_member' => viewer_is_member($viewer), 'canonical' => '/downloads',
+            'is_member' => viewer_is_member($viewer), 'canonical' => '/downloads', 'viewer' => $viewer,
         ]);
     }
 

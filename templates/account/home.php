@@ -43,14 +43,20 @@
       <?php else: ?><p class="muted">No news yet.</p><?php endif ?>
     </section>
     <section class="dash-card">
-      <h2>Birthdays today</h2>
+      <h2>Birthdays</h2>
       <?php if ($celebrants): ?><ul class="celebrants"><?php foreach ($celebrants as $c): ?><li><span class="celebrant-initial" aria-hidden="true"><?= e($c['initial']) ?></span><strong><?= e($c['name']) ?></strong></li><?php endforeach ?></ul>
       <?php else: ?><p class="muted">No birthdays to celebrate today.</p><?php endif ?>
+      <?php $soon = array_values(array_filter($upcoming_birthdays ?? [], static fn (array $c): bool => !in_array($c, $celebrants, true))); if ($soon): ?>
+        <h3 class="h4 muted">Coming up this week</h3>
+        <ul class="celebrants small"><?php foreach ($soon as $c): ?><li><span class="celebrant-initial" aria-hidden="true"><?= e($c['initial']) ?></span><span><strong><?= e($c['name']) ?></strong> <span class="muted tabular"><?= e(DateTimeImmutable::createFromFormat('!n-j', $c['month'] . '-' . $c['day'])->format('j M')) ?></span></span></li><?php endforeach ?></ul>
+      <?php endif ?>
       <p class="hint muted">Only members who chose to appear are listed. <a href="/account/preferences">Your choice</a>.</p>
     </section>
     <section class="dash-card">
-      <div class="dash-card-head"><h2>Notices</h2><a class="link-arrow" href="/account/notices">All notices <?= icon('arrow-right') ?></a></div>
-      <p class="muted">No unread notices.</p>
+      <div class="dash-card-head"><h2>Notices<?php if ($notices): ?> <span class="count-pill tabular"><?= count($notices) ?><span class="sr-only"> unread</span></span><?php endif ?></h2><a class="link-arrow" href="/account/notices">All notices <?= icon('arrow-right') ?></a></div>
+      <?php if ($notices): ?>
+        <ul class="notice-mini"><?php foreach (array_slice($notices, 0, 3) as $n): ?><li><a href="/account/notices#notice-<?= (int) $n['id'] ?>"><strong><?= e($n['title']) ?></strong></a><span class="muted small-text"><?= e(fmt_date($n['published_at'])) ?> · <?= e(excerpt($n['body'], 90)) ?></span></li><?php endforeach ?></ul>
+      <?php else: ?><p class="muted">No unread notices.</p><?php endif ?>
     </section>
   </div>
 <?php endif ?>

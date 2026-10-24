@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace Sections;
 
 /**
- * The radio arrives in phase 6. Until its tables exist this section shows a
- * friendly "off air" state; afterwards it reads the station status.
+ * The live radio player (§6.2) as a compact bar or a full panel. Shows an
+ * "off air" card while the station is switched off.
  */
 final class RadioPlayer extends Section
 {
@@ -24,7 +24,6 @@ final class RadioPlayer extends Section
 
     public static function data(array $settings, array $ctx): array
     {
-        $available = db_table_exists('radio_media');
-        return ['available' => $available, 'on' => $available && (bool) setting('radio.enabled', false)];
+        return ['on' => radio_enabled()];
     }
 }

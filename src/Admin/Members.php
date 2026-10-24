@@ -99,7 +99,7 @@ final class Members
             foreach ($report['new_user_ids'] as $uid) {
                 $u = q_one('SELECT u.email, m.first_name, m.member_number FROM users u JOIN members m ON m.user_id = u.id WHERE u.id = ?', [$uid]);
                 if ($u !== null) {
-                    send_template_mail((string) $u['email'], (string) $u['first_name'], 'welcome_import', ['name' => (string) $u['first_name'], 'member_number' => (string) $u['member_number'], 'login_url' => base_url('/forgot-password')]);
+                    send_template_mail((string) $u['email'], (string) $u['first_name'], 'welcome_import', ['member_number' => (string) $u['member_number'], 'login_url' => base_url('/forgot-password')]);
                 }
             }
         }
@@ -234,7 +234,7 @@ final class Members
         require_permission('members');
         $m = self::member($p);
         $token = create_password_reset((int) $m['user_id']);
-        send_template_mail((string) $m['email'], (string) $m['first_name'], 'member_reset', ['name' => (string) $m['first_name'], 'reset_url' => base_url('/reset/' . $token)]);
+        send_template_mail((string) $m['email'], (string) $m['first_name'], 'password_reset', ['reset_url' => base_url('/reset/' . $token)]);
         audit('reset_link', 'member', (int) $m['id'], (string) $m['email']);
         flash('A password link was emailed to ' . $m['email'] . ' (valid for one hour).');
         redirect('/admin/members/' . $m['id']);

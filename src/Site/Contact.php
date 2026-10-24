@@ -5,7 +5,7 @@ namespace Site;
 
 /**
  * The contact-form section posts here (§5, F14): the message is stored for
- * the admin inbox (phase 5) and emailed to the organisation, with a copy to
+ * the admin inbox and emailed to the organisation, with a copy to
  * the sender. Honeypot, time check and a per-IP rate limit guard it.
  */
 final class Contact
@@ -48,14 +48,14 @@ final class Contact
             $back(['form' => 'You have sent several messages in a short time. Please try again later or email us directly.']);
         }
         $pageId = input_int('page_id');
-        db_insert('contact_messages', [
+        $messageId = db_insert('contact_messages', [
             'name' => $values['name'], 'email' => $values['email'], 'phone' => $values['phone'],
             'subject' => $values['subject'] !== '' ? $values['subject'] : 'Message from the website',
             'body' => $values['message'], 'page_id' => $pageId > 0 ? $pageId : null, 'ip' => client_ip(),
         ]);
         $to = (string) setting('contact.email', '');
         if ($to !== '') {
-            send_template_mail($to, (string) setting('site.name'), 'contact_message', $values);
+            send_template_mail($to, (string) setting('site.name'), 'contact_message', ['subject' => $values['subject'] !== '' ? $values['subject'] : 'Message from the website', 'phone' => $values['phone'] !== '' ? $values['phone'] : 'not given', 'inbox_url' => base_url('/admin/inbox/' . $messageId)] + $values);
         }
         send_template_mail($values['email'], $values['name'], 'contact_copy', $values);
         $_SESSION['contact_sent'] = time();

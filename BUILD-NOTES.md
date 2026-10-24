@@ -170,10 +170,136 @@ database).
   example), validity months, free-first-N, terms link, regions, gender
   options, membership types, card background and signature uploads.
 - Group status in the Groups screen now suspends/restores the group login.
+**Phase 5: communications and member extras**
+- Mail: `Core\Mail\SmtpMailer` wraps vendored PHPMailer 6.9.3 (`vendor/phpmailer`,
+  LGPL 2.1, unmodified, no Composer). Email settings (super admin,
+  `/admin/settings/email`): file/SMTP driver, sender, host/port/encryption/user,
+  password stored encrypted (libsodium secretbox keyed from `app_key`), emails
+  per minute, birthday time, "send a test email". `FileMailer` stays the
+  default for development and tests. A transactional email that fails is
+  queued and retried by cron.
+- Queue (`email_queue` + `campaign_recipients`): `bin/cron` sends batches up to
+  the per-minute limit (counted over the last 60 s across both tables, so a
+  second cron run in the same minute sends nothing extra). A row is claimed
+  (queued -> sending) before sending; failures retry with back-off and become
+  `failed` after 3 attempts; rows a crashed run left in `sending` are marked
+  failed ("interrupted"), never re-sent. Unique (campaign, email) means a
+  recipient can never get a campaign twice; queued rows resume.
+- Campaigns (`/admin/campaigns`): block editor (heading, text, image, button,
+  divider, latest posts, upcoming events) as a server-rendered form (add,
+  move, duplicate, remove work without JS); `campaigns.js` autosaves (JSON +
+  CSRF header), refreshes the live preview (iframe, desktop/mobile widths)
+  and the recipient count. Audience picker per §5; test send; send now or
+  schedule; HTML snapshot taken when queued; `{first_name}` and a signed
+  per-address unsubscribe link filled per recipient; `List-Unsubscribe` +
+  one-click headers; delivery log per campaign plus a global log for other
+  queued mail. Emails use a responsive table layout in the active theme's
+  colours (readable inks from the design tokens).
+- Unsubscribe: `/unsubscribe/{b64(email)}.{hmac}`; GET shows a confirm button
+  (mail scanners do not unsubscribe people), POST unsubscribes (also RFC 8058
+  one-click). Effect: `email_suppressions` row + member `newsletters` off;
+  switching newsletters on again lifts the suppression.
+- Transactional templates (`/admin/email-templates`): 17 templates (verify,
+  welcome with member number, group welcome, import welcome, password reset,
+  event registration, job approved/rejected/pending, comment reply, birthday
+  greeting, birthday digest, contact copy/message/reply, deletion request).
+  Subject, plain-text body (blank line = paragraph) and button text are
+  editable; placeholders are listed per template and unknown ones are
+  rejected; preview with sample values, send me a test, reset to default.
+  All existing flows (verify, welcome, reset, admin password link, event
+  registration, contact, deletion) now use them; `templates/email/*.php`
+  except the layout were removed.
+- Notices (`/admin/notices`): rich-text announcement, same audiences, publish
+  / take down, optional email copy queued once on first publish (honours
+  preferences), read tracking (`notice_reads`; read counts in the admin list).
+  Members see them on `/account/notices` and the dashboard widget with an
+  unread badge; "mark as read" buttons, and `community.js` marks a notice read
+  after it has been on screen for 1.5 s.
+- Inbox (`/admin/inbox`): all/unread/replied, search, message page (marked read
+  by a POST from JS, button without JS), reply by email (template "Reply from
+  the inbox", Reply-To the organisation address), replies kept in
+  `contact_replies`, delete.
+- Birthdays (`birthday_run()`, cron `daily_at` = setting, default 07:00 site
+  time): opted-in celebrants get the greeting (`birthday_sends` member+year
+  insert is the idempotency check), admins with the members permission get a
+  digest of today + next 7 days (once per local date via an `INSERT IGNORE`
+  marker); 29 Feb -> 28 Feb in non-leap years. Admin overview shows today and
+  the next 7 days; the member dashboard shows today plus "coming up this week"
+  (opted-in celebrants only). `cron_is_due()` gained `daily_at` support.
+- Jobs (D8): `/jobs` (members only unless the "public" setting is on, filters
+  type/remote/search), `/jobs/{id}` (apply link/email, report once),
+  `/account/jobs` (my posts with status, post, edit, remove; 5 posts a day).
+  Posts wait for approval unless posted by staff or by a trusted member with
+  the auto-approve setting on (trusted = at least one approved job and no
+  rejected one). Owner edits of a live job go back to approval unless trusted.
+  Expiry = end of the closing date (site time) or 60 days, whichever first:
+  cron flips status, list queries also filter by `expires_at`. Admin queue
+  (`/admin/jobs`): awaiting approval / reported / live / expired / rejected,
+  approve, reject with reason (emailed), keep and close reports, delete,
+  settings, post a job. Moderators get a "job awaiting approval" email.
+- Likes and comments (D11): likes on posts and downloads (toggle, unique key,
+  JSON or form post), comments on posts: plain text, members only,
+  pre-moderated by default (setting: post-moderated; staff comments always
+  published), one level of replies (a reply to a reply joins the thread),
+  author can edit within 15 minutes (edits of approved comments go back to
+  the queue when pre-moderated) or delete, report once per member, author
+  emailed once when a reply is published, "Former member" after deletion.
+  Moderation queue `/admin/comments` (awaiting / reported / published /
+  rejected; approve, keep, reject, delete) under the content permission.
+  Post cards show like and comment counts (batched with `engagement_preload`).
+- Admin sidebar: Members (jobs, comments), Communications (campaigns,
+  notices, inbox, email templates, delivery log), Radio; the active link is
+  now the most specific match. Overview quick actions: new campaign, new
+  notice, upload to radio; "needs attention" cards link to the queues.
+
+**Phase 6: online radio**
+- Tables `radio_categories`, `radio_media` (points at a `media` row; title,
+  artist, description, cover, category, duration, on-demand flag, publish
+  date), `radio_playlists`, `radio_playlist_items`, `radio_slots` (start UTC,
+  duration, repeat none/daily/weekly + days mask, optional repeat-until,
+  media or playlist).
+- Admin (`/admin/radio`, radio permission): upload audio (mp3/m4a/ogg) or
+  video (mp4/webm); `radio-admin.js` measures the duration in the browser
+  (`URL.createObjectURL` + metadata) before the upload and posts it with the
+  form; without JS (or an unreadable file) the duration stays unknown and the
+  edit page offers "Measure duration" from the stored file. Unknown-duration
+  media cannot be scheduled or used in a scheduled/loop playlist. Media used
+  in a playlist or slot cannot be deleted (and the media library shows radio
+  usage and refuses to replace radio files). Categories, station on/off,
+  fallback loop playlist. Playlists: running order with move/remove/add (no
+  JS needed); a change that would make a scheduled slot overlap is refused
+  and rolled back. Schedule: week calendar (items placed by time with JS;
+  a list per day without it), now/next strip, all slots, add/edit/delete with
+  overlap validation (also a repeat against its own next repeat).
+- `GET /api/radio/now-playing`: exactly `{status, server_time, media{id,
+  title, artist, description, url, media_type, mime_type, duration,
+  cover_image}, offset, remaining, next{type, title, artist, starts_in},
+  next_check_in}`, computed from server time in UTC (injectable clock),
+  `Cache-Control: public, max-age=1`. No duration-reporting endpoint exists.
+- Player (`radio.js`, partial `partials/radio_player.php`, full on `/radio`,
+  full or mini in the radio section): server-rendered current state, big
+  "Tune in" button (autoplay rules), seeks to `offset + half the round trip`,
+  corrects once more when playback actually starts, re-syncs every 30 s and
+  seeks when drift > 2 s, reloads at item boundaries (`next_check_in`), swaps
+  audio/video elements by media type, cover, progress, elapsed/total, up next
+  with live countdown, volume (remembered), play/pause (resume = rejoin live),
+  off-air state with the next show. Playing something from the library pauses
+  the live player. Media are served by PHP with byte ranges (206).
+- `/radio`: live player on top, on-demand library below (newest first,
+  category chips, search, pagination, native audio/video controls,
+  `preload="none"`). "Listen live" header button shows when the station is
+  switched on and something is on air. CSP gained `media-src 'self' blob:`.
+- Demo: six original radio items in `demo-assets/radio` (synthesised music,
+  a talk segment read by the macOS speech synthesiser from text written for
+  this project, a generated 15 s VP8 video), an all-day loop playlist, a daily
+  "Midday magazine" slot and a weekly evening slot, station on; plus a notice,
+  a draft campaign and two jobs. `demo-assets/make-radio-demo.php` rebuilds
+  the files (macOS + an ffmpeg with libvpx).
+
 ## Tests
 
-`bin/check`: lint of every PHP file, `tests/run.php` (121 unit/DB tests) and
-`tests/smoke.php` (230 checks through `php -S`). Phases 1-2 coverage as
+`bin/check`: lint of every PHP file, `tests/run.php` (146 unit/DB tests) and
+`tests/smoke.php` (325 checks through `php -S`). Phases 1-2 coverage as
 before (router, escaping, CSRF, sanitiser, auth, lockout, permissions, uploads,
 content types, events, menus, search, feeds, installer, cron). Phase 3 adds:
 every section type rendering with defaults, hidden sections, schema validation
@@ -199,6 +325,42 @@ list/filters/edit/notes/password link/CSV export/import/bulk sheet, custom
 fields, settings validation, account pages, cancel registration (own only),
 data export, deletion request and admin removal, group registration, and
 403s for a limited admin and a member.
+
+Phases 5-6 add 25 unit/DB tests (`tests/comms_test.php`, `tests/radio_test.php`;
+146 in total) and 95 smoke checks (`tests/smoke_comms.php`; 325 in total):
+SMTP through a local test SMTP server (PHPMailer conversation incl. AUTH and
+custom headers), sealed SMTP password, template placeholders (all §5 ones),
+overrides and unknown-placeholder rejection, retry queue for failed
+transactional mail, unsubscribe token forgery, suppression and opt-in again,
+audience resolution for every audience type with preferences/suppression/
+dedupe, block validation/sanitising and rendering, queue batching with the
+per-minute limit, crash recovery and no duplicates, retries then failure,
+scheduled campaigns, notices (audience, read tracking, single email copy),
+birthday idempotency (same day, next year), digest window, 29 Feb in leap and
+non-leap years, `daily_at` cron, job validation/expiry/lifecycle/visibility/
+trust, likes uniqueness, comment moderation, reply depth, edit window,
+reports and reply email, repeat expansion across DST, overlap validation
+(repeats, self-overlap, back-to-back), playlist resync refusal, now-playing at
+slot starts/ends, inside playlists, loop alignment and wrap, loop cut short by
+a show, offline with next show, station off, repeat rules in local time. The
+smoke test drives every new screen through `php -S` (settings + test email,
+template edit/reset, campaign create/autosave/blocks/preview/test/send/batch/
+log, unsubscribe GET/POST/one-click, notice publish/read, inbox reply, job
+post/approve/report/expire/public, likes JSON + CSRF, comment pre-moderation/
+approve/reply email/edit window, radio page/API shape/byte ranges, upload with
+and without duration, schedule overlap, station off) and 403s for a limited
+admin and a member.
+
+Visual checks for phases 5-6 (headless Chrome via the suite's playwright-core,
+1440 and 375 px, no horizontal overflow on any of them): campaign list and
+editor, email render (campaign and transactional, desktop and phone width),
+template editor, admin jobs/comments/inbox/overview, radio library and
+schedule, job board and detail, account home/notices/jobs, post with
+comments, news cards with counts, downloads with likes, /radio before and
+after "Tune in", home mini player, video programme in the player. Two
+separate browser contexts tuned in 1.7 s apart stayed 0.16 s apart over 12 s
+(each within 0.2 s of the computed live position); an audio-to-video slot
+boundary swapped elements and played within 10 ms of the live position.
 
 Visual checks (headless Chrome, 1440 px and 375 px): home, contact and
 membership builder pages, builder editor (list, settings form, picker),
@@ -267,12 +429,58 @@ and edit. No horizontal overflow at 375 px on the public and account pages.
   removing the member. Imported members get a random password and use "Forgot
   password" (the optional welcome email says so).
 
+- Bulk email honours preferences strictly: members get campaigns and notice
+  copies only with "News and event updates" on (it is opt-in at sign-up);
+  unsubscribed addresses are skipped for everyone (groups, admins, event
+  guests have no preferences, only the suppression list). Transactional
+  emails ignore both. The editor shows how many are left out.
+- Audience "a region/branch": members have a region but no branch field, so
+  the audience is by region; "birthdays this month" uses the month at
+  queue time (site time zone).
+- Campaign content is rendered once when queued, so every recipient gets the
+  same latest posts/events; only `{first_name}` and the unsubscribe link vary.
+- The email-preview responses get their own CSP (`style-src 'unsafe-inline'`,
+  no scripts) because emails need inline styles; the rest of the site keeps
+  the strict CSP.
+- Comments (names of members) are shown to logged-in active members only;
+  visitors see the counts and a log-in prompt. Likes on downloads are
+  labelled "Useful". Members may delete their own comments.
+- Notice email copies are sent once, at first publish. Viewing a message or a
+  notice marks it read through a POST from JavaScript (GET never changes data).
+- Job "trusted member" is not defined in the spec: here it means at least one
+  approved job and no rejected one.
+- Radio repeats keep the local wall-clock time (site time zone) across DST;
+  boundaries are compared in UTC. Slots are at most 24 h and need a known
+  duration; slot length is the media or playlist length rounded up to whole
+  seconds. The loop is aligned to the Unix epoch so every listener hears the
+  same position; it is cut short when a show starts. `next.type` is
+  `scheduled` (next show or next item of the current playlist) or `loop`.
+  `server_time` is ISO 8601 UTC with milliseconds; `media`, `offset` and
+  `remaining` are null when off air.
+- "Cacheable for 1 s" = `Cache-Control: public, max-age=1`; the player fetches
+  with `cache: 'no-store'` so its latency compensation stays exact.
+- Radio media are served by PHP (`/media/{id}/{name}`) with byte-range support
+  rather than as static Apache files, because originals live outside
+  `public/`.
+
 ## Known gaps / next steps
 
-- Phase 5+: communications and the email queue (PHPMailer), notices (the
-  dashboard shows a placeholder), birthday cron/emails (preferences are already
-  stored), jobs, likes/comments, contact inbox screen (messages are stored),
-  radio, Users & roles, backups, audit log screen, system health page.
+- Phase 7: Users & roles screen, backups, audit log screen, system health
+  page (mail test is already on Email settings), cookie banner/analytics,
+  security hardening, accessibility/performance pass, deployment.
+- Phases 5-6 gaps: no bounce/complaint handling or open/click tracking; no
+  "retry failed recipients" button (failed rows stay failed so nobody gets a
+  duplicate); campaign/notice images must be public media; the campaign editor
+  has no drag and drop (up/down buttons); notice email copies are not re-sent
+  when a notice is edited. The radio has no persistent mini player across page
+  loads (D9), no per-programme on-demand detail pages, and the overlap check
+  looks at an 18-day window around the later slot start (enough for weekly
+  patterns; a clash that only appears on a DST change night is not detected).
+  Large uploads depend on the server's `upload_max_filesize`/`post_max_size`.
+  Two-browser sync was measured on one machine (same network path); listeners
+  on very asymmetric connections can be off by part of their round trip.
+- PHP's built-in server needs `PHP_CLI_SERVER_WORKERS` > 1 to stream radio to
+  several browsers at once (Apache has no such limit).
 - The rich-text editor is a small built-in toolbar (contenteditable +
   server-side sanitiser); D5 allows swapping in a vendored editor later.
 - Replacing an image changes its file name, so images embedded inside rich

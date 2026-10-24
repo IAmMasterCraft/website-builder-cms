@@ -128,3 +128,12 @@ document.querySelectorAll('[data-footer-col]').forEach((col) => {
   select?.addEventListener('change', update);
   update();
 });
+
+// Inbox: opening a message marks it read (a POST with the CSRF token; the
+// button still works without JavaScript).
+document.querySelectorAll('form[data-auto-read]').forEach(async (form) => {
+  try {
+    const res = await fetch(form.action, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-Token': csrf }, body: new FormData(form), credentials: 'same-origin' });
+    if (res.ok) form.hidden = true;
+  } catch { /* leave the button */ }
+});

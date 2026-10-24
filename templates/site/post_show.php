@@ -24,7 +24,14 @@
         <?php if ($post['tag_rows']): ?>
           <ul class="tag-list" aria-label="Tags"><?php foreach ($post['tag_rows'] as $tg): ?><li><a class="chip" href="/<?= e($post['base']) ?>?tag=<?= e(rawurlencode($tg['slug'])) ?>">#<?= e($tg['name']) ?></a></li><?php endforeach ?></ul>
         <?php endif ?>
+        <?php if ((int) $post['allow_likes'] || (int) $post['allow_comments']): ?><div class="engage-row">
+          <?php if ((int) $post['allow_likes']): ?><?= view('partials/like_button', ['type' => 'post', 'id' => (int) $post['id'], 'viewer' => $viewer, 'return' => post_url($post)]) ?><?php endif ?>
+          <?php if ((int) $post['allow_comments']): ?><a class="comment-count-link" href="#comments"><?= icon('help') ?> <span class="tabular"><?= e(pluralise(engagement_counts('post', (int) $post['id'])['comments'], 'comment')) ?></span></a><?php endif ?>
+        </div><?php endif ?>
         <?= view('site/share', ['url' => $share_url, 'text' => $post['title']]) ?>
+        <?php if ((int) $post['allow_comments'] && !$is_preview): ?>
+          <?= view('partials/comments', ['type' => 'post', 'id' => (int) $post['id'], 'viewer' => $viewer, 'return' => post_url($post), 'error' => $comment_error, 'thread' => $thread, 'count' => engagement_counts('post', (int) $post['id'])['comments']]) ?>
+        <?php endif ?>
       <?php endif ?>
     </div>
   </div>

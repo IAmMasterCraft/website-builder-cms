@@ -11,5 +11,11 @@
     </div>
     <<?= $h ?>><a href="<?= e(post_url($post)) ?>"><?= e($post['title']) ?></a></<?= $h ?>>
     <p><?= e(excerpt($post['summary'] ?: $post['body'], 150)) ?></p>
+    <?php $ec = engagement_counts('post', (int) $post['id']); if ((int) ($post['allow_likes'] ?? 1) || (int) ($post['allow_comments'] ?? 1)): ?>
+      <p class="card-counts muted">
+        <?php if ((int) ($post['allow_likes'] ?? 1)): ?><span><?= icon('heart') ?><span class="tabular"><?= $ec['likes'] ?></span><span class="sr-only"> likes</span></span><?php endif ?>
+        <?php if ((int) ($post['allow_comments'] ?? 1)): ?><span><?= icon('help') ?><span class="tabular"><?= $ec['comments'] ?></span><span class="sr-only"> comments</span></span><?php endif ?>
+      </p>
+    <?php endif ?>
   </div>
 </article>

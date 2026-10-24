@@ -77,12 +77,27 @@ function admin_nav(?array $user): array
         ],
         'Members' => [
             ['/admin/members', 'Members', 'users', 'members'],
+            ['/admin/jobs', 'Jobs', 'flag', 'jobs'],
+            ['/admin/comments', 'Comments', 'help', 'content'],
             ['/admin/custom-fields', 'Custom fields', 'tag', 'super_admin'],
+        ],
+        'Communications' => [
+            ['/admin/campaigns', 'Campaigns', 'mail', 'communications'],
+            ['/admin/notices', 'Notices', 'bell', 'communications'],
+            ['/admin/inbox', 'Inbox', 'inbox', 'communications'],
+            ['/admin/email-templates', 'Email templates', 'file', 'communications'],
+            ['/admin/email-log', 'Delivery log', 'clock', 'communications'],
+        ],
+        'Radio' => [
+            ['/admin/radio', 'Library', 'radio', 'radio'],
+            ['/admin/radio/playlists', 'Playlists', 'layers', 'radio'],
+            ['/admin/radio/schedule', 'Schedule', 'calendar', 'radio'],
         ],
         'System' => [
             ['/admin/design', 'Design', 'image', 'super_admin'],
             ['/admin/settings', 'Site settings', 'settings', 'super_admin'],
             ['/admin/settings/membership', 'Membership settings', 'award', 'super_admin'],
+            ['/admin/settings/email', 'Email settings', 'mail', 'super_admin'],
         ],
     ];
     $out = [];
@@ -195,8 +210,8 @@ function footer_blocks(string $path, array $social): array
     return $blocks;
 }
 
-/** "Listen live" header button: setting on and the station on air (phase 6). */
+/** "Listen live" header button: setting on and the station switched on and on air (§3.2, §6). */
 function listen_live_visible(): bool
 {
-    return (bool) setting('header.listen_live', true) && (bool) setting('radio.enabled', false) && db_table_exists('radio_slots');
+    return (bool) setting('header.listen_live', true) && radio_on_air();
 }

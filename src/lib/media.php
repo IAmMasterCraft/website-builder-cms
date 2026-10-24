@@ -456,6 +456,8 @@ function media_usage(int $id): array
         ['awards', 'photo_media_id', 'recipient', 'Award', '/admin/awards/%d/edit'],
         ['groups_orgs', 'logo_media_id', 'name', 'Group', '/admin/groups/%d/edit'],
         ['members', 'photo_media_id', 'first_name', 'Member photo', '/admin'],
+        ['radio_media', 'media_id', 'title', 'Radio programme', '/admin/radio/media/%d'],
+        ['radio_media', 'cover_media_id', 'title', 'Radio cover', '/admin/radio/media/%d'],
     ];
     $out = [];
     foreach ($refs as [$table, $col, $titleCol, $label, $url]) {
@@ -516,6 +518,10 @@ function media_replace(int $id, string $tmp, string $originalName, int $size, bo
     $m = media_find($id);
     if ($m === null) {
         throw new UploadException('Media item not found.');
+    }
+    if (q_val('SELECT 1 FROM radio_media WHERE media_id = ? LIMIT 1', [$id]) !== null) {
+        // Its measured duration drives the radio schedule: upload a new programme instead.
+        throw new UploadException('This file is a radio programme. Upload a new programme in the Radio library instead of replacing it.');
     }
     $info = media_validate($tmp, $originalName, $size, (string) $m['kind']);
     $stored = media_write_files($tmp, $info, $isUpload, (string) $m['visibility']);

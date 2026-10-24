@@ -1,5 +1,7 @@
 // Public site enhancements. Every feature works without this file.
 import { initLightbox } from './lightbox.js';
+import { initCommunity } from './community.js';
+import { initRadio } from './radio.js';
 
 // Mobile navigation toggle.
 const toggle = document.querySelector('.nav-toggle');
@@ -151,3 +153,5 @@ if (counters.length && !reducedMotion && 'IntersectionObserver' in window) {
 }
 
 initLightbox();
+initCommunity();
+initRadio();

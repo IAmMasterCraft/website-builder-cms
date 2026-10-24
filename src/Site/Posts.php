@@ -28,6 +28,7 @@ final class Posts
         $pg = paging(9);
         $result = posts_public($base, ['when' => $when, 'category' => $category, 'tag' => $tag], $pg['per'], $pg['offset'], $viewer);
         media_preload(array_column($result['rows'], 'cover_media_id'));
+        engagement_preload('post', array_map('intval', array_column($result['rows'], 'id')));
         $categories = [];
         foreach (q_all('SELECT name, slug FROM categories WHERE base = ? AND is_base = 0 ORDER BY sort, name', [$base]) as $c) {
             $categories[$c['slug']] = $c['name'];
@@ -78,7 +79,13 @@ final class Posts
             [$base, $row['id']]
         );
         $cover = media_find($row['cover_media_id'] ? (int) $row['cover_media_id'] : null);
+        engagement_preload('post', array_merge([(int) $row['id']], array_map('intval', array_column($related, 'id'))));
+        $commentError = $_SESSION['comment_error'] ?? null;
+        unset($_SESSION['comment_error']);
         render('site/post_show', [
+            'viewer' => $viewer,
+            'thread' => !$locked && (int) $row['allow_comments'] && viewer_is_member($viewer) ? comment_thread('post', (int) $row['id'], $viewer) : [],
+            'comment_error' => is_array($commentError) ? $commentError : null,
             'title' => $row['seo_title'] ?: $row['title'],
             'meta_description' => $row['seo_description'] ?: excerpt($row['summary'] ?: $row['body'], 300),
             'post' => $post,

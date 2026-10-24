@@ -50,7 +50,7 @@ final class Dashboard
         render('admin/overview', [
             'title' => 'Overview',
             'counts' => self::counts(),
-            'birthdays' => self::birthdaysToday(),
+            'birthdays' => birthday_members(birthday_dates_ahead((new \DateTimeImmutable('now', site_tz()))->setTime(0, 0), 7)),
             'activity' => $activity,
             'user' => $user,
             'cron_last' => is_string($cron) ? $cron : null,
