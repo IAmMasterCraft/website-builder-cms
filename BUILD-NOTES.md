@@ -296,6 +296,88 @@ database).
   a draft campaign and two jobs. `demo-assets/make-radio-demo.php` rebuilds
   the files (macOS + an ffmpeg with libvpx).
 
+**Phase 7: super admin, hardening, accessibility, deployment**
+- Users and roles (`/admin/users`, super admin): list with search/status
+  filter, create admins (email invitation with a 72-hour set-password link,
+  or a password set now), edit name/email/role/status and the 8 permission
+  keys, quick suspend/reactivate (a suspended admin is logged out on their
+  next request), send a password link, recent actions per admin. Rule (§2):
+  there is always at least one active super admin. `staff_apply_change()`
+  locks the active super admin rows (`FOR UPDATE`) and refuses any change
+  that would leave none (`LastSuperAdminException`); `bin/make-admin` goes
+  through the same function. The screen also never lets anyone change their
+  own role or status. No 2FA (D10).
+- Audit log (`/admin/audit`): filters by person (or "System"), action, item
+  type, date range (site time zone) and summary text, paging, CSV export
+  (formula-safe). Every admin POST handler writes an entry; a unit test
+  reads every admin POST route's handler source and fails if one does not
+  (two documented exemptions: builder autosave, which logs once per
+  editing session from `builder_save_draft()`, and "mark message read").
+  Gaps found by the test were filled (menu move/hide, album captions/
+  reorder/remove, member notes, campaign save/test/cancel/copy, template
+  test, radio categories, playlist edits). Member-side changes (email
+  change, deletion request, export) are logged too.
+- Backups (`/admin/backups`): "Download database" streams a gzip SQL dump
+  written in pure PHP (own unbuffered connection, consistent InnoDB
+  snapshot, DROP/CREATE + batched INSERTs, binary columns as hex, one
+  statement per line); "Download uploads" streams a ZIP (stored entries,
+  CRC computed first, Zip64 records when needed) of `public/uploads`,
+  `storage/originals` and `storage/variants`. Both are POSTs (CSRF, audited).
+  Daily backup via cron (setting: on/off, local time, keep 1-60, with or
+  without uploads) into `storage/backups` (mode 640, atomic `.part` rename,
+  pruned to the newest N per kind); "Back up to the server now"; download
+  and delete stored files (name pattern + realpath check). CLI:
+  `bin/backup [--uploads]`, `bin/restore <file> [--yes]` (asks you to type
+  the database name).
+- System health (`/admin/health`): PHP version and SAPI, required/optional
+  extensions, GD WebP, debug/display_errors, shell functions (not needed);
+  database server and version, pending migrations, size; cron last run and
+  every job's last run with staleness (3 intervals + 5 min, daily jobs 26 h),
+  overdue scheduled items (§12 warning), emails stuck in the queue; disk
+  space, writable folders, config.php permissions, upload totals;
+  upload_max_filesize/post_max_size/largest upload vs the radio limits,
+  memory_limit, max_execution_time; mail transport, failed emails, https
+  site address, scheduled backups. Links to "Send a test email" and Backups.
+- §12 lazy publishing was already in place (once a minute on public page
+  views); it is now covered by a test, and health warns when items are
+  overdue.
+- Members change their own email (`/account/password`, now "Email and
+  password"): current password required, 5 requests an hour; verified
+  accounts keep the old login until the link sent to the new address is
+  confirmed (button page, single use, 2 days; the old address gets a notice
+  with the new one masked; outstanding reset links are dropped; a race for
+  the address cancels the change); unverified accounts switch at once and
+  get a new verification link. Three new editable templates: confirm new
+  email, email change notice, admin invitation.
+- Orphaned group logos: deleting an unverified group deletes its logo;
+  the hourly purge job also sweeps sign-up logos no group uses (only files
+  with no uploader or a group uploader, older than a day).
+- Builder touch reordering: the drag handle uses pointer events for touch
+  and pen (pointer capture, drop marker, auto-scroll near the edges, live
+  region announcement, autosave); mouse keeps HTML5 drag and drop; arrow
+  buttons/keys unchanged. Checked in headless Chrome with real touch events
+  (`dev-tools/touch-reorder.mjs`).
+- Analytics and cookie banner (§7, §11): Site settings offer an allow-list
+  (Plausible, Fathom, Google Analytics 4) with a per-provider site ID
+  pattern; no pasted scripts. `analytics.js` loads the provider; the CSP is
+  widened for that provider's hosts on public pages only (admin keeps the
+  strict CSP; builder/design previews never load analytics). GA4 waits for
+  consent in a cookie banner (editable text; "Cookie settings" in the footer
+  to change the choice; shown only with JavaScript, so nothing tracks
+  without it). No analytics = no banner.
+- Hardening: `X-Powered-By` removed, `Cross-Origin-Opener-Policy`, HSTS on
+  HTTPS, explicit `connect-src`; `.htaccess` adds compression, nosniff and
+  referrer headers for static files and denies dumps/archives in `public/`.
+  Current-password checks (password change, email change, deletion request)
+  allow 10 wrong guesses an hour per account. `bin/check` gained a secrets
+  step (no config, dumps, keys or hard-coded passwords tracked) and lints the
+  bash scripts. Reviewed against the php-plain-security checklist (raw
+  input, SQL with variables, unescaped output, innerHTML greps: every hit is
+  code-derived or read-only).
+- Deployment kit: `DEPLOY.md` (aaPanel, Apache, PHP-FPM, MySQL; see the
+  file) and `bin/package` (archive of a commit for upload, private files
+  excluded and verified). Not deployed anywhere.
+
 ## Tests
 
 `bin/check`: lint of every PHP file, `tests/run.php` (146 unit/DB tests) and
@@ -368,6 +450,58 @@ Design screen with live theme switch, /join, account overview, ID card
 (screen, PNG render, CR80 print, A4 sheet), verify page, admin members list
 and edit. No horizontal overflow at 375 px on the public and account pages.
 
+Phase 7 adds 28 unit/DB tests (`tests/admin_test.php`, `tests/system_test.php`,
+`tests/profile_test.php`; 174 in total) and 67 smoke checks
+(`tests/smoke_admin.php`; 392 in total): last-super-admin rule (demote,
+suspend, suspended super admins do not count, promote back), staff
+validation, invitation link lifetime, suspended session dropped, permission
+keys, audit fields/filters, static audit coverage of every admin POST route,
+SQL dump -> drop every table -> restore with identical `SHOW CREATE TABLE`,
+row counts and `CHECKSUM TABLE` (gzip and plain, with quotes, backslashes,
+semicolons, newlines and emoji in the data), SQL splitter, ZIP validity
+(ZipArchive consistency check and `unzip -t`, normal and forced Zip64),
+uploads zip contents, retention, the backups cron job, health checks, stale
+cron, overdue items, lazy publishing, analytics allow-list/CSP, email
+change flows, logo purge, password-confirm limit. Smoke: Users & roles
+through HTTP (invite email -> set password -> scoped access, permission
+change, suspend logs out, own role/status ignored, second super admin
+demotes and promotes), audit screen/filters/CSV and entries for every area
+the smoke test touched, backups (419 without token, gzip dump downloaded
+over HTTP then restored into gather_test with identical checksums, uploads
+zip, store/download/delete, schedule validation), health page, **permission
+matrix over every admin route** (each of the 8 keys plus an admin with
+none: every admin GET answers 403 exactly outside that key's area and every
+denied admin POST answers 403 with a valid token; members get 403 and
+visitors are sent to /login on every admin page), **CSRF enumeration**
+(every POST route of the app answers 419 without a token, logged in or
+not, and with wrong form/header tokens; the only exemption is the signed
+RFC 8058 unsubscribe, which still refuses a forged token), email change over
+HTTP, analytics/cookie banner and security headers.
+
+Accessibility and performance (phase 7, headless Chrome 141 via the suite's
+playwright-core; tools in `dev-tools/`, never deployed):
+- axe-core 4.11 with WCAG 2.0/2.1/2.2 A+AA and best-practice rules: 78 page
+  runs (home, news list and detail, event list/calendar/detail, join, radio,
+  gallery, leaders, downloads, FAQ, login, jobs, member dashboard, ID card,
+  email and password; 20 admin screens incl. users, audit, backups, health,
+  members, member edit, settings, posts, post form, builder, design, menu,
+  media, campaigns, radio library and schedule, inbox, events) at 1366 px
+  and 375 px plus admin dark mode: **0 violations of any impact** after the
+  fixes (admin "View site" and profile menu unnamed on phones; collapsed
+  sidebar hid link names; accent button contrast in system dark mode;
+  scrolling tables not keyboard-reachable; `.sr-only` text in tables caused
+  horizontal page overflow on phones; top bar outside landmarks; nested
+  complementary landmarks). No horizontal overflow, no console errors.
+- Lighthouse 12.8 (local `php -S`, so no gzip and no cache headers; Apache
+  adds both through `.htaccess`): mobile home 96, news detail 96, event
+  detail 97, join 97, dashboard 97, ID card 95 performance; accessibility,
+  best practices 100 everywhere; SEO 100 on public pages (66 on account
+  pages, which are `noindex` on purpose). Desktop: 100/100/100/100 on home,
+  news and event. Remaining hints: render-blocking theme.css + site.css
+  (13 KB gzip for site.css), ~60 KB unused CSS per page (one shared
+  stylesheet), compression/caching (server config). Images: WebP 400/800/
+  1600 with srcset/sizes, below-the-fold images `loading="lazy"`.
+
 ## Interpretations of the spec
 
 - "All content types have title, slug, summary, body…": applied in full to
@@ -384,8 +518,7 @@ and edit. No horizontal overflow at 375 px on the public and account pages.
 - Event "today" includes multi-day events that span today; "past" uses the end
   time. Calendar weeks start on Monday.
 - Members-only downloads are listed for visitors with a lock and a log-in link.
-- Admin users and permissions are managed with `bin/make-admin` until the
-  Users & roles screen (phase 7).
+- Admin users and permissions: Users & roles screen (phase 7) or `bin/make-admin`.
 - Theme previews: `themes/<name>/preview.png` (spec layout) served by a small
   route (`/theme-preview/{key}.png`) because `themes/` is not web-reachable.
 - Builder: Publish also publishes a draft page (status draft -> published);
@@ -463,38 +596,76 @@ and edit. No horizontal overflow at 375 px on the public and account pages.
   rather than as static Apache files, because originals live outside
   `public/`.
 
+- Users & roles: the screen manages staff only (super admins and admins);
+  members/groups stay in Members. An admin login cannot reuse a member's
+  address (one users table, one role per account). Super admins hold no
+  permission rows. "Demote" = super admin -> admin; there is no account
+  deletion for staff (suspend instead), so the audit trail keeps its names.
+- Audit log: summaries are short text (255 chars), not before/after diffs;
+  exports and backup downloads are logged too (GET downloads write a log
+  row, the only GET side effect). Builder autosaves log once per editing
+  session; campaign autosaves (JSON) are not logged, form saves are.
+- Backups: "download DB dump + uploads zip" = two downloads (SQL gzip, ZIP);
+  restore is a CLI step (`bin/restore`), not a web button, so a wrong click
+  cannot overwrite the live site. Scheduled backups use the same cron
+  dispatcher (`daily_at`).
+- Cookie banner: shown only when the chosen provider sets cookies (GA4);
+  cookieless providers (Plausible, Fathom) load without a banner. The
+  allow-list is fixed in code (`src/lib/analytics.php`).
+- Email change: members and groups only (staff email is changed by a super
+  admin in Users & roles).
+
 ## Known gaps / next steps
 
-- Phase 7: Users & roles screen, backups, audit log screen, system health
-  page (mail test is already on Email settings), cookie banner/analytics,
-  security hardening, accessibility/performance pass, deployment.
+- Not run here: PHP 8.2 and MySQL 8 (local runs use PHP 8.5 and MariaDB);
+  the code was scanned for post-8.2 syntax/functions and none are used.
+  Do one install on the server's PHP version (DEPLOY.md step 8 lints with it).
+- `plain-php-reviewer` and `security-reviewer` were not run from this
+  builder session (no agent access); the php-plain-security checklist and
+  greps were applied by hand. Run both reviewers before go-live.
+- Deployment itself is not done (by instruction); DEPLOY.md and
+  `bin/package` are ready.
 - Phases 5-6 gaps: no bounce/complaint handling or open/click tracking; no
   "retry failed recipients" button (failed rows stay failed so nobody gets a
   duplicate); campaign/notice images must be public media; the campaign editor
   has no drag and drop (up/down buttons); notice email copies are not re-sent
   when a notice is edited. The radio has no persistent mini player across page
   loads (D9), no per-programme on-demand detail pages, and the overlap check
-  looks at an 18-day window around the later slot start (enough for weekly
-  patterns; a clash that only appears on a DST change night is not detected).
-  Large uploads depend on the server's `upload_max_filesize`/`post_max_size`.
-  Two-browser sync was measured on one machine (same network path); listeners
-  on very asymmetric connections can be off by part of their round trip.
+  looks at an 18-day window around the later slot start (a clash that only
+  appears on a DST change night is not detected). Two-browser sync was
+  measured on one machine.
 - PHP's built-in server needs `PHP_CLI_SERVER_WORKERS` > 1 to stream radio to
   several browsers at once (Apache has no such limit).
 - The rich-text editor is a small built-in toolbar (contenteditable +
   server-side sanitiser); D5 allows swapping in a vendored editor later.
 - Replacing an image changes its file name, so images embedded inside rich
   text keep pointing at the old (deleted) file; covers/photos are unaffected.
-- No axe or Lighthouse runs yet; pages were checked by screenshot at 1440 and
-  375 px. Keyboard paths were designed in (builder reorder keys, tabs, crop
-  keys) but not audited with a screen reader.
-- Builder drag and drop uses HTML5 drag events (mouse); touch users reorder
-  with the arrow buttons.
-- Purging an unverified group leaves its uploaded logo in the media library.
-- Members can only change their email through an admin.
-- Fixed a phase 2 bug found while testing: the router ignored patterns with
-  regex quantifiers, so `/reset/{token}` links returned 404; now covered by a
-  unit test and a smoke check.
+- Keyboard paths were checked with axe and by design; not audited with a
+  real screen reader.
+- Backups: very large upload folders take as long to zip as to download (no
+  background job); restoring needs the CLI. Zip64 output was verified with
+  forced Zip64 records, not with a real >4 GiB archive.
+- The audit log has no retention limit or purge yet.
 - Tests write uploaded/generated files into `storage/` and `public/uploads/`
-  (git-ignored); clear them by hand if they grow. The unit tests and the smoke
-  test share one test database (each run starts by dropping it).
+  (git-ignored; ~250 MB after many runs here): clear them by hand. The unit
+  tests and the smoke test share one test database (each run starts by
+  dropping it).
+
+## Acceptance check (spec §14), final status
+
+| # | Check | Status | Evidence / reason |
+|---|---|---|---|
+| 1 | Fresh install via wizard on PHP 8.2 + MySQL; demo content loads | Partial | Wizard + demo content pass in every smoke run (PHP 8.5, MariaDB 13); the packaged archive starts the wizard. Not run on PHP 8.2/MySQL 8 locally (no 8.2-incompatible code found) |
+| 2 | Home page from sections, reorder, publish, restore revision | Met | builder tests + smoke; touch reorder added |
+| 3 | Menus edited; deleting a linked page flags the item | Met | menus tests + smoke |
+| 4 | Each content type: create, schedule, publish, filters, detail | Met | content/archive/events tests + smoke; lazy publish tested |
+| 5 | Event registration (guest + member), email, CSV, .ics | Met | events tests + smoke (file mail catcher) |
+| 6 | Sign-up -> verify -> number -> card PNG/print -> QR valid; regenerate -> invalid | Met | members tests + smoke + visual checks |
+| 7 | Birthday cron once per year; 29 Feb; digest | Met | comms tests |
+| 8 | Job post -> approval -> members -> auto-expire | Met | jobs tests + smoke |
+| 9 | Campaign to a segment queued, batched; unsubscribe | Met | comms tests + smoke |
+| 10 | Radio slot + loop; two browsers within 2 s; off air | Met | radio tests + smoke; measured 0.16 s apart (phase 6) |
+| 11 | Admin without "members" gets 403; member cannot open /admin | Met | full permission matrix over every admin route (smoke) + unit matrix |
+| 12 | CSRF rejection, PHP upload rejected, XSS neutralised, lockout | Met | CSRF enumeration of every POST route; upload/sanitiser/lockout tests |
+| 13 | Lighthouse >= 90 and axe no serious issues on home, news, event, join, dashboard | Met | axe 0 violations (78 runs); Lighthouse mobile 95-97 perf, 100 a11y/best practices (local php -S) |
+| 14 | Lint, tests green, plain-php-reviewer + security-reviewer no high findings | Partial | lint + 174 tests + 392 smoke checks green; the two reviewer agents still need to be run by the lead |

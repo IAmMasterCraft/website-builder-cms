@@ -174,8 +174,8 @@ function health_checks(?int $now = null): array
 
     // Storage
     $st = [];
-    $free = disk_free_space(BASE);
-    $total = disk_total_space(BASE);
+    $free = function_exists('disk_free_space') ? disk_free_space(BASE) : false;
+    $total = function_exists('disk_total_space') ? disk_total_space(BASE) : false;
     if ($free !== false && $total !== false && $total > 0) {
         $pct = $free / $total * 100;
         $st[] = health_item('Disk space', $free < 512 * 1024 ** 2 || $pct < 5 ? 'bad' : ($pct < 15 ? 'warn' : 'ok'), human_bytes($free) . ' free of ' . human_bytes($total) . ' (' . number_format($pct, 0) . '%)');

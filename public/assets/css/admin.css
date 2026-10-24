@@ -180,7 +180,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .field .hint { color: var(--muted); font-size: 0.82rem; margin: 0; }
 .field .error { color: var(--bad); font-size: 0.82rem; font-weight: 600; margin: 0; }
 .req { color: var(--bad); }
-input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="number"], input[type="url"], input[type="date"], input[type="datetime-local"], input[type="tel"], select, textarea {
+input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="number"], input[type="url"], input[type="date"], input[type="datetime-local"], input[type="time"], input[type="tel"], select, textarea {
   width: 100%; min-height: 40px; padding: 0.45rem 0.7rem; border: 1px solid var(--line-strong); border-radius: var(--r-s); background: var(--panel); color: var(--ink); font: inherit; transition: border-color 150ms ease-out, box-shadow 150ms ease-out; }
 textarea { min-height: 6rem; resize: vertical; line-height: 1.5; }
 input:focus-visible, select:focus-visible, textarea:focus-visible, .rt-editor:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
@@ -616,3 +616,5 @@ code { overflow-wrap: anywhere; }
 .health-grid > .panel { margin: 0; }
 .health-list .row-title { overflow-wrap: anywhere; }
 .health-list p { overflow-wrap: anywhere; }
+.date-range { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.date-range input { width: auto; min-height: 36px; }

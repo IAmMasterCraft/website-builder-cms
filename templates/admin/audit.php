@@ -14,8 +14,8 @@ $pages = (int) ceil($total / $per);
     <select id="aa" name="action"><option value="">All actions</option><?php foreach ($actions as $a): ?><option<?= $filters['action'] === $a ? ' selected' : '' ?>><?= e($a) ?></option><?php endforeach ?></select>
     <label for="ai" class="sr-only">Item type</label>
     <select id="ai" name="item"><option value="">All items</option><?php foreach ($items as $i): ?><option<?= $filters['item'] === $i ? ' selected' : '' ?>><?= e($i) ?></option><?php endforeach ?></select>
-    <label for="af">From</label><input type="date" id="af" name="from" value="<?= e($filters['from']) ?>">
-    <label for="at">to</label><input type="date" id="at" name="to" value="<?= e($filters['to']) ?>">
+    <span class="date-range"><label for="af">From</label><input type="date" id="af" name="from" value="<?= e($filters['from']) ?>">
+    <label for="at">to</label><input type="date" id="at" name="to" value="<?= e($filters['to']) ?>"></span>
     <button class="btn small ghost" type="submit">Filter</button>
     <?php if ($query): ?><a class="btn small ghost" href="/admin/audit">Clear</a><?php endif ?>
   </form>

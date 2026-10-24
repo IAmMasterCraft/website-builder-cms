@@ -31,7 +31,12 @@ final class Backups
         audit('download', 'backup', null, 'database dump');
         backup_send_headers('gather-' . gmdate('Ymd-His') . '-db.sql' . ($gzip ? '.gz' : ''), $gzip ? 'application/gzip' : 'application/sql');
         $out = fopen('php://output', 'wb');
-        backup_dump_db($out, $gzip);
+        try {
+            backup_dump_db($out, $gzip);
+        } catch (\Throwable $e) {
+            // Headers are gone: the file simply ends early (and will not open), so log it.
+            error_log('backup download failed: ' . $e->getMessage());
+        }
         fclose($out);
     }
 
@@ -42,7 +47,12 @@ final class Backups
         audit('download', 'backup', null, 'uploads zip');
         backup_send_headers('gather-' . gmdate('Ymd-His') . '-uploads.zip', 'application/zip');
         $out = fopen('php://output', 'wb');
-        backup_zip_uploads($out);
+        try {
+            backup_zip_uploads($out);
+        } catch (\Throwable $e) {
+            // Headers are gone: the file simply ends early (and will not open), so log it.
+            error_log('backup download failed: ' . $e->getMessage());
+        }
         fclose($out);
     }
 

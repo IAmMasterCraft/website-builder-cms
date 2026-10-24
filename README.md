@@ -8,7 +8,8 @@ alumni bodies. Clean-room build from
 
 Status: phases 1 (skeleton), 2 (media, content types, menus), 3 (page builder,
 themes, design controls), 4 (membership, ID cards), 5 (communications, birthdays,
-jobs, likes and comments) and 6 (online radio) are built.
+jobs, likes and comments), 6 (online radio) and 7 (users and roles, audit log,
+backups, system health, hardening, accessibility pass, deployment kit) are built.
 See [BUILD-NOTES.md](BUILD-NOTES.md) for what is done and what is left.
 
 ## Requirements
@@ -56,7 +57,10 @@ The tests drop and recreate every table in the test database.
 | `php bin/make-admin <email> [--role=super_admin\|admin] [--perm=content,events,...]` | Create or update an admin |
 | `php bin/demo <admin-email>` | Load demo content into an empty site |
 | `php bin/cron [--force\|--list]` | Run due scheduled jobs: publishing, cleanup, purge of unverified sign-ups (14 days), scheduled campaigns, the email queue (per-minute limit), birthdays (daily at the configured time), job expiry; crontab: `* * * * * php /path/bin/cron` |
-| `bin/check` | Lint, tests and smoke test |
+| `php bin/backup [--uploads]` | Write a database backup (and optionally an uploads zip) into `storage/backups` |
+| `php bin/restore <file.sql.gz> [--yes]` | Replace every table with a Gather backup (asks for the database name) |
+| `bin/check` | Lint, secrets check, tests and smoke test |
+| `bin/package [ref]` | Build `dist/gather-<date>-<commit>.tar.gz` for upload (no config, storage, tests or dev tools) |
 
 ## Layout
 
@@ -71,13 +75,22 @@ vendor/phpmailer/  PHPMailer 6.9.3 (LGPL 2.1, unmodified src/ files + LICENSE), 
 demo-assets/       original demo radio media (synthesised music, speech, generated video) + the dev script that made them
 migrations/        numbered SQL files
 storage/           originals/, variants/ (private), mail/, logs/, cache/, backups/  (not web-reachable)
-bin/               migrate, make-admin, demo, cron, check
+bin/               migrate, make-admin, demo, cron, backup, restore, check, package
+dev-tools/         dev only (never deployed): axe-core + Lighthouse (npm install here), audit.mjs, touch-reorder.mjs
 tests/             run.php (runner), *_test.php, smoke.php
 ```
 
 ## Deploy
 
-Target: aaPanel (Apache + PHP-FPM + MySQL); see the suite skill
-`php-aapanel-deploy`. Point the site root at `public/`, make `storage/`,
-`public/uploads/` and the project folder (for `config.php`) writable by the
-web user during install, then add the cron line. Deployment is phase 7.
+Target: the aaPanel server (Apache + PHP-FPM + MySQL). Follow
+[DEPLOY.md](DEPLOY.md): `bin/check`, commit, `bin/package`, create the site
+with running directory `/public`, upload and unpack, enable HTTPS, run
+`/install`, add the one cron line, then check Admin -> System health.
+
+## Accessibility audit (dev only)
+
+```bash
+cd dev-tools && npm install && cd ..        # axe-core and Lighthouse, local to this folder
+php -S 127.0.0.1:8080 -t public public/index.php &
+PUBLIC_PAGES="/,/join" node dev-tools/audit.mjs http://127.0.0.1:8080 admin@email adminpass member@email memberpass
+```
