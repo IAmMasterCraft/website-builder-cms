@@ -27,6 +27,9 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
 <?php foreach ($extra_css ?? [] as $css): ?><link rel="stylesheet" href="<?= e(asset($css)) ?>">
 <?php endforeach ?><script src="<?= e(asset('assets/js/boot.js')) ?>"></script>
 <script type="module" src="<?= e(asset('assets/js/site.js')) ?>"></script>
+<?php if ($c['analytics'] !== null): ?><script type="module" src="<?= e(asset('assets/js/analytics.js')) ?>"></script>
+<meta name="analytics" content="<?= e(json_attr(['provider' => $c['analytics']['provider'], 'id' => $c['analytics']['id'], 'script' => $c['analytics']['script'], 'consent' => $c['analytics']['cookies']])) ?>">
+<?php endif ?>
 </head>
 <body class="<?= e($body_class ?? '') ?>">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -153,9 +156,18 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
         <li><a href="/feed.xml">RSS</a></li>
         <li><a href="/sitemap.xml">Sitemap</a></li>
         <li><a href="/search">Search</a></li>
+        <?php if ($c['analytics'] !== null && $c['analytics']['cookies']): ?><li><button type="button" class="link-button" data-cookie-settings hidden>Cookie settings</button></li><?php endif ?>
       </ul>
     </div>
   </div>
 </footer>
+<?php if ($c['analytics'] !== null && $c['analytics']['cookies']): ?>
+<section class="cookie-banner" data-cookie-banner hidden aria-labelledby="cookie-title">
+  <div class="container cookie-inner">
+    <div><h2 id="cookie-title" class="cookie-title">Cookies</h2><p><?= e($c['analytics']['banner']) ?></p></div>
+    <div class="btn-row"><button type="button" class="btn accent small" data-consent="yes">Accept analytics</button><button type="button" class="btn small" data-consent="no">No thanks</button></div>
+  </div>
+</section>
+<?php endif ?>
 </body>
 </html>

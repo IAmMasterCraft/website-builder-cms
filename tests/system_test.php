@@ -234,3 +234,22 @@ test('ini_bytes and human_bytes', function (): void {
     same('1.5 MB', human_bytes(1.5 * 1024 * 1024));
     same('900 B', human_bytes(900));
 });
+
+test('analytics: only allow-listed providers with valid IDs; CSP widened just for them', function (): void {
+    setting_set('analytics', ['provider' => 'evil', 'site_id' => 'x']);
+    same(null, analytics_config());
+    setting_set('analytics', ['provider' => 'ga4', 'site_id' => '"><script>']);
+    same(null, analytics_config(), 'bad id disables analytics');
+    setting_set('analytics', ['provider' => 'ga4', 'site_id' => 'G-AB12CD34EF', 'banner' => '']);
+    $a = analytics_config();
+    same(true, $a['cookies']);
+    same(analytics_default_banner(), $a['banner']);
+    $csp = csp_header_value($a);
+    contains("script-src 'self' https://www.googletagmanager.com", $csp);
+    not_contains('unsafe-inline', $csp);
+    not_contains('googletagmanager', csp_header_value(), 'default CSP has no third-party scripts');
+    setting_set('analytics', ['provider' => 'plausible', 'site_id' => 'example.org']);
+    same(false, analytics_config()['cookies'], 'cookieless provider: no banner');
+    setting_set('analytics', []);
+    same(null, analytics_config());
+});

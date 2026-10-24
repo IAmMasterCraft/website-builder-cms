@@ -141,17 +141,71 @@ function init() {
       const id = e.dataTransfer.getData('text/plain');
       const after = li.classList.contains('drop-after');
       clearDropMarks();
-      if (!id || id === s.id) return;
-      const from = indexOf(id);
-      const [moved] = state.sections.splice(from, 1);
-      let to = indexOf(s.id) + (after ? 1 : 0);
-      state.sections.splice(to, 0, moved);
-      to = indexOf(id);
-      renderList();
-      announce(`${label(moved)} moved to position ${to + 1} of ${state.sections.length}.`);
-      changed();
+      reorder(id, s.id, after);
+    });
+    // Touch and pen: drag the handle with pointer events (HTML5 drag events are mouse-only).
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' || e.button !== 0) return;
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      li.classList.add('dragging');
+      const scroller = scrollParent(list);
+      let target = null;
+      let after = false;
+      let frame = 0;
+      let lastY = e.clientY;
+      const mark = (x, y) => {
+        clearDropMarks();
+        const el = document.elementFromPoint(x, y)?.closest('.section-item');
+        target = null;
+        if (!el || el === li || !list.contains(el)) return;
+        const r = el.getBoundingClientRect();
+        after = y >= r.top + r.height / 2;
+        el.classList.add(after ? 'drop-after' : 'drop-before');
+        target = el.dataset.id;
+      };
+      // Scroll the list while the finger rests near its top or bottom edge.
+      const autoScroll = () => {
+        const r = scroller === document.scrollingElement ? { top: 0, bottom: window.innerHeight } : scroller.getBoundingClientRect();
+        const edge = 48;
+        const dy = lastY < r.top + edge ? -8 : lastY > r.bottom - edge ? 8 : 0;
+        if (dy !== 0) scroller.scrollBy(0, dy);
+        frame = requestAnimationFrame(autoScroll);
+      };
+      frame = requestAnimationFrame(autoScroll);
+      const onMove = (ev) => { lastY = ev.clientY; mark(ev.clientX, ev.clientY); };
+      const finish = (ev) => {
+        cancelAnimationFrame(frame);
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', finish);
+        handle.removeEventListener('pointercancel', finish);
+        if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
+        li.classList.remove('dragging');
+        clearDropMarks();
+        if (ev.type === 'pointerup' && target) reorder(s.id, target, after, true);
+      };
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', finish);
+      handle.addEventListener('pointercancel', finish);
     });
     return li;
+  }
+  /** Move section `id` before or after section `targetId` (drag and drop, mouse or touch). */
+  function reorder(id, targetId, after, refocus = false) {
+    if (!id || id === targetId || indexOf(id) < 0 || indexOf(targetId) < 0) return;
+    const [moved] = state.sections.splice(indexOf(id), 1);
+    state.sections.splice(indexOf(targetId) + (after ? 1 : 0), 0, moved);
+    const to = indexOf(id);
+    renderList(refocus ? { id, role: 'handle' } : null);
+    announce(`${label(moved)} moved to position ${to + 1} of ${state.sections.length}.`);
+    changed();
+  }
+  function scrollParent(el) {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = getComputedStyle(p).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+    }
+    return document.scrollingElement;
   }
   function clearDropMarks() { list.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after')); }
   function thumb(type) {

@@ -227,9 +227,8 @@ final class Account
         $current = is_string($_POST['current'] ?? null) ? $_POST['current'] : '';
         $new = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
         $errors = [];
-        $hash = (string) q_val('SELECT password_hash FROM users WHERE id = ?', [$user['id']]);
-        if (!password_verify($current, $hash)) {
-            $errors['current'] = 'That is not your current password.';
+        if (!confirm_current_password((int) $user['id'], $current)) {
+            $errors['current'] = 'That is not your current password (after 10 wrong tries, wait an hour).';
         }
         if (($problem = password_problem($new)) !== null) {
             $errors['password'] = $problem;
@@ -255,8 +254,8 @@ final class Account
         $user = self::user();
         $errors = [];
         $current = is_string($_POST['email_password'] ?? null) ? $_POST['email_password'] : '';
-        if (!password_verify($current, (string) q_val('SELECT password_hash FROM users WHERE id = ?', [$user['id']]))) {
-            $errors['email_password'] = 'That is not your current password.';
+        if (!confirm_current_password((int) $user['id'], $current)) {
+            $errors['email_password'] = 'That is not your current password (after 10 wrong tries, wait an hour).';
         }
         $bucket = 'email-change:' . $user['id'];
         if (!$errors && rate_limited($bucket, 5, 3600)) {
@@ -454,8 +453,7 @@ final class Account
     {
         csrf_check();
         $user = self::user();
-        $hash = (string) q_val('SELECT password_hash FROM users WHERE id = ?', [$user['id']]);
-        if (!password_verify(is_string($_POST['password'] ?? null) ? $_POST['password'] : '', $hash)) {
+        if (!confirm_current_password((int) $user['id'], is_string($_POST['password'] ?? null) ? $_POST['password'] : '')) {
             remember_input([], ['password' => 'Enter your password to confirm.']);
             redirect('/account/privacy');
         }

@@ -829,3 +829,11 @@ details.report[open] summary { margin-bottom: var(--s-3); }
 .narrow-card + .narrow-card { margin-top: var(--s-5); }
 .pending-email { display: grid; gap: var(--s-2); margin-bottom: var(--s-4); }
 .pending-email p { margin: 0; }
+/* Cookie banner (only when an analytics provider that sets cookies is on) */
+.link-button { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 0.2em; cursor: pointer; }
+.cookie-banner { position: fixed; inset: auto 0 0 0; z-index: 60; background: var(--c-surface); border-top: 1px solid var(--c-line); box-shadow: 0 -8px 24px rgb(0 0 0 / 0.12); padding-block: var(--s-4); }
+.cookie-banner[hidden] { display: none; }
+.cookie-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3) var(--s-5); }
+.cookie-inner p { margin: 0; max-width: 60ch; }
+.cookie-title { font-size: var(--step-0); margin: 0 0 var(--s-1); }
+.cookie-banner .btn-row { display: flex; flex-wrap: wrap; gap: var(--s-2); }

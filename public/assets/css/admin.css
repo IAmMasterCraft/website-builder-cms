@@ -364,7 +364,7 @@ details.seo[open] summary { margin-bottom: 0.75rem; }
 .section-item.dragging { opacity: 0.5; }
 .section-item.drop-before { box-shadow: 0 -3px 0 var(--accent); }
 .section-item.drop-after { box-shadow: 0 3px 0 var(--accent); }
-.drag-handle { display: grid; place-items: center; width: 28px; height: 44px; border: 0; border-radius: var(--r-s); background: transparent; color: var(--muted); cursor: grab; }
+.drag-handle { display: grid; place-items: center; width: 28px; height: 44px; touch-action: none; border: 0; border-radius: var(--r-s); background: transparent; color: var(--muted); cursor: grab; }
 .drag-handle:hover { background: var(--panel-2); }
 .grip { width: 10px; height: 18px; background: radial-gradient(circle, currentColor 1.4px, transparent 1.6px) 0 0 / 5px 6px; }
 .section-open { display: flex; align-items: center; gap: 0.6rem; min-width: 0; padding: 0.25rem; border: 0; border-radius: var(--r-s); background: none; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }

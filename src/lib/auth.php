@@ -267,3 +267,22 @@ function audit(string $action, string $itemType = '', ?int $itemId = null, strin
         [$user['id'] ?? null, $action, $itemType, $itemId, mb_substr($summary, 0, 250), client_ip()]
     );
 }
+
+/**
+ * Re-check the password of a logged-in user (password change, email change,
+ * deletion request). Wrong guesses are limited to 10 an hour per account,
+ * so a stolen session cannot be used to brute-force the password.
+ */
+function confirm_current_password(int $userId, string $password): bool
+{
+    $bucket = 'pwconfirm:' . $userId;
+    if (rate_limited($bucket, 10, 3600)) {
+        return false;
+    }
+    $hash = (string) q_val('SELECT password_hash FROM users WHERE id = ?', [$userId]);
+    if ($hash !== '' && password_verify($password, $hash)) {
+        return true;
+    }
+    rate_hit($bucket);
+    return false;
+}

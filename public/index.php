@@ -30,6 +30,9 @@ try {
         }
         if ($method === 'GET' && !str_starts_with($path, '/admin')) {
             publish_due_lazily();
+            if (($analytics = analytics_config()) !== null) {
+                header('Content-Security-Policy: ' . csp_header_value($analytics));
+            }
         }
         $match = app_routes()->match($method, $path);
     }

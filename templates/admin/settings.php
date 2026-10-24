@@ -33,6 +33,13 @@ $f = static function (string $k, string $label, string $type = 'text', string $h
         <?= $f('bank_text', 'Bank transfer details', 'textarea', 'For example account name, sort code and account number.') ?>
         <?php for ($i = 1; $i <= 3; $i++): ?><div class="field-row"><?= $f('donate_label_' . $i, 'Button ' . $i . ' text') ?><?= $f('donate_url_' . $i, 'Button ' . $i . ' link', 'url') ?></div><?php endfor ?>
       </div></section>
+      <section class="panel"><div class="panel-head"><h2>Analytics and cookies</h2></div><div class="panel-body fields">
+        <p class="muted">Off by default. Pick a provider from the list and give its site ID; you cannot paste other scripts. Providers that set cookies are only loaded after a visitor accepts the cookie banner; without analytics there is no banner.</p>
+        <div class="field"><label for="s-analytics_provider">Provider</label><select id="s-analytics_provider" name="analytics_provider"<?= isset($errors['analytics_provider']) ? ' aria-invalid="true" aria-describedby="s-analytics_provider-err"' : '' ?>><option value="">None (no analytics, no cookie banner)</option><?php foreach (analytics_providers() as $pk => $pd): ?><option value="<?= e($pk) ?>"<?= $v('analytics_provider') === $pk ? ' selected' : '' ?>><?= e($pd['label']) ?></option><?php endforeach ?></select>
+          <?php if (isset($errors['analytics_provider'])): ?><p class="error" id="s-analytics_provider-err"><?= e($errors['analytics_provider']) ?></p><?php endif ?></div>
+        <?= $f('analytics_id', 'Site ID', 'text', 'Plausible: your domain (example.org). Fathom: the site ID (ABCDEFGH). Google Analytics 4: the measurement ID (G-…).') ?>
+        <?= $f('cookie_banner', 'Cookie banner text', 'textarea', 'Shown with “Accept analytics” and “No thanks” buttons when the provider sets cookies. Leave empty for the default wording.') ?>
+      </div></section>
       <section class="panel"><div class="panel-head"><h2>Social links</h2></div><div class="panel-body fields">
         <div class="field-row"><?php foreach (\Admin\Settings::SOCIAL as $k => $l): ?><?= $f('social_' . $k, $l, 'url') ?><?php endforeach ?></div>
       </div></section>

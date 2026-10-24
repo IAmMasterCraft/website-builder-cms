@@ -13,6 +13,17 @@ done
 if [ -n "$lint_errors" ]; then echo "$lint_errors"; exit 1; fi
 echo "all PHP files lint"
 
+echo "== Secrets"
+# config files, dumps and keys must never be tracked; no hard-coded passwords or keys in tracked PHP.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  tracked=$(git ls-files | grep -E '^config\.php$|^tests/config\.test\.php$|\.(sql\.gz|pem|key|p12)$|^(storage|public)/.*\.sql$|(^|/)\.env|^storage/(backups|logs|mail|originals|variants)/[^.]' || true)
+  literals=$(git grep -nE "'(pass|password|app_key|secret|smtp_pass)'[[:space:]]*=>[[:space:]]*'[^' ]{12,}'" -- '*.php' ':!config.example.php' ':!tests/config.test.example.php' ':!tests/*' ':!vendor/*' || true)
+  if [ -n "$tracked$literals" ]; then echo "Secrets or private files are tracked:"; echo "$tracked"; echo "$literals"; exit 1; fi
+  echo "no secrets tracked"
+else
+  echo "not a git checkout: skipped"
+fi
+
 echo "== Unit and database tests"
 "$PHP" tests/run.php | tail -n 1
 

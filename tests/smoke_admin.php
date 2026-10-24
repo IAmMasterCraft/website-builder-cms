@@ -298,3 +298,20 @@ check('confirming switches the login email', $r['status'] === 303 && (int) q_val
 $r = login_as($base, 'moved@example.test', 'mover-password-1')->get('/account');
 check('member logs in with the new address', $r['status'] === 200);
 status_is(new Browser($base), '/account/email/confirm/' . $cm[1], 404);
+
+// ---- Analytics allow-list and cookie banner (§7, §11) ------------------------------
+$visitorB = new Browser($base);
+$r = $visitorB->get('/');
+check('no analytics: no cookie banner and no third-party script hosts in the CSP', !str_contains($r['body'], 'data-cookie-banner') && !str_contains($r['headers'], 'googletagmanager'));
+$r = $admin->submit('/admin/settings', '/admin/settings', ['site_name' => 'Smoke Test Society', 'timezone' => 'Europe/London', 'analytics_provider' => 'ga4', 'analytics_id' => 'not-an-id']);
+check('analytics ID is validated', $r['status'] === 422 && str_contains($r['body'], 'Measurement ID'));
+$r = $admin->submit('/admin/settings', '/admin/settings', ['site_name' => 'Smoke Test Society', 'timezone' => 'Europe/London', 'analytics_provider' => 'ga4', 'analytics_id' => 'G-SMOKE1234', 'cookie_banner' => 'Smoke cookies?']);
+$r = $visitorB->get('/');
+check('analytics on: banner (hidden until JS) + module + CSP for the provider only', str_contains($r['body'], 'data-cookie-banner hidden') && str_contains($r['body'], 'Smoke cookies?')
+    && str_contains($r['body'], 'assets/js/analytics.js') && preg_match('/^Content-Security-Policy:.*googletagmanager/mi', $r['headers']) === 1);
+check('admin pages keep the strict CSP', preg_match('/^Content-Security-Policy:.*googletagmanager/mi', $admin->get('/admin')['headers']) === 0);
+$admin->submit('/admin/settings', '/admin/settings', ['site_name' => 'Smoke Test Society', 'timezone' => 'Europe/London', 'analytics_provider' => '']);
+check('analytics off again: banner gone', !str_contains($visitorB->get('/')['body'], 'data-cookie-banner'));
+$r = $visitorB->get('/');
+check('security headers on public pages', str_contains($r['headers'], 'X-Content-Type-Options: nosniff') && str_contains($r['headers'], 'Referrer-Policy:') && str_contains($r['headers'], 'Cross-Origin-Opener-Policy: same-origin')
+    && !preg_match('/^X-Powered-By/mi', $r['headers']) && preg_match('/gather_sid=[^;]+;.*HttpOnly.*SameSite=Lax/i', $admin->get('/login')['headers'] . (new Browser($base))->get('/login')['headers']) === 1);

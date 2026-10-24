@@ -11,11 +11,20 @@ DirectoryIndex index.php
 </IfModule>
 
 # Never serve dotfiles, backups or source files from the web root.
-<FilesMatch "(^\.|\.(sql|log|bak|ini|sh|md|dist)$|~$)">
+<FilesMatch "(^\.|\.(sql|gz|zip|tar|log|bak|ini|sh|md|dist|lock)$|~$)">
   Require all denied
 </FilesMatch>
 
+# Compress text responses (PHP pages, CSS, JS, SVG, JSON, feeds).
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json image/svg+xml application/xml application/rss+xml text/calendar
+</IfModule>
+
 <IfModule mod_headers.c>
+  # Static files do not pass through PHP, so set the basic headers here too.
+  Header always setifempty X-Content-Type-Options "nosniff"
+  Header always setifempty Referrer-Policy "strict-origin-when-cross-origin"
+  Header unset X-Powered-By
   <FilesMatch "\.(css|js|svg|webp|png|jpg|woff2)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>

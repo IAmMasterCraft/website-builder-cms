@@ -35,6 +35,8 @@ final class Settings
         foreach ((array) setting('social', []) as $k => $v) {
             $current['social_' . $k] = $v;
         }
+        $a = (array) setting('analytics', []);
+        $current += ['analytics_provider' => (string) ($a['provider'] ?? ''), 'analytics_id' => (string) ($a['site_id'] ?? ''), 'cookie_banner' => (string) ($a['banner'] ?? '')];
         render('admin/settings', [
             'title' => 'Site settings', 'values' => $values + $current, 'errors' => $errors,
             'logo' => media_find((int) setting('site.logo_media_id', 0) ?: null),
@@ -93,6 +95,21 @@ final class Settings
             }
             $donate[] = ['label' => $label, 'url' => $url];
         }
+        $provider = input('analytics_provider');
+        $siteId = input('analytics_id');
+        $banner = input('cookie_banner');
+        $v += ['analytics_provider' => $provider, 'analytics_id' => $siteId, 'cookie_banner' => $banner];
+        if ($provider !== '') {
+            $def = analytics_providers()[$provider] ?? null;
+            if ($def === null) {
+                $errors['analytics_provider'] = 'Choose a provider from the list.';
+            } elseif (!preg_match($def['id_pattern'], $siteId)) {
+                $errors['analytics_id'] = $def['id_label'] . ': ' . $def['id_hint'] . '.';
+            }
+        }
+        if (mb_strlen($banner) > 500) {
+            $errors['cookie_banner'] = 'Keep the banner text under 500 characters.';
+        }
         $logoId = null;
         $file = $_FILES['logo_upload'] ?? null;
         if (is_array($file) && ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
@@ -118,12 +135,13 @@ final class Settings
         setting_set('contact.address', $v['contact_address']);
         setting_set('org.charity_number', $v['charity_number']);
         setting_set('social', $social);
+        setting_set('analytics', ['provider' => $provider, 'site_id' => $provider === '' ? '' : $siteId, 'banner' => $banner]);
         if ($logoId !== null) {
             setting_set('site.logo_media_id', $logoId);
         } elseif (input('logo_remove') === '1') {
             setting_set('site.logo_media_id', null);
         }
-        audit('update', 'settings', null, 'site settings');
+        audit('update', 'settings', null, 'site settings' . ($provider !== '' ? ' (analytics: ' . $provider . ')' : ''));
         flash('Settings saved.');
         redirect('/admin/settings');
     }

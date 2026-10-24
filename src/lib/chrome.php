@@ -46,6 +46,8 @@ function site_chrome(): array
         'path' => $path,
         'flash' => flash(),
         'theme_css' => theme_css_url($theme, !$themePreview),
+        // No analytics inside the builder/design preview frames.
+        'analytics' => $themePreview || str_starts_with($path, '/admin') ? null : analytics_config(),
         'year' => (new DateTimeImmutable('now', site_tz()))->format('Y'),
     ];
 }

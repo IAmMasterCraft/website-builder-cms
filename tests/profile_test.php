@@ -128,3 +128,12 @@ test('purging an unverified group deletes its logo; orphaned logos are swept', f
     ok(media_find($kept) !== null, 'admin uploads in the folder are kept');
     ok(media_find($fresh) !== null, 'recent uploads are kept (sign-up may still be running)');
 });
+
+test('confirming the current password is limited to 10 wrong guesses an hour', function (): void {
+    $id = fixture_member();
+    ok(confirm_current_password($id, 'correct horse battery'));
+    for ($i = 0; $i < 10; $i++) {
+        ok(!confirm_current_password($id, 'wrong guess ' . $i));
+    }
+    ok(!confirm_current_password($id, 'correct horse battery'), 'locked even with the right password');
+});

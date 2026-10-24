@@ -21,6 +21,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start([
         'cookie_httponly' => true,
         'cookie_secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'cookie_path'     => '/',
         'cookie_samesite' => 'Lax',
         'use_strict_mode' => true,
         'use_only_cookies' => true,
@@ -28,8 +29,15 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     ]);
 }
 
-header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; font-src 'self'; media-src 'self' blob:; frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://www.facebook.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'");
+$https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+header_remove('X-Powered-By');
+// Public pages may widen script/connect-src for the chosen analytics provider (public/index.php).
+header('Content-Security-Policy: ' . csp_header_value());
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Frame-Options: SAMEORIGIN');
+header('Cross-Origin-Opener-Policy: same-origin');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+if ($https) {
+    header('Strict-Transport-Security: max-age=31536000');
+}
