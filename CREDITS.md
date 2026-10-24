@@ -33,6 +33,25 @@ Downloaded 2026-10-24 from Unsplash under the [Unsplash Licence](https://unsplas
 | `community-dinner.jpg` | [Taylor Heery](https://unsplash.com/@taylorheeryphoto) | https://unsplash.com/photos/a-group-of-people-sitting-at-a-long-table-KZfUMAgVPCg |
 | `london-street.jpg` | [Anthony DELANOIX](https://unsplash.com/@anthonydelanoix) | https://unsplash.com/photos/st-pauls-cathedral-CFi7_hCXecU |
 
-## Icons and fonts
+## Icons
 
-(added with the design update; see below)
+[Lucide](https://lucide.dev) v1.61.0 (npm `lucide-static@1.61.0`, tarball SHA-256
+`62773cd2ee411ad2e37c1973d1e4c4b49f9a6c57da6b5d5d0abca08756ba75f1`), ISC licence (some icons
+derived from Feather, MIT). The icons we use are compiled into one SVG sprite,
+`public/assets/img/icons.svg`, by `dev-tools/build-icons.php`; the licence is in
+`public/assets/img/LICENSE-lucide.txt`. The social-network glyphs (Facebook, X, Instagram,
+YouTube, LinkedIn, WhatsApp) are simple outlines drawn for this project.
+
+## Fonts
+
+Self-hosted woff2 files from the Fontsource npm packages, all under the SIL Open Font
+Licence 1.1 (licence files next to the fonts in `public/assets/fonts/`):
+
+| Family | Package | Designers |
+|---|---|---|
+| Bricolage Grotesque | `@fontsource-variable/bricolage-grotesque@5.3.0` | Mathieu Triay |
+| Instrument Sans | `@fontsource-variable/instrument-sans@5.3.0` | Instrument |
+| Newsreader | `@fontsource-variable/newsreader@5.3.0` | Production Type |
+| Inter, Manrope, Nunito, Source Serif 4, Lora, Fraunces, Playfair Display | `@fontsource-variable/*` (phase 3) | see each LICENSE file |
+
+No icon or font is requested from a third-party server at runtime.

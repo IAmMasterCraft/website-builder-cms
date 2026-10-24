@@ -11,13 +11,16 @@ declare(strict_types=1);
 /**
  * Curated fonts. 'files' are self-hosted variable woff2 files in
  * public/assets/fonts (latin + latin-ext); system stacks download nothing.
- * @return array<string, array{label:string, stack:string, files:?string, kind:string}>
+ * @return array<string, array{label:string, stack:string, files:?string, kind:string, weights?:string, italic?:bool}>
  */
 function design_fonts(): array
 {
     $sans = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
     $serif = '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif';
     return [
+        'bricolage-grotesque' => ['label' => 'Bricolage Grotesque (bold display grotesk)', 'stack' => '"Bricolage Grotesque Variable", ' . $sans, 'files' => 'bricolage-grotesque', 'kind' => 'sans', 'weights' => '200 800'],
+        'instrument-sans' => ['label' => 'Instrument Sans (crisp text sans)', 'stack' => '"Instrument Sans Variable", ' . $sans, 'files' => 'instrument-sans', 'kind' => 'sans', 'weights' => '400 700'],
+        'newsreader'     => ['label' => 'Newsreader (editorial serif)', 'stack' => '"Newsreader Variable", ' . $serif, 'files' => 'newsreader', 'kind' => 'serif', 'weights' => '200 800', 'italic' => true],
         'inter'          => ['label' => 'Inter (clean sans)', 'stack' => '"Inter Variable", ' . $sans, 'files' => 'inter', 'kind' => 'sans'],
         'manrope'        => ['label' => 'Manrope (modern sans)', 'stack' => '"Manrope Variable", ' . $sans, 'files' => 'manrope', 'kind' => 'sans'],
         'nunito'         => ['label' => 'Nunito (friendly rounded)', 'stack' => '"Nunito Variable", ui-rounded, ' . $sans, 'files' => 'nunito', 'kind' => 'rounded'],
@@ -58,11 +61,15 @@ function design_font_faces(): string
             continue;
         }
         $family = trim(explode(',', $f['stack'])[0], '" ');
-        foreach (['latin-ext' => $latinExt, 'latin' => $latin] as $subset => $range) {
-            $css .= sprintf(
-                "@font-face{font-family:\"%s\";font-style:normal;font-display:swap;font-weight:100 900;src:url(/assets/fonts/%s-%s-wght-normal.woff2) format(\"woff2-variations\"),url(/assets/fonts/%s-%s-wght-normal.woff2) format(\"woff2\");unicode-range:%s}\n",
-                $family, $f['files'], $subset, $f['files'], $subset, $range
-            );
+        $styles = !empty($f['italic']) ? ['normal', 'italic'] : ['normal'];
+        foreach ($styles as $style) {
+            foreach (['latin-ext' => $latinExt, 'latin' => $latin] as $subset => $range) {
+                $file = $f['files'] . '-' . $subset . '-wght-' . $style . '.woff2';
+                $css .= sprintf(
+                    "@font-face{font-family:\"%s\";font-style:%s;font-display:swap;font-weight:%s;src:url(/assets/fonts/%s) format(\"woff2-variations\"),url(/assets/fonts/%s) format(\"woff2\");unicode-range:%s}\n",
+                    $family, $style, $f['weights'] ?? '100 900', $file, $file, $range
+                );
+            }
         }
     }
     return $css;
