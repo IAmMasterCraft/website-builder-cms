@@ -9,7 +9,7 @@ $cards = [
 ];
 $attention = [
     ['Unread messages', $counts['messages_unread'], 'inbox', user_can($user, 'communications') ? '/admin/inbox?show=unread' : null],
-    ['Comments to moderate', $counts['comments_pending'], 'help', user_can($user, 'content') ? '/admin/comments' : null],
+    ['Reported comments', $counts['comments_pending'], 'help', user_can($user, 'content') ? '/admin/comments' : null],
     ['Jobs awaiting approval', $counts['jobs_pending'], 'flag', user_can($user, 'jobs') ? '/admin/jobs' : null],
     ['Scheduled items', $counts['scheduled'], 'clock', null],
 ];

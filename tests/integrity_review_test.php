@@ -95,7 +95,6 @@ test('R3 comments: deleting your own comment keeps other members\' replies (show
     reset_comms();
     $cat = (string) q_val("SELECT id FROM categories WHERE slug = 'news'");
     $post = fixture_content('posts', ['title' => 'Talk', 'category_id' => $cat, 'status' => 'published', 'visibility' => 'public', 'allow_comments' => '1']);
-    setting_set('comments.moderation', 'post');
     $a = fixture_member();
     $b = fixture_member();
     act_as($a);
@@ -119,14 +118,12 @@ test('R3 comments: deleting your own comment keeps other members\' replies (show
     act_as($b);
     ok(comment_delete_own($reply, current_user()));
     same(null, q_val('SELECT id FROM comments WHERE id = ?', [$top]), 'a [deleted] comment goes once its last reply is gone');
-    setting_set('comments.moderation', 'pre');
 });
 
 test('R3 comments: deleting a comment without replies removes it; moderator delete keeps replies too', function (): void {
     reset_comms();
     $cat = (string) q_val("SELECT id FROM categories WHERE slug = 'news'");
     $post = fixture_content('posts', ['title' => 'Talk 2', 'category_id' => $cat, 'status' => 'published', 'visibility' => 'public', 'allow_comments' => '1']);
-    setting_set('comments.moderation', 'post');
     $a = fixture_member();
     act_as($a);
     [$solo] = comment_add(current_user(), 'post', $post, 'Alone');
@@ -137,24 +134,22 @@ test('R3 comments: deleting a comment without replies removes it; moderator dele
     [$reply] = comment_add(current_user(), 'post', $post, 'Reply', $top);
     ok(comment_moderate($top, 'delete', fixture_admin()));
     ok(q_val('SELECT id FROM comments WHERE id = ?', [$reply]) !== null);
-    setting_set('comments.moderation', 'pre');
 });
 
-test('Low comments: replies under a rejected comment are not counted', function (): void {
+test('Low comments: replies under a hidden comment are not counted', function (): void {
     reset_comms();
     $cat = (string) q_val("SELECT id FROM categories WHERE slug = 'news'");
     $post = fixture_content('posts', ['title' => 'Talk 3', 'category_id' => $cat, 'status' => 'published', 'visibility' => 'public', 'allow_comments' => '1']);
-    setting_set('comments.moderation', 'post');
     act_as(fixture_member());
     [$top] = comment_add(current_user(), 'post', $post, 'Top');
     comment_add(current_user(), 'post', $post, 'Reply', $top);
     engagement_forget();
     same(2, engagement_counts('post', $post)['comments']);
-    comment_moderate($top, 'reject', fixture_admin());
+    comment_moderate($top, 'hide', fixture_admin());
     engagement_forget();
     same(0, engagement_counts('post', $post)['comments'], 'hidden replies are not counted');
-    same([], comment_thread('post', $post, current_user()));
-    setting_set('comments.moderation', 'pre');
+    same([], comment_thread('post', $post, current_user_row(fixture_member())), 'other members see nothing');
+    same('hidden', comment_thread('post', $post, current_user())[0]['status'] ?? null, 'the author sees their own hidden comment');
 });
 
 // ---- R7 + low items: jobs -----------------------------------------------------------

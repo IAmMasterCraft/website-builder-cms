@@ -18,7 +18,7 @@ final class Dashboard
             'events_upcoming' => (int) q_val('SELECT COUNT(*) FROM events WHERE ' . published_sql() . ' AND COALESCE(end_at, start_at) >= ?', [$nowUtc]),
             'registrations_week' => (int) q_val("SELECT COALESCE(SUM(quantity), 0) FROM event_registrations WHERE status <> 'cancelled' AND created_at >= ?", [$weekAgo]),
             'messages_unread' => (int) q_val('SELECT COUNT(*) FROM contact_messages WHERE read_at IS NULL'),
-            'comments_pending' => (int) q_val("SELECT COUNT(*) FROM comments WHERE status IN ('pending','reported')"),
+            'comments_pending' => comments_reported_count(),
             'jobs_pending' => (int) q_val("SELECT COUNT(*) FROM jobs WHERE status = 'pending'"),
             'posts_published' => (int) q_val('SELECT COUNT(*) FROM posts WHERE ' . published_sql()),
             'scheduled' => (int) q_val("SELECT (SELECT COUNT(*) FROM posts WHERE status = 'scheduled') + (SELECT COUNT(*) FROM events WHERE status = 'scheduled') + (SELECT COUNT(*) FROM pages WHERE status = 'scheduled')"),

@@ -6,12 +6,12 @@ $renderComment = static function (array $c, bool $isReply) use ($viewer, $isMemb
         return '<article class="comment is-deleted" id="comment-' . (int) $c['id'] . '"><p class="comment-body muted">[deleted]</p></article>';
     }
     ob_start(); ?>
-    <article class="comment<?= $c['status'] === 'pending' ? ' is-pending' : '' ?>" id="comment-<?= (int) $c['id'] ?>">
+    <article class="comment<?= $c['status'] === 'hidden' ? ' is-pending' : '' ?>" id="comment-<?= (int) $c['id'] ?>">
       <header class="comment-head">
         <span class="comment-avatar" aria-hidden="true"><?= e(mb_strtoupper(mb_substr($c['author'], 0, 1))) ?></span>
         <span><strong><?= e($c['author']) ?></strong><?= in_array($c['role'] ?? '', ['admin', 'super_admin'], true) ? ' <span class="badge brand">Team</span>' : '' ?><br>
           <time class="muted small-text" datetime="<?= e(iso_date($c['created_at'])) ?>"><?= e(fmt_date($c['created_at'], 'j M Y, H:i')) ?></time><?= $c['edited_at'] ? ' <span class="muted small-text">· edited</span>' : '' ?>
-          <?= $c['status'] === 'pending' ? ' <span class="badge warn">Awaiting approval: only you can see this</span>' : '' ?></span>
+          <?= $c['status'] === 'hidden' ? ' <span class="badge warn">' . ($c['hidden_reason'] === 'reports' ? 'Hidden while a moderator reviews reports' : 'Hidden by a moderator') . ': only you can see this</span>' : '' ?></span>
       </header>
       <p class="comment-body"><?= nl2br(e($c['body'])) ?></p>
       <?php if ($isMember): ?>
@@ -79,7 +79,7 @@ $renderComment = static function (array $c, bool $isReply) use ($viewer, $isMemb
       <label for="new-comment">Add a comment</label>
       <textarea id="new-comment" name="body" rows="4" maxlength="<?= COMMENT_MAX ?>" required<?= ($error && !$error['parent']) ? ' aria-invalid="true" aria-describedby="new-comment-err"' : '' ?>><?= ($error && !$error['parent']) ? e($error['body']) : '' ?></textarea>
       <?php if ($error && !$error['parent']): ?><p class="error" id="new-comment-err"><?= e($error['message']) ?></p><?php endif ?>
-      <p class="hint muted small-text">Plain text, be kind. <?= comments_moderation() === 'pre' && !is_staff($viewer) ? 'Comments appear after a moderator approves them.' : '' ?></p>
+      <p class="hint muted small-text">Plain text, be kind. Your comment appears straight away; anyone can report a comment to the moderators.</p>
       <button class="btn" type="submit">Post comment</button>
     </form>
   <?php endif ?>

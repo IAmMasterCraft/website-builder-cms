@@ -2,25 +2,25 @@
 declare(strict_types=1);
 
 /*
- * Likes and comments (§4.7, D11). Members only. One like per member per
- * item (toggle). Comments are plain text with one level of replies, can be
- * edited for 15 minutes, reported, and are pre-moderated by default
- * (setting: post-moderated). Items: posts (likes + comments, each switched
- * on per post) and downloads (likes).
+ * Likes and comments (§4.7, D11 as changed by Addendum A1). Members only.
+ * One like per member per item (toggle). Comments are plain text with one
+ * level of replies and are published straight away (no approval); they can
+ * be edited for 15 minutes and reported. Reported comments wait in the
+ * admin "Reports" queue, where an admin keeps or hides them; a comment
+ * reported by COMMENT_AUTO_HIDE_REPORTS different members is hidden
+ * automatically until an admin reviews it. Items: posts (likes + comments,
+ * each switched on per post) and downloads (likes).
  */
 
 const COMMENT_EDIT_MINUTES = 15;
 const COMMENT_MAX = 2000;
+/** Open reports from this many different members hide a comment until an admin reviews it. */
+const COMMENT_AUTO_HIDE_REPORTS = 3;
 
 /** item type => [table, supports comments] */
 function engagement_items(): array
 {
     return ['post' => ['posts', true], 'download' => ['downloads', false]];
-}
-
-function comments_moderation(): string
-{
-    return setting('comments.moderation', 'pre') === 'post' ? 'post' : 'pre';
 }
 
 /** The item row if it exists, is published, the viewer may see it and the feature is on. */
@@ -151,18 +151,16 @@ function comment_add(array $user, string $type, int $itemId, string $body, ?int 
         return [null, 'You have posted several comments in a short time. Please wait a few minutes.'];
     }
     rate_hit('comment:' . $user['id']);
-    $status = is_staff($user) || comments_moderation() === 'post' ? 'approved' : 'pending';
-    $id = db_insert('comments', ['item_type' => $type, 'item_id' => $itemId, 'user_id' => $user['id'], 'parent_id' => $parentId, 'body' => $body, 'status' => $status]);
-    if ($status === 'approved') {
-        comment_notify_reply($id);
-    }
+    // A1: published straight away; problems are dealt with through reports.
+    $id = db_insert('comments', ['item_type' => $type, 'item_id' => $itemId, 'user_id' => $user['id'], 'parent_id' => $parentId, 'body' => $body, 'status' => 'approved']);
+    comment_notify_reply($id);
     return [$id, null];
 }
 
-/** Can this user still edit the comment? (owner, within 15 minutes, not rejected) */
+/** Can this user still edit the comment? (owner, within 15 minutes, not hidden) */
 function comment_editable(array $comment, ?array $user, ?DateTimeImmutable $now = null): bool
 {
-    if ($user === null || (int) ($comment['user_id'] ?? 0) !== (int) $user['id'] || $comment['status'] === 'rejected') {
+    if ($user === null || (int) ($comment['user_id'] ?? 0) !== (int) $user['id'] || $comment['status'] !== 'approved') {
         return false;
     }
     $now ??= new DateTimeImmutable('now', utc());
@@ -170,7 +168,7 @@ function comment_editable(array $comment, ?array $user, ?DateTimeImmutable $now 
     return $now->getTimestamp() - $created->getTimestamp() < COMMENT_EDIT_MINUTES * 60;
 }
 
-/** Edit within the window. Pre-moderated sites send edited comments back to the queue. */
+/** Edit within the window (the comment stays published). */
 function comment_edit(int $id, array $user, string $body, ?DateTimeImmutable $now = null): ?string
 {
     $c = q_one('SELECT * FROM comments WHERE id = ?', [$id]);
@@ -181,8 +179,7 @@ function comment_edit(int $id, array $user, string $body, ?DateTimeImmutable $no
     if ($body === '' || mb_strlen($body) > COMMENT_MAX) {
         return 'Write a comment of up to ' . number_format(COMMENT_MAX) . ' characters.';
     }
-    $status = $c['status'] === 'approved' && comments_moderation() === 'pre' && !is_staff($user) ? 'pending' : $c['status'];
-    q('UPDATE comments SET body = ?, status = ?, edited_at = ? WHERE id = ?', [$body, $status, ($now ?? new DateTimeImmutable('now', utc()))->setTimezone(utc())->format('Y-m-d H:i:s'), $id]);
+    q('UPDATE comments SET body = ?, edited_at = ? WHERE id = ?', [$body, ($now ?? new DateTimeImmutable('now', utc()))->setTimezone(utc())->format('Y-m-d H:i:s'), $id]);
     return null;
 }
 
@@ -217,30 +214,58 @@ function comment_remove(int $id, ?int $ownerId = null): bool
     });
 }
 
+/**
+ * Report a published comment (once per member). When open reports from
+ * COMMENT_AUTO_HIDE_REPORTS different members add up, the comment is hidden
+ * until an admin keeps or removes it. Returns false when already reported
+ * or not available.
+ */
 function comment_report(int $id, int $userId, string $reason): bool
 {
-    if (q_val("SELECT 1 FROM comments WHERE id = ? AND status = 'approved' AND deleted_at IS NULL", [$id]) === null) {
-        return false;
-    }
-    return q('INSERT IGNORE INTO comment_reports (comment_id, user_id, reason) VALUES (?, ?, ?)', [$id, $userId, mb_substr($reason, 0, 500)])->rowCount() === 1;
+    return db_tx(static function () use ($id, $userId, $reason): bool {
+        $c = q_one("SELECT id, user_id FROM comments WHERE id = ? AND status = 'approved' AND deleted_at IS NULL FOR UPDATE", [$id]);
+        if ($c === null || (int) ($c['user_id'] ?? 0) === $userId) {
+            return false;
+        }
+        if (q('INSERT IGNORE INTO comment_reports (comment_id, user_id, reason) VALUES (?, ?, ?)', [$id, $userId, mb_substr($reason, 0, 500)])->rowCount() !== 1) {
+            return false;
+        }
+        $reporters = (int) q_val('SELECT COUNT(DISTINCT user_id) FROM comment_reports WHERE comment_id = ? AND resolved_at IS NULL AND user_id IS NOT NULL', [$id]);
+        if ($reporters >= COMMENT_AUTO_HIDE_REPORTS) {
+            q("UPDATE comments SET status = 'hidden', hidden_reason = 'reports' WHERE id = ?", [$id]);
+        }
+        return true;
+    });
 }
 
-/** Moderation action: approve, reject, or keep (clear reports). */
+/**
+ * Moderation action from the Reports queue:
+ * keep (reports dismissed; a comment hidden by reports is shown again),
+ * hide, unhide, delete.
+ */
 function comment_moderate(int $id, string $action, int $adminId): bool
 {
     $c = q_one('SELECT * FROM comments WHERE id = ?', [$id]);
     if ($c === null) {
         return false;
     }
+    $resolve = static fn () => q('UPDATE comment_reports SET resolved_at = UTC_TIMESTAMP() WHERE comment_id = ? AND resolved_at IS NULL', [$id]);
     switch ($action) {
-        case 'approve':
-            q("UPDATE comments SET status = 'approved', reviewed_by = ? WHERE id = ?", [$adminId, $id]);
-            q('UPDATE comment_reports SET resolved_at = UTC_TIMESTAMP() WHERE comment_id = ? AND resolved_at IS NULL', [$id]);
-            comment_notify_reply($id);
+        case 'keep':
+            if ($c['status'] === 'hidden' && $c['hidden_reason'] === 'reports') {
+                q("UPDATE comments SET status = 'approved', hidden_reason = NULL, reviewed_by = ? WHERE id = ?", [$adminId, $id]);
+            } else {
+                q('UPDATE comments SET reviewed_by = ? WHERE id = ?', [$adminId, $id]);
+            }
+            $resolve();
             return true;
-        case 'reject':
-            q("UPDATE comments SET status = 'rejected', reviewed_by = ? WHERE id = ?", [$adminId, $id]);
-            q('UPDATE comment_reports SET resolved_at = UTC_TIMESTAMP() WHERE comment_id = ? AND resolved_at IS NULL', [$id]);
+        case 'hide':
+            q("UPDATE comments SET status = 'hidden', hidden_reason = 'moderator', reviewed_by = ? WHERE id = ?", [$adminId, $id]);
+            $resolve();
+            return true;
+        case 'unhide':
+            q("UPDATE comments SET status = 'approved', hidden_reason = NULL, reviewed_by = ? WHERE id = ?", [$adminId, $id]);
+            $resolve();
             return true;
         case 'delete':
             return comment_remove($id);
@@ -287,7 +312,8 @@ function comment_author_name(array $c): string
 }
 
 /**
- * Thread for an item: approved comments plus the viewer's own pending ones.
+ * Thread for an item: published comments plus the viewer's own hidden ones
+ * (marked as hidden, so the author knows why nobody else sees them).
  * @return list<array> top-level comments, each with 'replies'
  */
 function comment_thread(string $type, int $itemId, ?array $viewer): array
@@ -296,7 +322,7 @@ function comment_thread(string $type, int $itemId, ?array $viewer): array
     $rows = q_all(
         "SELECT c.*, u.display_name, u.role, (SELECT COUNT(*) FROM comment_reports r WHERE r.comment_id = c.id AND r.user_id = ?) AS reported_by_me
            FROM comments c LEFT JOIN users u ON u.id = c.user_id
-          WHERE c.item_type = ? AND c.item_id = ? AND (c.status = 'approved' OR (c.status = 'pending' AND c.user_id = ?))
+          WHERE c.item_type = ? AND c.item_id = ? AND (c.status = 'approved' OR (c.status = 'hidden' AND c.user_id = ?))
           ORDER BY c.created_at, c.id",
         [$uid, $type, $itemId, $uid]
     );
@@ -318,4 +344,10 @@ function comment_thread(string $type, int $itemId, ?array $viewer): array
     }
     // A deleted comment is only shown (as "[deleted]") to keep its replies in context.
     return array_values(array_filter($top, static fn (array $c): bool => $c['deleted_at'] === null || $c['replies'] !== []));
+}
+
+/** Comments with open reports (the admin "Reports" queue and the notification badge). */
+function comments_reported_count(): int
+{
+    return (int) q_val('SELECT COUNT(DISTINCT r.comment_id) FROM comment_reports r JOIN comments c ON c.id = r.comment_id WHERE r.resolved_at IS NULL AND c.deleted_at IS NULL');
 }

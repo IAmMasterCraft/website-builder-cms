@@ -120,7 +120,7 @@ function admin_chrome(): array
 {
     $user = current_user();
     $unread = (int) q_val('SELECT COUNT(*) FROM contact_messages WHERE read_at IS NULL');
-    $pendingComments = (int) q_val("SELECT COUNT(*) FROM comments WHERE status IN ('pending','reported')");
+    $pendingComments = comments_reported_count();
     $pendingJobs = (int) q_val("SELECT COUNT(*) FROM jobs WHERE status = 'pending'");
     return [
         'site_name' => (string) setting('site.name', 'Gather'),

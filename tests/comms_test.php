@@ -45,7 +45,6 @@ function reset_comms(): void
     q("DELETE FROM settings WHERE `key` LIKE 'birthdays.digest.%'");
     setting_set('mail.per_minute', 60);
     setting_set('jobs', []);
-    setting_set('comments.moderation', 'pre');
     engagement_forget();
     notices_forget();
     setting_set('mail.pause', null);
@@ -521,7 +520,7 @@ test('likes: one per member per item, toggle, counts', function (): void {
     same(null, engagement_item('post', $noLikes, 'likes', current_user_row($a['user_id'])), 'likes switched off on the post');
 });
 
-test('comments: pre-moderation, one reply level, 15-minute edit window, reports, reply email', function (): void {
+test('comments (A1): published straight away, one reply level, 15-minute edit window, reports, reply email', function (): void {
     reset_comms();
     $rec = rec_mailer();
     $post = fixture_post_id();
@@ -531,40 +530,45 @@ test('comments: pre-moderation, one reply level, 15-minute edit window, reports,
     $ru = current_user_row($replier['user_id']);
     [$c1, $err] = comment_add($au, 'post', $post, '  First!  ');
     same(null, $err);
-    same('pending', q_val('SELECT status FROM comments WHERE id = ?', [$c1]), 'D11: pre-moderated by default');
-    same(1, count(comment_thread('post', $post, $au)), 'the author sees their own pending comment');
-    same(0, count(comment_thread('post', $post, $ru)), 'others do not');
-    [, $err] = comment_add($ru, 'post', $post, 'reply', $c1);
-    ok($err !== null, 'cannot reply to a pending comment');
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c1]), 'A1: no approval step');
+    same(1, count(comment_thread('post', $post, $ru)), 'other members see it at once');
+    same(null, setting('comments.moderation'), 'the moderation setting is gone');
     $admin = fixture_admin('admin', ['content']);
-    ok(comment_moderate($c1, 'approve', $admin));
     [$r1] = comment_add($ru, 'post', $post, 'Welcome!', $c1);
-    ok(comment_moderate($r1, 'approve', $admin));
     [$r2, $err] = comment_add($au, 'post', $post, 'Thanks', $r1);
     same(null, $err);
     same($c1, (int) q_val('SELECT parent_id FROM comments WHERE id = ?', [$r2]), 'a reply to a reply joins the thread (one level)');
     $replyMail = array_values(array_filter($rec->sent, static fn (Message $m): bool => $m->subject === 'Rae B. replied to your comment'));
     same(1, count($replyMail), 'author is told about the reply once');
     same($author['email'], $replyMail[0]->toEmail);
-    ok(comment_moderate($r1, 'approve', $admin));
+    comment_notify_reply($r1);
     same(1, count(array_filter($rec->sent, static fn (Message $m): bool => $m->subject === 'Rae B. replied to your comment')), 'not twice');
-    // Edit window.
+    // Edit window: edits stay published.
     $row = q_one('SELECT * FROM comments WHERE id = ?', [$c1]);
     $created = new DateTimeImmutable((string) $row['created_at'], utc());
     ok(comment_editable($row, $au, $created->modify('+14 minutes')));
     ok(!comment_editable($row, $au, $created->modify('+15 minutes')));
     ok(!comment_editable($row, $ru, $created->modify('+1 minute')), 'only the author');
     same(null, comment_edit($c1, $au, 'First (edited)', $created->modify('+5 minutes')));
-    same('pending', q_val('SELECT status FROM comments WHERE id = ?', [$c1]), 'edits go back to the queue when pre-moderated');
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c1]), 'A1: edits no longer go back to a queue');
     ok(comment_edit($c1, $au, 'late', $created->modify('+20 minutes')) !== null);
-    // Post-moderation setting.
-    setting_set('comments.moderation', 'post');
+    // Reports and admin hide.
     [$c2] = comment_add($ru, 'post', $post, 'Straight in');
-    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c2]));
     ok(comment_report($c2, $author['user_id'], 'rude'));
     ok(!comment_report($c2, $author['user_id'], 'again'), 'one report per member');
-    ok(comment_moderate($c2, 'reject', $admin));
+    ok(!comment_report($c2, $replier['user_id'], 'mine'), 'authors cannot report themselves');
+    same(1, comments_reported_count(), 'it is in the Reports queue');
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c2]), 'one report does not hide it');
+    ok(comment_moderate($c2, 'hide', $admin));
+    same('hidden', q_val('SELECT status FROM comments WHERE id = ?', [$c2]));
     same(0, (int) q_val('SELECT COUNT(*) FROM comment_reports WHERE comment_id = ? AND resolved_at IS NULL', [$c2]), 'reports resolved');
+    $own = array_values(array_filter(comment_thread('post', $post, $ru), static fn (array $c): bool => (int) $c['id'] === $c2));
+    same(1, count($own), 'the author still sees their hidden comment (marked hidden)');
+    same([], array_values(array_filter(comment_thread('post', $post, $au), static fn (array $c): bool => (int) $c['id'] === $c2)), 'others do not');
+    ok(!comment_editable(q_one('SELECT * FROM comments WHERE id = ?', [$c2]), $ru), 'hidden comments cannot be edited');
+    ok(comment_moderate($c2, 'unhide', $admin));
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c2]));
+    ok(!comment_moderate($c2, 'approve', $admin), 'the old approve action is gone');
     // Validation and deleted authors.
     [, $err] = comment_add($ru, 'post', $post, str_repeat('x', COMMENT_MAX + 1));
     ok($err !== null);
@@ -573,11 +577,36 @@ test('comments: pre-moderation, one reply level, 15-minute edit window, reports,
     account_delete($replier['user_id']);
     same('Former member', comment_author_name(q_one('SELECT * FROM comments WHERE id = ?', [$r1])));
     engagement_forget();
-    // r1 is approved but its parent c1 is back in the queue, so visitors cannot see it (review fix: not counted).
-    same(0, engagement_counts('post', $post)['comments'], 'cards count visible comments only (c1 is back in the queue so r1 is hidden, r2 pending, c2 rejected)');
-    comment_moderate($c1, 'approve', $admin);
+    same(4, engagement_counts('post', $post)['comments'], 'c1, r1, r2 and c2 are visible');
+    comment_moderate($c1, 'hide', $admin);
     engagement_forget();
-    same(2, engagement_counts('post', $post)['comments'], 'c1 approved again: c1 and r1 count');
-    setting_set('comments.moderation', 'pre');
+    same(1, engagement_counts('post', $post)['comments'], 'replies under a hidden comment are not counted');
     mailer(null, true);
+});
+
+test('comments (A1): reports from 3 different members hide a comment until an admin keeps it', function (): void {
+    reset_comms();
+    $post = fixture_post_id();
+    $writer = current_user_row(fixture_full_member()['user_id']);
+    [$c] = comment_add($writer, 'post', $post, 'Contentious');
+    $reporters = [fixture_full_member(), fixture_full_member(), fixture_full_member()];
+    ok(comment_report($c, $reporters[0]['user_id'], 'spam'));
+    ok(comment_report($c, $reporters[1]['user_id'], 'spam'));
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c]), 'two reports: still visible');
+    ok(comment_report($c, $reporters[2]['user_id'], 'spam'));
+    same(['hidden', 'reports'], array_values(q_one('SELECT status, hidden_reason FROM comments WHERE id = ?', [$c])), 'third distinct reporter hides it');
+    same(1, comments_reported_count(), 'waits in the Reports queue');
+    engagement_forget();
+    same(0, engagement_counts('post', $post)['comments']);
+    ok(!comment_report($c, fixture_full_member()['user_id'], 'late'), 'a hidden comment cannot be reported again');
+    $admin = fixture_admin('admin', ['content']);
+    ok(comment_moderate($c, 'keep', $admin));
+    same(['approved', null], array_values(q_one('SELECT status, hidden_reason FROM comments WHERE id = ?', [$c])), 'keep shows it again');
+    same(0, comments_reported_count(), 'reports dismissed');
+    // A comment an admin hid by hand is not shown again by "keep".
+    [$d] = comment_add($writer, 'post', $post, 'Other');
+    ok(comment_report($d, $reporters[0]['user_id'], ''));
+    comment_moderate($d, 'hide', $admin);
+    ok(comment_moderate($d, 'keep', $admin));
+    same('hidden', q_val('SELECT status FROM comments WHERE id = ?', [$d]));
 });

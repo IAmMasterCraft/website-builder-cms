@@ -62,8 +62,7 @@ final class Engagement
             $_SESSION['comment_error'] = ['parent' => $parent, 'message' => $error, 'body' => mb_substr(is_string($_POST['body'] ?? null) ? $_POST['body'] : '', 0, COMMENT_MAX)];
             self::back('#comments');
         }
-        $status = (string) q_val('SELECT status FROM comments WHERE id = ?', [$id]);
-        flash($status === 'approved' ? 'Your comment is published.' : 'Thank you! Your comment will appear once a moderator approves it.', $status === 'approved' ? 'success' : 'info');
+        flash('Your comment is published.');
         self::back('#comment-' . $id);
     }
 
@@ -75,8 +74,7 @@ final class Engagement
         if ($error !== null) {
             flash($error, 'error');
         } else {
-            $status = (string) q_val('SELECT status FROM comments WHERE id = ?', [(int) $p['id']]);
-            flash($status === 'pending' ? 'Saved. The edited comment will appear again once a moderator approves it.' : 'Comment updated.', $status === 'pending' ? 'info' : 'success');
+            flash('Comment updated.');
         }
         self::back('#comment-' . (int) $p['id']);
     }

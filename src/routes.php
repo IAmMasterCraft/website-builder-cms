@@ -220,7 +220,7 @@ function app_routes(): Router
     $r->post('/admin/inbox/{id:\d+}/reply', [Admin\Inbox::class, 'reply']);
     $r->post('/admin/inbox/{id:\d+}/delete', [Admin\Inbox::class, 'delete']);
 
-    // Jobs and comments moderation
+    // Jobs moderation and comment reports
     $r->get('/admin/jobs', [Admin\Jobs::class, 'index']);
     $r->get('/admin/jobs/new', [Admin\Jobs::class, 'create']);
     $r->post('/admin/jobs', [Admin\Jobs::class, 'store']);
@@ -230,7 +230,6 @@ function app_routes(): Router
     $r->post('/admin/jobs/{id:\d+}/resolve', [Admin\Jobs::class, 'resolve']);
     $r->post('/admin/jobs/{id:\d+}/delete', [Admin\Jobs::class, 'delete']);
     $r->get('/admin/comments', [Admin\Comments::class, 'index']);
-    $r->post('/admin/comments/settings', [Admin\Comments::class, 'settings']);
     $r->post('/admin/comments/{id:\d+}', [Admin\Comments::class, 'moderate']);
 
     // Radio
