@@ -127,11 +127,23 @@ final class Media
         if (mb_strlen($alt) > 300) {
             $errors['alt'] = 'Alt text is limited to 300 characters.';
         }
+        $focal = [];
+        foreach (['focal_x' => 'Horizontal focal point', 'focal_y' => 'Vertical focal point'] as $k => $label) {
+            $v = input($k, '50');
+            if (!preg_match('/^\d{1,3}$/', $v) || (int) $v > 100) {
+                $errors[$k] = "$label must be a whole number from 0 to 100.";
+                $v = '50';
+            }
+            $focal[$k] = (int) $v;
+        }
+        if ($m['kind'] !== 'image') {
+            $focal = [];
+        }
         if ($errors) {
-            render('admin/media_edit', ['title' => 'Edit media', 'm' => array_merge($m, ['title' => $title, 'alt' => $alt]), 'usage' => media_usage((int) $m['id']), 'errors' => $errors], 'admin', 422);
+            render('admin/media_edit', ['title' => 'Edit media', 'm' => array_merge($m, ['title' => $title, 'alt' => $alt], $focal), 'usage' => media_usage((int) $m['id']), 'errors' => $errors], 'admin', 422);
             return;
         }
-        db_update('media', (int) $m['id'], ['title' => $title, 'alt' => $alt, 'folder' => slugify(input('folder'), 80)]);
+        db_update('media', (int) $m['id'], ['title' => $title, 'alt' => $alt, 'folder' => slugify(input('folder'), 80)] + $focal);
         audit('update', 'media', (int) $m['id'], $title);
         flash('Media details saved.');
         redirect('/admin/media/' . $m['id']);

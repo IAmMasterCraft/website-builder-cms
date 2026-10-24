@@ -1,6 +1,7 @@
 // Admin enhancements. Every form works without this file; JS adds comfort.
 import { pickImage, pickerAvailable } from './media-picker.js';
 import { initRichText } from './rt.js';
+import { initFocal } from './focal.js';
 
 const csrf = document.querySelector('meta[name="csrf"]')?.content ?? '';
 const root = document.documentElement;
@@ -162,3 +163,5 @@ if (scrollers.length) {
   markScrollers();
   window.addEventListener('resize', markScrollers, { passive: true });
 }
+
+initFocal();

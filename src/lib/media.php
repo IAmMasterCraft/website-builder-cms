@@ -147,7 +147,7 @@ function media_files_list(array $f): array
 /**
  * Store a validated file and create its media row.
  * $isUpload: true for PHP uploads (move_uploaded_file), false for local files (seeding, tests).
- * @param array{visibility?:string, folder?:string, alt?:string, title?:string, kind?:string} $opts
+ * @param array{visibility?:string, folder?:string, alt?:string, title?:string, kind?:string, focal_x?:int, focal_y?:int} $opts
  */
 function media_store(string $tmp, string $originalName, int $size, ?int $userId, bool $isUpload = true, array $opts = []): int
 {
@@ -169,7 +169,7 @@ function media_store(string $tmp, string $originalName, int $size, ?int $userId,
         'visibility' => $visibility,
         'variants' => $stored['variants'] ? json_encode($stored['variants'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) : null,
         'uploaded_by' => $userId,
-    ]);
+    ] + (isset($opts['focal_x'], $opts['focal_y']) ? ['focal_x' => max(0, min(100, (int) $opts['focal_x'])), 'focal_y' => max(0, min(100, (int) $opts['focal_y']))] : []));
 }
 
 /**
@@ -402,6 +402,20 @@ function media_variant_url(array $m, int $w): string
     return '/media/' . (int) $m['id'] . '/w/' . $w;
 }
 
+/**
+ * Classes that move a cropped image's object-position to its focal point
+ * (strict CSP: no style attributes, so 5 % steps map to fx-NN / fy-NN classes).
+ */
+function media_focal_class(?array $m): string
+{
+    if ($m === null) {
+        return '';
+    }
+    $x = (int) (round(max(0, min(100, (int) ($m['focal_x'] ?? 50))) / 5) * 5);
+    $y = (int) (round(max(0, min(100, (int) ($m['focal_y'] ?? 50))) / 5) * 5);
+    return $x === 50 && $y === 50 ? '' : 'fx-' . $x . ' fy-' . $y;
+}
+
 /** Responsive, lazy <img>. Returns '' when there is no image. */
 function img_html(?array $m, string $sizes = '100vw', ?string $alt = null, string $class = '', bool $lazy = true, int $width = 800): string
 {
@@ -416,6 +430,7 @@ function img_html(?array $m, string $sizes = '100vw', ?string $alt = null, strin
     $h = (int) $m['height'];
     $dispW = min($width, $w ?: $width);
     $dispH = $w > 0 ? (int) round($h * $dispW / $w) : $dispW;
+    $class = trim($class . ' ' . media_focal_class($m));
     return sprintf(
         '<img src="%s" srcset="%s" sizes="%s" width="%d" height="%d" alt="%s"%s%s decoding="async">',
         e(media_url($m, $width)),
@@ -450,7 +465,7 @@ function media_attachable(?array $m): bool
     return $m !== null && $m['visibility'] !== 'private' && (string) $m['folder'] !== 'member-photos';
 }
 
-/** Media ids under "media_id" / "bg_media_id" keys anywhere in builder sections or campaign blocks JSON. */
+/** Media ids under "media_id" / "*_media_id" keys anywhere in builder sections or campaign blocks JSON. */
 function media_ids_in_json(?string $json): array
 {
     $data = json_decode((string) $json, true);
@@ -460,7 +475,7 @@ function media_ids_in_json(?string $json): array
             return;
         }
         foreach ($node as $k => $v) {
-            if (in_array($k, ['media_id', 'bg_media_id'], true) && (is_int($v) || (is_string($v) && ctype_digit($v))) && (int) $v > 0) {
+            if (is_string($k) && preg_match('/(^|_)media_id$/', $k) && (is_int($v) || (is_string($v) && ctype_digit($v))) && (int) $v > 0) {
                 $ids[(int) $v] = true;
             } elseif (is_array($v)) {
                 $walk($v);

@@ -6,7 +6,8 @@ export function pickerAvailable() {
   return Boolean(document.getElementById('media-picker-template'));
 }
 
-export function pickImage(opener) {
+export function pickImage(opener, kind = 'image') {
+  const noun = kind === 'video' ? 'videos' : 'images';
   const tpl = document.getElementById('media-picker-template');
   if (!tpl) return Promise.resolve(null);
   return new Promise((resolve) => {
@@ -22,21 +23,26 @@ export function pickImage(opener) {
       status.textContent = 'Loading…';
       grid.replaceChildren();
       try {
-        const res = await fetch(`/admin/media/picker?kind=image&q=${encodeURIComponent(q)}`, {
+        const res = await fetch(`/admin/media/picker?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(q)}`, {
           headers: { Accept: 'application/json', 'X-CSRF-Token': csrf }, credentials: 'same-origin',
         });
         if (!res.ok) throw new Error(`Request failed (${res.status})`);
         const data = await res.json();
         const items = Array.isArray(data.items) ? data.items : [];
-        status.textContent = items.length ? `${items.length} images` : 'No images found. Upload images in the Media library first.';
+        status.textContent = items.length ? `${items.length} ${noun}` : `No ${noun} found. Upload them in the Media library first.`;
         items.forEach((item) => {
           const li = document.createElement('li');
           const b = document.createElement('button');
           b.type = 'button';
-          const img = document.createElement('img');
-          img.src = item.thumb ?? '';
-          img.alt = '';
-          img.loading = 'lazy';
+          const img = document.createElement(item.thumb ? 'img' : 'span');
+          if (item.thumb) {
+            img.src = item.thumb;
+            img.alt = '';
+            img.loading = 'lazy';
+          } else {
+            img.className = 'picker-file';
+            img.textContent = item.kind;
+          }
           const span = document.createElement('span');
           span.textContent = item.title || `Image ${item.id}`;
           b.setAttribute('aria-label', `Choose ${item.title || 'image ' + item.id}`);

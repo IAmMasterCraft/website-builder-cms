@@ -4,7 +4,7 @@
 <div class="form-layout">
   <div>
     <div class="panel"><div class="panel-body">
-      <?php if ($m['kind'] === 'image'): ?><?= img_html($m, '(min-width: 64rem) 50rem, 100vw', $m['alt'], '', false, 1600) ?>
+      <?php if ($m['kind'] === 'image'): ?><div class="focal-stage" data-focal-stage><?= img_html($m, '(min-width: 64rem) 50rem, 100vw', $m['alt'], 'focal-img', false, 1600) ?><span class="focal-marker" aria-hidden="true" hidden></span></div>
       <?php else: ?><p><?= icon('file') ?> <?= e($m['original_name']) ?></p><?php endif ?>
     </div></div>
     <form class="panel panel-body fields" method="post" action="/admin/media/<?= (int) $m['id'] ?>" novalidate>
@@ -12,6 +12,19 @@
       <div class="field"><label for="m-title">Title</label><input type="text" id="m-title" name="title" value="<?= e($m['title']) ?>" maxlength="200" required<?= isset($errors['title']) ? ' aria-invalid="true" aria-describedby="m-title-err"' : '' ?>><?php if (isset($errors['title'])): ?><p class="error" id="m-title-err"><?= e($errors['title']) ?></p><?php endif ?></div>
       <?php if ($m['kind'] === 'image'): ?>
       <div class="field"><label for="m-alt">Alt text</label><textarea id="m-alt" name="alt" rows="2" maxlength="300" aria-describedby="m-alt-hint"><?= e($m['alt']) ?></textarea><p class="hint" id="m-alt-hint">Describe the image for people who cannot see it. Leave empty only for decorative images.</p></div>
+      <fieldset class="focal-fields" data-focal-fields>
+        <legend>Focal point</legend>
+        <p class="hint" id="focal-hint">The part of the photo that must stay visible when it is cropped (cards, banners, phone screens). Click the photo above to set it, or type percentages from the left and top.</p>
+        <div class="focal-inputs">
+          <?= field_html('focal_x', 'From the left (%)', 'number', (string) ($m['focal_x'] ?? 50), $errors['focal_x'] ?? null, ['min' => 0, 'max' => 100, 'prefix' => 'm']) ?>
+          <?= field_html('focal_y', 'From the top (%)', 'number', (string) ($m['focal_y'] ?? 50), $errors['focal_y'] ?? null, ['min' => 0, 'max' => 100, 'prefix' => 'm']) ?>
+        </div>
+        <div class="focal-previews" aria-hidden="true" data-focal-previews>
+          <figure><div class="fp-frame fp-square"><?= img_html($m, '10rem', '', '', true, 400) ?></div><figcaption>Square</figcaption></figure>
+          <figure><div class="fp-frame fp-wide"><?= img_html($m, '14rem', '', '', true, 400) ?></div><figcaption>Banner</figcaption></figure>
+          <figure><div class="fp-frame fp-tall"><?= img_html($m, '8rem', '', '', true, 400) ?></div><figcaption>Phone</figcaption></figure>
+        </div>
+      </fieldset>
       <?php endif ?>
       <div class="field"><label for="m-folder">Folder</label><input type="text" id="m-folder" name="folder" value="<?= e($m['folder']) ?>" maxlength="80"></div>
       <div class="form-actions"><button class="btn accent" type="submit">Save details</button></div>
