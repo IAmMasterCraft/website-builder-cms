@@ -1,5 +1,5 @@
 <?php
-/** Up to two buttons from settings. @var array $s @var string $first @var string $second */
+/** Up to two buttons from settings. @var array $s @var string $first @var string $second @var ?string $class */
 $buttons = [];
 foreach ([1, 2] as $i) {
     $label = trim((string) ($s["button{$i}_label"] ?? ''));
@@ -12,6 +12,6 @@ if (!$buttons) {
     return;
 }
 ?>
-<div class="hero-actions">
-  <?php foreach ($buttons as [$label, $url, $cls]): ?><a class="btn <?= e($cls) ?>" href="<?= e($url) ?>"><?= e($label) ?><?= $cls === $first ? ' ' . icon('arrow-right') : '' ?></a><?php endforeach ?>
+<div class="hero-actions<?= isset($class) ? ' ' . e($class) : '' ?>">
+  <?php foreach ($buttons as $n => [$label, $url, $cls]): ?><a class="btn <?= e($cls) ?>" href="<?= e($url) ?>"><?= e($label) ?><?= $n === 0 ? ' ' . icon('arrow-right') : '' ?></a><?php endforeach ?>
 </div>

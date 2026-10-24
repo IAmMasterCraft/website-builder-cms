@@ -15,6 +15,7 @@ final class Faq extends Section
         return array_merge(self::headerFields('Frequently asked questions'), [
             ['key' => 'category', 'type' => 'select', 'label' => 'Category', 'options' => 'faq_category_any_options', 'default' => ''],
             self::countField(6, 50),
+            ['key' => 'layout', 'type' => 'select', 'label' => 'Layout', 'options' => ['split' => 'Heading beside the questions', 'stacked' => 'Heading above the questions'], 'default' => 'split'],
         ], self::linkFields('All questions', '/faq'));
     }
 

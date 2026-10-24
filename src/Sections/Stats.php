@@ -23,6 +23,8 @@ final class Stats extends Section
     public static function schema(): array
     {
         return array_merge(self::headerFields(), [
+            self::headLayoutField('stacked'),
+            ['key' => 'layout', 'type' => 'select', 'label' => 'Layout', 'options' => ['cards' => 'Cards', 'band' => 'Band with icon tiles', 'rules' => 'Big numbers with accent rules'], 'default' => 'cards'],
             ['key' => 'animate', 'type' => 'checkbox', 'label' => 'Count up when scrolled into view', 'default' => true],
             ['key' => 'items', 'type' => 'repeater', 'label' => 'Numbers', 'min' => 1, 'max' => 6, 'item_label' => 'label', 'add_label' => 'Add number',
                 'default' => [
@@ -35,6 +37,7 @@ final class Stats extends Section
                     ['key' => 'metric', 'type' => 'select', 'label' => 'Number', 'options' => self::METRICS, 'default' => 'custom'],
                     ['key' => 'value', 'type' => 'text', 'label' => 'Your number (e.g. 25+ or £12k)', 'max' => 16, 'show_if' => ['metric', ['custom']]],
                     ['key' => 'label', 'type' => 'text', 'label' => 'Label', 'max' => 60, 'required' => true],
+                    ['key' => 'icon', 'type' => 'select', 'label' => 'Icon', 'options' => 'icon_options_none', 'default' => ''],
                 ]],
         ]);
     }

@@ -3,7 +3,7 @@
 $start = utc_to_local($event['start_at']);
 $isPast = event_end_at($event) < utc_now();
 ?>
-<li class="event-row<?= $isPast ? ' past' : '' ?>">
+<li class="event-row<?= $isPast ? ' past' : '' ?>" data-reveal>
   <div class="date-tile" aria-hidden="true"><span class="m"><?= e($start?->format('M')) ?></span><span class="d"><?= e($start?->format('j')) ?></span></div>
   <div>
     <h3><a href="<?= e(event_url($event)) ?>"><?= e($event['title']) ?></a></h3>
@@ -14,4 +14,5 @@ $isPast = event_end_at($event) < utc_now();
       <?php if ($event['visibility'] === 'members'): ?><span class="lock"><?= icon('lock') ?> <?= e(t('members.only')) ?></span><?php endif ?>
     </div>
   </div>
+  <span class="card-go row-go" aria-hidden="true"><?= icon('arrow-right') ?></span>
 </li>

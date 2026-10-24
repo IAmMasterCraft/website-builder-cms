@@ -16,7 +16,7 @@ final class Gallery extends Section
             ['key' => 'source', 'type' => 'select', 'label' => 'Photos from', 'options' => ['latest' => 'Latest photos from all albums', 'album' => 'One album'], 'default' => 'latest'],
             ['key' => 'album_id', 'type' => 'select', 'label' => 'Album', 'options' => 'album_options', 'show_if' => ['source', ['album']]],
             self::countField(8, 48, 'How many photos'),
-            ['key' => 'layout', 'type' => 'select', 'label' => 'Layout', 'options' => ['grid' => 'Square grid', 'masonry' => 'Masonry (natural shapes)', 'strip' => 'Strip (swipe sideways)'], 'default' => 'grid'],
+            ['key' => 'layout', 'type' => 'select', 'label' => 'Layout', 'options' => ['grid' => 'Square grid', 'mosaic' => 'Mosaic (mixed sizes)', 'masonry' => 'Masonry (natural shapes)', 'strip' => 'Strip (swipe sideways)'], 'default' => 'grid'],
         ], self::linkFields('View all albums', '/gallery'));
     }
 

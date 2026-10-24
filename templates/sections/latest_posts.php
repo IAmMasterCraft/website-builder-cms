@@ -6,7 +6,7 @@
   <?php elseif ($s['layout'] === 'list'): ?>
     <ul class="post-list">
       <?php foreach ($posts as $p): ?>
-        <li><time class="muted tabular" datetime="<?= e(iso_date($p['publish_at'])) ?>"><?= e(fmt_date($p['publish_at'])) ?></time>
+        <li data-reveal><time class="muted tabular small-text" datetime="<?= e(iso_date($p['publish_at'])) ?>"><?= e(fmt_date($p['publish_at'])) ?></time>
           <h3 class="h3"><a href="<?= e(post_url($p)) ?>"><?= e($p['title']) ?></a></h3>
           <p><?= e(excerpt($p['summary'] ?: $p['body'], 160)) ?></p></li>
       <?php endforeach ?>
@@ -23,6 +23,6 @@
       </div>
     </div>
   <?php else: ?>
-    <div class="grid"><?php foreach ($posts as $p): ?><?= view('partials/post_card', ['post' => $p]) ?><?php endforeach ?></div>
+    <div class="grid cols-3" data-reveal-group><?php foreach ($posts as $i => $p): ?><?= view('partials/post_card', ['post' => $p, 'feature' => $s['layout'] === 'magazine' && $i === 0]) ?><?php endforeach ?></div>
   <?php endif ?>
 </div>

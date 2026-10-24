@@ -10,7 +10,8 @@ namespace Sections;
  *
  * Schema field: [key, type, label, default?, required?, max?, min?, help?,
  *   options? (array or option-provider name), fields? (repeater), show_if?].
- * Types: text, textarea, richtext, url, number, select, checkbox, media, repeater.
+ * Types: text, textarea, richtext, url, number, select, checkbox, media
+ * (images; 'kind' => 'video' for videos), repeater.
  */
 abstract class Section
 {
@@ -83,6 +84,33 @@ abstract class Section
             ['key' => 'heading', 'type' => 'text', 'label' => 'Heading', 'max' => 160, 'default' => $heading],
             ['key' => 'intro', 'type' => 'textarea', 'label' => 'Intro text', 'max' => 500, 'default' => $intro],
         ];
+    }
+
+    /** How the heading block is laid out: stacked, heading beside the intro, or centred. */
+    protected static function headLayoutField(string $default = 'stacked'): array
+    {
+        return ['key' => 'head_layout', 'type' => 'select', 'label' => 'Heading layout', 'options' => ['stacked' => 'Heading above the intro', 'split' => 'Heading left, intro right', 'center' => 'Centred'], 'default' => $default];
+    }
+
+    /** One call-to-action button (text + link). */
+    protected static function buttonFields(string $label = '', string $url = ''): array
+    {
+        return [
+            ['key' => 'button_label', 'type' => 'text', 'label' => 'Button text', 'max' => 40, 'default' => $label, 'help' => 'Leave empty to hide the button.'],
+            ['key' => 'button_url', 'type' => 'url', 'label' => 'Button link', 'default' => $url],
+        ];
+    }
+
+    /** Media rows for a list of repeater items, loaded in one query. */
+    protected static function mediaFor(array $items, string $key = 'media_id'): array
+    {
+        media_preload(array_map(static fn (array $i): int => (int) ($i[$key] ?? 0), $items));
+        $out = [];
+        foreach ($items as $n => $i) {
+            $m = media_find((int) ($i[$key] ?? 0) ?: null);
+            $out[$n] = $m !== null && $m['kind'] === 'image' ? $m : null;
+        }
+        return $out;
     }
 
     /** A "View all" style link. */

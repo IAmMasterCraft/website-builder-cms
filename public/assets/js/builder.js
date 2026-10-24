@@ -379,13 +379,14 @@ function init() {
         const preview = h('div', { class: 'media-preview' });
         const paint = () => {
           const m = obj[f.key] ? state.media[String(obj[f.key])] : null;
-          preview.replaceChildren(m ? h('img', { src: m.thumb, alt: '' }) : h('span', { class: 'muted', text: obj[f.key] ? `Image ${obj[f.key]}` : 'No image chosen' }));
+          const noun = f.kind === 'video' ? 'video' : 'image';
+          preview.replaceChildren(m && m.thumb ? h('img', { src: m.thumb, alt: '' }) : h('span', { class: 'muted', text: obj[f.key] ? (m?.title ?? `${noun} ${obj[f.key]}`) : `No ${noun} chosen` }));
           removeBtn.hidden = !obj[f.key];
         };
-        const choose = h('button', { type: 'button', class: 'btn small ghost', id }, icon('image'), ' Choose image');
+        const choose = h('button', { type: 'button', class: 'btn small ghost', id }, icon(f.kind === 'video' ? 'play' : 'image'), f.kind === 'video' ? ' Choose video' : ' Choose image');
         const removeBtn = h('button', { type: 'button', class: 'btn small ghost', onclick: () => { set(null); paint(); } }, 'Remove');
         choose.addEventListener('click', async () => {
-          const item = await pickImage(choose);
+          const item = await pickImage(choose, f.kind === 'video' ? 'video' : 'image');
           if (!item) return;
           state.media[String(item.id)] = { thumb: item.thumb, title: item.title };
           set(item.id);

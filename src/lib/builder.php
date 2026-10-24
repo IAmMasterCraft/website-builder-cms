@@ -17,7 +17,7 @@ use Core\Sanitizer;
 const BUILDER_MAX_SECTIONS = 60;
 const BUILDER_MAX_REVISIONS = 20;
 const BUILDER_SESSION_MINUTES = 30;
-const BUILDER_BACKGROUNDS = ['none' => 'None', 'soft' => 'Soft tint', 'brand' => 'Brand colour', 'image' => 'Image'];
+const BUILDER_BACKGROUNDS = ['none' => 'None', 'soft' => 'Soft tint', 'brand' => 'Brand colour', 'dark' => 'Dark', 'image' => 'Image'];
 const BUILDER_SPACING = ['compact' => 'Compact', 'normal' => 'Normal', 'roomy' => 'Roomy'];
 const BUILDER_WIDTHS = ['contained' => 'Contained', 'full' => 'Full width'];
 
@@ -27,6 +27,8 @@ function builder_section_types(): array
     $classes = [
         Sections\Hero::class, Sections\RichText::class, Sections\TextImage::class, Sections\Features::class,
         Sections\Stats::class, Sections\Cta::class, Sections\Spacer::class,
+        Sections\SplitMetrics::class, Sections\AboutBand::class, Sections\Process::class, Sections\Points::class,
+        Sections\Showcase::class, Sections\Testimonials::class, Sections\Tiers::class, Sections\Logos::class,
         Sections\LatestPosts::class, Sections\UpcomingEvents::class, Sections\EventCalendar::class, Sections\Gallery::class,
         Sections\Faq::class, Sections\Downloads::class,
         Sections\Leaders::class, Sections\Awards::class, Sections\Directory::class, Sections\Birthdays::class, Sections\RadioPlayer::class,
@@ -48,7 +50,7 @@ function builder_section_class(string $type): ?string
 
 function builder_option_providers(): array
 {
-    return ['icon_options', 'post_source_options', 'album_options', 'leader_group_any_options', 'award_year_any_options', 'faq_category_any_options', 'download_category_any_options'];
+    return ['icon_options', 'icon_options_none', 'post_source_options', 'album_options', 'leader_group_any_options', 'award_year_any_options', 'faq_category_any_options', 'download_category_any_options'];
 }
 
 function builder_options(array $field): array
@@ -63,10 +65,23 @@ function builder_options(array $field): array
 function icon_options(): array
 {
     return [
-        'heart' => 'Heart', 'users' => 'People', 'calendar' => 'Calendar', 'pin' => 'Map pin', 'globe' => 'Globe', 'award' => 'Award',
-        'help' => 'Question', 'flag' => 'Flag', 'home' => 'Home', 'mail' => 'Envelope', 'phone' => 'Phone', 'ticket' => 'Ticket',
-        'image' => 'Picture', 'download' => 'Download', 'radio' => 'Radio', 'check' => 'Tick', 'bell' => 'Bell', 'layers' => 'Layers', 'link' => 'Link',
+        'heart' => 'Heart', 'hand-heart' => 'Caring hand', 'heart-handshake' => 'Support', 'handshake' => 'Handshake', 'users' => 'People',
+        'user' => 'Person', 'house-heart' => 'Home and family', 'home' => 'Home', 'calendar' => 'Calendar', 'calendar-check' => 'Booked',
+        'ticket' => 'Ticket', 'pin' => 'Map pin', 'map' => 'Map', 'globe' => 'Globe', 'building' => 'Building', 'landmark' => 'Civic building',
+        'award' => 'Award', 'trophy' => 'Trophy', 'crown' => 'Crown', 'star' => 'Star', 'sparkles' => 'Sparkles', 'badge-check' => 'Verified',
+        'shield-check' => 'Safe and trusted', 'id-card' => 'Member card', 'graduation-cap' => 'Learning', 'book-open' => 'Reading', 'baby' => 'Children',
+        'sprout' => 'Growing', 'leaf' => 'Leaf', 'flower' => 'Flower', 'tree' => 'Tree', 'utensils' => 'Food', 'coffee' => 'Coffee', 'gift' => 'Gift',
+        'music' => 'Music', 'mic' => 'Microphone', 'radio' => 'Radio', 'camera' => 'Camera', 'image' => 'Picture', 'paintbrush' => 'Arts',
+        'palette' => 'Palette', 'bike' => 'Sport', 'stethoscope' => 'Health', 'hammer' => 'Repairs', 'briefcase' => 'Work', 'megaphone' => 'Campaign',
+        'zap' => 'Energy', 'help' => 'Question', 'flag' => 'Flag', 'mail' => 'Envelope', 'phone' => 'Phone', 'download' => 'Download',
+        'check' => 'Tick', 'bell' => 'Bell', 'layers' => 'Layers', 'link' => 'Link', 'smile' => 'Smile', 'wifi' => 'Online',
     ];
+}
+
+/** Icons for optional fields: "none" first. */
+function icon_options_none(): array
+{
+    return ['' => 'No icon'] + icon_options();
 }
 
 function post_source_options(): array
@@ -181,17 +196,19 @@ function builder_clean_field(array $f, mixed $raw, array &$errors, string $path,
             }
             return $v;
         case 'media':
+            $kind = ($f['kind'] ?? 'image') === 'video' ? 'video' : 'image';
+            $noun = $kind === 'video' ? 'video' : 'image';
             $id = is_int($raw) ? $raw : (is_string($raw) && ctype_digit($raw) ? (int) $raw : 0);
             if ($id > 0) {
                 $m = media_find($id);
-                if ($m === null || $m['kind'] !== 'image' || $m['visibility'] !== 'public') {
-                    $errors[$path] = "Choose a public image for “{$label}”.";
+                if ($m === null || $m['kind'] !== $kind || $m['visibility'] !== 'public') {
+                    $errors[$path] = "Choose a public $noun for “{$label}”.";
                     return null;
                 }
                 return $id;
             }
             if ($required) {
-                $errors[$path] = "Choose an image for “{$label}”.";
+                $errors[$path] = "Choose an $noun for “{$label}”.";
             }
             return null;
         case 'richtext':
@@ -452,7 +469,7 @@ function builder_render(array $sections, array $ctx): string
             }
             $inner = '<div class="container"><p class="blk-empty">' . e($class::LABEL) . ': nothing to show here yet (hidden from visitors).</p></div>';
         }
-        $html .= view('sections/_wrap', ['section' => $s, 'style' => $style, 'inner' => $inner, 'preview' => $preview]);
+        $html .= view('sections/_wrap', ['section' => $s, 'settings' => $settings, 'style' => $style, 'inner' => $inner, 'preview' => $preview]);
         if (empty($s['hidden'])) {
             $firstVisible = false;
         }
@@ -666,20 +683,25 @@ function builder_make(string $type, array $settings = [], array $style = []): ar
 function builder_starter_templates(): array
 {
     return [
-        'home' => ['name' => 'Home', 'description' => 'Hero, numbers, events, news, gallery and a join band.', 'sections' => [
+        'home' => ['name' => 'Home', 'description' => 'Full-screen hero, key numbers, story, programmes, events, testimonials, news and a join band.', 'sections' => [
             builder_make('hero'),
-            builder_make('stats'),
-            builder_make('upcoming_events', ['eyebrow' => 'Get together']),
-            builder_make('latest_posts', ['eyebrow' => 'Latest'], ['background' => 'soft']),
-            builder_make('gallery', ['eyebrow' => 'Moments']),
+            builder_make('stats', ['layout' => 'band'], ['background' => 'dark', 'spacing' => 'compact']),
+            builder_make('split_metrics', [], ['background' => 'soft']),
+            builder_make('features', ['eyebrow' => 'What we do', 'head_layout' => 'center']),
+            builder_make('upcoming_events', ['eyebrow' => 'Get together', 'head_layout' => 'split'], ['background' => 'soft']),
+            builder_make('testimonials'),
+            builder_make('latest_posts', ['eyebrow' => 'Latest', 'layout' => 'magazine', 'count' => 4]),
+            builder_make('gallery', ['eyebrow' => 'Moments', 'layout' => 'mosaic', 'count' => 6], ['background' => 'soft']),
             builder_make('cta'),
         ]],
-        'about' => ['name' => 'About', 'description' => 'Your story, what you do, key numbers and leaders.', 'sections' => [
+        'about' => ['name' => 'About', 'description' => 'Your story, values, milestones, numbers and leaders.', 'sections' => [
+            builder_make('about_band'),
             builder_make('text_image', ['eyebrow' => 'About us', 'heading' => 'Who we are']),
-            builder_make('features', ['heading' => 'What we do'], ['background' => 'soft']),
-            builder_make('stats', ['heading' => 'In numbers']),
-            builder_make('leaders', ['heading' => 'Meet the team']),
-            builder_make('cta', ['heading' => 'Want to help?', 'text' => 'We are always looking for volunteers and new members.', 'button1_label' => 'Get involved']),
+            builder_make('points', ['eyebrow' => 'What we stand for', 'heading' => 'Our values', 'style' => 'numbers'], ['background' => 'soft']),
+            builder_make('process', ['eyebrow' => 'Milestones', 'heading' => 'Our story so far']),
+            builder_make('leaders', ['heading' => 'Meet the team', 'head_layout' => 'split'], ['background' => 'soft']),
+            builder_make('logos', ['eyebrow' => 'Our partners', 'style' => 'grid']),
+            builder_make('cta', ['heading' => 'Want to help?', 'text' => 'We are always looking for volunteers and new members.', 'button1_label' => 'Get involved', 'tone' => 'dark']),
         ]],
         'contact' => ['name' => 'Contact', 'description' => 'Contact form, map and details, plus common questions.', 'sections' => [
             builder_make('contact'),
@@ -700,14 +722,12 @@ function builder_starter_templates(): array
             builder_make('event_calendar', [], ['background' => 'soft']),
             builder_make('cta', ['heading' => 'Never miss an event', 'text' => 'Members hear about new events first.', 'button1_label' => 'Become a member']),
         ]],
-        'membership' => ['name' => 'Membership', 'description' => 'Benefits, how to join, questions and a sign-up band.', 'sections' => [
-            builder_make('hero', ['eyebrow' => 'Membership', 'heading' => 'Join our community', 'text' => 'Members get a digital ID card, early event news and a voice in how we run things.', 'button1_label' => 'Join now', 'button1_url' => '/join', 'button2_label' => 'Register a group', 'button2_url' => '/join/group', 'layout' => 'centered']),
-            builder_make('features', ['heading' => 'What you get', 'cards' => [
-                ['icon' => 'award', 'title' => 'Digital member card', 'text' => 'A card with your member number and a QR code anyone can check.', 'link_label' => '', 'link_url' => ''],
-                ['icon' => 'calendar', 'title' => 'Events first', 'text' => 'Register for member events and get reminders.', 'link_label' => '', 'link_url' => ''],
-                ['icon' => 'users', 'title' => 'Your say', 'text' => 'Vote at general meetings and stand for committee roles.', 'link_label' => '', 'link_url' => ''],
-            ]]),
-            builder_make('faq', ['heading' => 'Membership questions'], ['background' => 'soft']),
+        'membership' => ['name' => 'Membership', 'description' => 'Tiers, benefits, how to join, questions and a sign-up band.', 'sections' => [
+            builder_make('hero', ['eyebrow' => 'Membership', 'heading' => 'Join our community', 'text' => 'Members get a digital ID card, early event news and a voice in how we run things.', 'button1_label' => 'Join now', 'button1_url' => '/join', 'button2_label' => 'Register a group', 'button2_url' => '/join/group', 'height' => 'tall']),
+            builder_make('tiers', [], ['background' => 'soft']),
+            builder_make('points', ['style' => 'checks']),
+            builder_make('process', ['eyebrow' => 'How it works', 'heading' => 'Four steps to your member card', 'layout' => 'horizontal'], ['background' => 'soft']),
+            builder_make('faq', ['heading' => 'Membership questions']),
             builder_make('cta', ['heading' => 'Ready to join?', 'text' => 'It takes about five minutes. Have a photo ready for your card.', 'button1_label' => 'Start now']),
         ]],
     ];
@@ -763,4 +783,29 @@ function builder_save_template(string $name, string $kind, array $sections, ?int
         throw new InvalidArgumentException('Nothing to save.');
     }
     return db_insert('section_templates', ['name' => $name, 'kind' => $kind, 'sections' => builder_encode($clean), 'created_by' => $userId]);
+}
+
+/**
+ * The home page hero's first photo, reused as the picture beside the log-in
+ * and sign-up forms so they match the site. Null when there is none.
+ */
+function site_feature_image(): ?array
+{
+    static $done = false;
+    static $media = null;
+    if ($done) {
+        return $media;
+    }
+    $done = true;
+    $homeId = (int) setting('home.page_id', 0);
+    $json = $homeId > 0 ? q_val("SELECT sections FROM pages WHERE id = ? AND status = 'published'", [$homeId]) : null;
+    foreach (builder_decode($json !== null ? (string) $json : null) as $s) {
+        if (($s['type'] ?? '') === 'hero' && empty($s['hidden'])) {
+            $id = (int) ($s['settings']['slides'][0]['media_id'] ?? 0);
+            $m = media_find($id ?: null);
+            $media = $m !== null && $m['kind'] === 'image' && $m['visibility'] === 'public' ? $m : null;
+            break;
+        }
+    }
+    return $media;
 }

@@ -14,7 +14,7 @@ final class UpcomingEvents extends Section
     {
         return array_merge(self::headerFields('Upcoming events'), [
             self::countField(4),
-            ['key' => 'layout', 'type' => 'select', 'label' => 'Layout', 'options' => ['list' => 'List with date tiles', 'grid' => 'Two columns'], 'default' => 'list'],
+            ['key' => 'layout', 'type' => 'select', 'label' => 'Layout', 'options' => ['cards' => 'Photo cards with date badges', 'list' => 'List with date tiles', 'grid' => 'Two columns'], 'default' => 'cards'],
             ['key' => 'empty_text', 'type' => 'text', 'label' => 'Text when there are no events', 'max' => 160, 'default' => 'No upcoming events right now. New dates are added regularly.'],
         ], self::linkFields('Open the calendar', '/events/calendar'));
     }
@@ -27,6 +27,7 @@ final class UpcomingEvents extends Section
             'SELECT e.* FROM events e WHERE ' . published_sql('e') . ' AND ' . visibility_sql('e', $viewer) . " AND $cond ORDER BY e.start_at LIMIT " . (int) $settings['count'],
             $params
         );
+        media_preload(array_column($rows, 'cover_media_id'));
         return ['events' => $rows];
     }
 }

@@ -13,7 +13,10 @@ final class Features extends Section
     public static function schema(): array
     {
         return array_merge(self::headerFields('What we do'), [
+            self::headLayoutField('stacked'),
             ['key' => 'columns', 'type' => 'select', 'label' => 'Cards per row', 'options' => ['2' => '2', '3' => '3', '4' => '4'], 'default' => '3'],
+            ['key' => 'style', 'type' => 'select', 'label' => 'Card style', 'options' => ['cards' => 'Cards with icon tiles', 'reveal' => 'Tall cards, photo appears on hover', 'minimal' => 'Minimal (no card)'], 'default' => 'cards',
+                'help' => 'Tall cards use each card’s photo; on phones the photo always shows.'],
             ['key' => 'cards', 'type' => 'repeater', 'label' => 'Cards', 'min' => 1, 'max' => 8, 'item_label' => 'title', 'add_label' => 'Add card',
                 'default' => [
                     ['icon' => 'calendar', 'title' => 'Events', 'text' => 'Gatherings, classes and celebrations all year round.', 'link_label' => 'See events', 'link_url' => '/events'],
@@ -26,7 +29,13 @@ final class Features extends Section
                     ['key' => 'text', 'type' => 'textarea', 'label' => 'Text', 'max' => 300],
                     ['key' => 'link_label', 'type' => 'text', 'label' => 'Link text', 'max' => 40],
                     ['key' => 'link_url', 'type' => 'url', 'label' => 'Link address'],
+                    ['key' => 'media_id', 'type' => 'media', 'label' => 'Photo (tall cards)'],
                 ]],
         ]);
+    }
+
+    public static function data(array $settings, array $ctx): array
+    {
+        return ['media' => $settings['style'] === 'reveal' ? self::mediaFor($settings['cards']) : []];
     }
 }

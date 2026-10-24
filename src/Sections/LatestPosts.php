@@ -15,7 +15,7 @@ final class LatestPosts extends Section
         return array_merge(self::headerFields('News and stories'), [
             ['key' => 'category', 'type' => 'select', 'label' => 'Posts from', 'options' => 'post_source_options', 'default' => 'all'],
             self::countField(3),
-            ['key' => 'layout', 'type' => 'select', 'label' => 'Layout', 'options' => ['grid' => 'Grid of cards', 'list' => 'Compact list', 'carousel' => 'Carousel (swipe sideways)'], 'default' => 'grid'],
+            ['key' => 'layout', 'type' => 'select', 'label' => 'Layout', 'options' => ['grid' => 'Grid of cards', 'magazine' => 'Magazine (first post large)', 'list' => 'Compact list', 'carousel' => 'Carousel (swipe sideways)'], 'default' => 'grid'],
         ], self::linkFields('All news', '/news'));
     }
 

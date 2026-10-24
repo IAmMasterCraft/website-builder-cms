@@ -64,7 +64,7 @@ final class Builder
         }
         $mediaIds = [];
         array_walk_recursive($sections, static function (mixed $v, int|string $k) use (&$mediaIds): void {
-            if (in_array($k, ['media_id', 'bg_media_id'], true) && (is_int($v) || (is_string($v) && ctype_digit($v)))) {
+            if (in_array($k, ['media_id', 'bg_media_id', 'video_media_id'], true) && (is_int($v) || (is_string($v) && ctype_digit($v)))) {
                 $mediaIds[] = (int) $v;
             }
         });
@@ -73,7 +73,7 @@ final class Builder
         foreach (array_unique($mediaIds) as $id) {
             $m = media_find($id);
             if ($m !== null) {
-                $media[(string) $id] = ['thumb' => media_url($m, 400), 'title' => $m['title'] !== '' ? $m['title'] : $m['original_name']];
+                $media[(string) $id] = ['thumb' => $m['kind'] === 'image' ? media_url($m, 400) : null, 'title' => $m['title'] !== '' ? $m['title'] : $m['original_name']];
             }
         }
         $templates = [];
