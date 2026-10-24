@@ -244,7 +244,8 @@ database).
   (`/admin/jobs`): awaiting approval / reported / live / expired / rejected,
   approve, reject with reason (emailed), keep and close reports, delete,
   settings, post a job. Moderators get a "job awaiting approval" email.
-- Likes and comments (D11): likes on posts and downloads (toggle, unique key,
+- Likes and comments (D11; moderation changed by Addendum A1, see below):
+  likes on posts and downloads (toggle, unique key,
   JSON or form post), comments on posts: plain text, members only,
   pre-moderated by default (setting: post-moderated; staff comments always
   published), one level of replies (a reply to a reply joins the thread),
@@ -385,10 +386,121 @@ database).
   file) and `bin/package` (archive of a commit for upload, private files
   excluded and verified). Not deployed anywhere.
 
+
+**Addendum A (A1, A2, A5), 2026-10-24**
+- A1 comments without approval (migration `013`): comments from active
+  members are published at once; the pre/post moderation setting, its
+  route and the "edits go back to the queue" rule are gone (waiting
+  comments were published, rejected ones became hidden). Statuses are now
+  `approved`/`hidden` with `hidden_reason` (`moderator` or `reports`).
+  `/admin/comments` is a Reports / Hidden / Published queue with keep,
+  hide, show again and delete; a comment reported by 3 different members
+  (`COMMENT_AUTO_HIDE_REPORTS`) is hidden until an admin keeps it ("keep"
+  shows a report-hidden comment again; one hidden by hand stays hidden).
+  Authors see their own hidden comments with a badge; authors cannot
+  report themselves. Overview card and bell count reported comments.
+- A2 newsletter opt-in (migration `014`): dashboard card for members with
+  news emails off ("Yes, send me updates" = POST + CSRF, audited as
+  `consent`; "No thanks" sets `members.optin_prompt_dismissed_at`, the card
+  returns after 90 days; never shown after a complaint or bounce). Every
+  email, transactional too, has "Manage email preferences" in the HTML
+  footer and the text part (`email_prefs_text()`); `/account/preferences`
+  asks visitors to log in and returns there. Campaigns can be marked
+  "Essential membership notice" (`campaigns.essential`; checkbox + warning
+  in the editor; audit entries when toggled and in the send/schedule
+  entries): audience and send-time checks ignore the newsletter
+  preference but skip every suppressed address; the footer explains why
+  it was received. Membership settings: sign-up box ticked by default
+  (off; note on UK GDPR/PECR). Opting in again lifts the person's own
+  unsubscribe or complaint, never a bounce.
+- A5 bounces and complaints (migration `015`):
+  - Tags: every queued message has a signed tag (`c<row>-<12 hex>` for
+    campaign recipients, `q<row>-…` for `email_queue`; HMAC from
+    `app_sign()`), used in the VERP envelope sender
+    `bounces+TAG@domain` (Email settings: bounce address), the Message-ID
+    and `X-Gather-Message-Id`; plus the provider's metadata header when
+    the SMTP host is Mailgun/SendGrid/Postmark/Brevo/SES. Campaigns add
+    `Feedback-ID`; bulk mail has `Precedence: bulk` and
+    `Auto-Submitted: auto-generated`. Transactional mail sent directly is
+    now logged as an `email_queue` row first (subject only, body dropped
+    once sent) so its bounces map too; these rows count towards the
+    per-minute limit.
+  - SMTP time: `SmtpMailer` reads PHPMailer's reply code and throws
+    `RecipientRejectedException`; 5xx -> hard bounce (or block for 5.7.x),
+    failed at once, never retried; 4xx -> soft, retried with back-off and
+    recorded as a soft bounce when the attempts run out.
+  - Classification `bounce_classify()` (RFC 3463 status first, then SMTP
+    code and text): hard (5.1.x, 5.2.1, 5.4.1, 5.4.4, 550/551/553, "user
+    unknown"), soft (4.x.x, 5.2.2/5.2.3, mailbox full, timeouts), block
+    (5.7.x, spam/policy text), complaint (ARF, webhooks).
+  - `bounce_record()`: `email_events` row (provider/report id as `ext_id`,
+    so replays are no-ops), outcome on the queue row (`bounce` column),
+    rules: hard -> `hard_bounce` suppression; soft -> `soft_bounce` after 3
+    within 30 days; complaint -> `complaint`; block -> campaign `paused`
+    (with reason, Resume button, health warning), address not suppressed.
+    Stronger reasons replace weaker ones (hard > complaint > soft >
+    unsubscribe). Bulk mail skips every suppression at claim time;
+    transactional mail skips hard/soft bounces except mail the person just
+    asked for (verify, password reset, email change, invitation, event
+    registration, contact copy/reply).
+  - Parsing: `Core\Mail\MimeMessage` + `BounceParser` (RFC 3464 DSNs,
+    RFC 5965 ARF, legacy plain-text Exim bounces, auto-replies and delay
+    notices ignored); tag from the envelope address or returned headers,
+    otherwise the latest message sent to the Final-Recipient (30 days).
+  - Bounce mailbox: pure-PHP `ImapClient` / `Pop3Client` over
+    `MailboxSocket` (implicit TLS or STARTTLS/STLS, certificate always
+    verified, optional CA file; no ext-imap). `bounce_mailbox_poll()` (cron
+    every 5 min, "Check now" button) reads up to 200 messages, records,
+    deletes processed ones, moves unreadable ones to an IMAP folder (POP3:
+    `storage/bounces/`), prunes that folder by count/age, stores status in
+    `mail.bounce_state` (health).
+  - Webhooks `POST /webhooks/email/{ses|mailgun|postmark|sendgrid|brevo}`
+    (`src/lib/webhooks.php`, controller `Site\EmailWebhooks`): off until
+    configured; SES/SNS signature v1/v2 with the certificate fetched only
+    from `https://sns.<region>.amazonaws.com(.cn)/…pem` and a topic ARN
+    allow-list (subscription confirmed automatically); Mailgun HMAC +
+    15-minute timestamp; Postmark basic auth or `X-Gather-Webhook-Token`;
+    SendGrid ECDSA P-256 signature of timestamp+body; Brevo bearer token.
+    CSRF-exempt like the RFC 8058 unsubscribe: no `csrf_check()`,
+    documented in the handler and listed in the smoke test's
+    `$csrfExempt`. Failed authentications are rate limited per IP.
+  - List hygiene `src/lib/dns.php`: MX (null MX = no mail) then A/AAAA via
+    `dns_get_record` with warnings caught, cached in `email_domains`
+    (ok 7 days, none 24 h, errors not cached), 4 s lookup budget per
+    request (then "unknown" = accepted), big providers and RFC 6761 names
+    never looked up. Used at sign-up (plus typo suggestions such as
+    gmial.com -> gmail.com, asked once), CSV import (row skipped) and
+    campaign/notice queueing (row stored as "not sent"). Tests inject a
+    resolver; `GATHER_DNS=off` disables lookups (smoke server).
+  - Per-domain throttling: Email settings "emails per minute to one
+    domain" (default 30, 0 = off), counted over the last 60 s across both
+    tables; throttled rows wait without using the batch budget.
+  - Screens: Email settings bounce section (bounce address, per-domain
+    pace, mailbox, webhooks with their URLs; secrets sealed and never
+    printed), Suppression list `/admin/email-suppressions`
+    (communications permission; rates, filters, latest events; admins can
+    clear bounce suppressions only), campaign delivery log with delivered /
+    soft / hard / complaint / suppressed cards, filters and a bounce
+    column, global log columns, paused-campaign banner + Resume, health
+    group "Bounces and complaints" (7/30-day rates with warnings above 2 %
+    and 0.1 %, blocks/paused campaigns, mailbox status, set-aside count,
+    bounce address), member banner on every account page when their
+    address bounced.
+
 ## Tests
 
-`bin/check`: lint of every PHP file, `tests/run.php` (231 unit/DB tests after
-the code review fixes) and `tests/smoke.php` (403 checks through `php -S`).
+`bin/check`: lint of every PHP file, `tests/run.php` (265 unit/DB tests after
+Addendum A1/A2/A5) and `tests/smoke.php` (437 checks through `php -S`).
+Addendum A added `tests/optin_test.php` (A2), `tests/bounces_test.php`
+(A5: classification table, tags, every DSN/ARF fixture in
+`tests/fixtures/bounces/`, suppression rules, SMTP-time rejections through
+`tests/fixtures/fake_smtp_server.php`, IMAP (implicit TLS and STARTTLS) and
+POP3 (STLS) polling against `tests/fixtures/fake_mail_server.php` with a
+certificate generated per run, webhooks with real HMAC/RSA/ECDSA
+signatures and the fixtures in `tests/fixtures/webhooks/`, hostile SNS
+certificate URLs, DNS with an injected resolver, throttling, health,
+suppression clearing) and `tests/smoke_addendum.php`; the A1 comment
+tests were rewritten.
 The review fixes added 57 unit/DB tests and 11 smoke checks (install token,
 site address and hidden DB errors in the installer, sign-up without login,
 identical answer for an existing address, opt-in contact confirmation and
@@ -630,6 +742,26 @@ playwright-core; tools in `dev-tools/`, never deployed):
 - Email change: members and groups only (staff email is changed by a super
   admin in Users & roles).
 
+- Addendum A1: comments waiting for approval at upgrade time are published
+  (the new rule); the 3-report auto-hide counts open reports from distinct
+  member accounts and applies to staff comments too.
+- Addendum A2: "unsubscribed-from-all" = clicked the unsubscribe link (an
+  `unsubscribe` suppression row); switching news emails off in the
+  preferences does not stop essential notices. Essential is a flag on the
+  campaign, not an audience; any audience can be used. Duplicating a
+  campaign does not copy the flag. The opt-in card is not shown to groups
+  (no members row).
+- Addendum A5: "delivered" in the logs = handed to our relay with no
+  bounce reported since (a complaint still counts as delivered). Soft
+  bounces at SMTP time count towards the 3-in-30-days rule only once the
+  retries are exhausted; asynchronous DSNs with `Action: failed` and a 4.x.x
+  status count at once; `Action: delayed` never. A block pauses the whole
+  campaign (spec), the blocked recipient can be retried after resuming
+  ("Retry failed"); bounced recipients never. Admins may clear bounce
+  suppressions only; unsubscribes and complaints are lifted only by the
+  person opting in again. SES requires a topic ARN allow-list before the
+  endpoint is enabled.
+
 ## Code review fixes (2026-10-24)
 
 Two reviews (security-reviewer, plain-php-reviewer) after phase 7. Every
@@ -757,7 +889,15 @@ Data integrity
   review of the fixes from a fresh context is advisable before go-live.
 - Deployment itself is not done (by instruction); DEPLOY.md and
   `bin/package` are ready.
-- Phases 5-6 gaps: no bounce/complaint handling or open/click tracking;
+- Addendum A gaps: the docs/ folder (A3/A4, incl. SPF/DKIM/DMARC and
+  bounce-mailbox set-up) is not written yet; the settings page has a short
+  SPF/DKIM/DMARC note. Mailbox clients send ASCII credentials as quoted
+  strings and others as IMAP literals; no OAuth2/XOAUTH2 (needed by some
+  hosted mailboxes such as Microsoft 365). Real providers and real DSNs
+  from live servers were not exercised (fixtures are hand-written from
+  the formats). Members whose address bounced can change it but cannot
+  self-clear the suppression (an admin clears it).
+- Phases 5-6 gaps: no open/click tracking;
   campaign/notice images must be public media; the campaign editor
   has no drag and drop (up/down buttons); notice email copies are not re-sent
   when a notice is edited. The radio has no persistent mini player across page

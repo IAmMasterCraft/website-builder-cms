@@ -110,6 +110,8 @@ $j = post_json($admin, $editor . '/log', $editor, $fields + ['op' => 'save']);
 check('a sent campaign can no longer be edited (409)', $j['status'] === 409);
 $before = count(mail_files());
 setting_set('mail.per_minute', 1);
+// A5: transactional emails sent directly are logged and count towards the per-minute limit; move them out of this minute.
+q('UPDATE email_queue SET sent_at = sent_at - INTERVAL 2 MINUTE WHERE sent_at > UTC_TIMESTAMP() - INTERVAL 2 MINUTE');
 $s1 = mail_queue_run();
 check('cron batch respects the per-minute limit', $s1['sent'] === 1 && (int) q_val("SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = ? AND status = 'queued'", [$campId]) === $walesCount - 1);
 setting_set('mail.per_minute', 50);

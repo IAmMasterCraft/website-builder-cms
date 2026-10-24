@@ -28,7 +28,7 @@ final class Campaigns
     {
         require_permission('communications');
         $status = query_param('status');
-        $where = array_key_exists($status, ['draft' => 1, 'scheduled' => 1, 'sending' => 1, 'sent' => 1]) ? 'WHERE c.status = ?' : '';
+        $where = array_key_exists($status, ['draft' => 1, 'scheduled' => 1, 'sending' => 1, 'paused' => 1, 'sent' => 1]) ? 'WHERE c.status = ?' : '';
         $rows = q_all("SELECT c.*, u.display_name AS author,
                 (SELECT COUNT(*) FROM campaign_recipients r WHERE r.campaign_id = c.id AND r.status = 'sent') AS sent_count,
                 (SELECT COUNT(*) FROM campaign_recipients r WHERE r.campaign_id = c.id AND r.status = 'failed') AS failed_count
@@ -250,7 +250,7 @@ final class Campaigns
         csrf_check();
         require_permission('communications');
         $c = self::find((int) $p['id']);
-        if (in_array($c['status'], ['sending'], true)) {
+        if (in_array($c['status'], ['sending', 'paused'], true)) {
             flash('A campaign that is being sent cannot be deleted.', 'error');
             redirect('/admin/campaigns/' . $c['id']);
         }
@@ -272,6 +272,20 @@ final class Campaigns
         redirect('/admin/campaigns/' . $c['id'] . '/log');
     }
 
+    /** A5: resume a campaign paused after a policy/spam block (once the cause is fixed). */
+    public static function resume(array $p): void
+    {
+        csrf_check();
+        require_permission('communications');
+        $c = self::find((int) $p['id']);
+        $ok = campaign_resume((int) $c['id']);
+        if ($ok) {
+            audit('resume', 'campaign', (int) $c['id'], (string) $c['subject']);
+        }
+        flash($ok ? 'Sending resumed.' : 'This campaign is not paused.', $ok ? 'success' : 'info');
+        redirect('/admin/campaigns/' . $c['id'] . '/log');
+    }
+
     /** Delivery log: every recipient with status. */
     public static function log(array $p): void
     {
@@ -283,6 +297,9 @@ final class Campaigns
         $where = 'campaign_id = ?';
         if (in_array($status, ['queued', 'sending', 'sent', 'failed', 'suppressed'], true)) {
             $where .= ' AND status = ?';
+            $params[] = $status;
+        } elseif (in_array($status, ['soft', 'hard', 'block', 'complaint'], true)) {
+            $where .= ' AND bounce = ?';
             $params[] = $status;
         } else {
             $status = '';

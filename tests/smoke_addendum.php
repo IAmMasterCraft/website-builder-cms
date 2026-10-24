@@ -37,3 +37,74 @@ check('A2: marking a campaign essential is saved and audit-logged', (int) q_val(
     && q_val("SELECT id FROM audit_log WHERE action = 'essential_on' AND item_id = ?", [$essId]) !== null);
 $edit = $admin->get('/admin/campaigns/' . $essId);
 check('A2: the editor shows the essential badge and reach ignores news preferences', str_contains($edit['body'], 'Essential notice') && str_contains($edit['body'], 'whatever their news email preference'));
+
+// ---- A5: bounce handling screens, webhooks, list hygiene -----------------------------
+$r = $admin->get('/admin/settings/email');
+check('A5: email settings have the bounce section (address, mailbox, webhooks)', $r['status'] === 200 && str_contains($r['body'], 'Bounces and complaints')
+    && str_contains($r['body'], 'name="mb_protocol"') && str_contains($r['body'], '/webhooks/email/mailgun'));
+$r = $admin->post('/admin/settings/email/bounces', ['bounce_address' => 'bounces@example.test']);
+check('A5: bounce settings refuse a request without a CSRF token', $r['status'] === 419);
+$r = $admin->submit('/admin/settings/email', '/admin/settings/email/bounces', ['bounce_address' => 'bounces+x@example.test', 'per_domain_minute' => '30', 'mb_protocol' => 'off',
+    'mb_encryption' => 'ssl', 'mb_port' => '993', 'mb_max_messages' => '500', 'mb_max_age_days' => '30']);
+check('A5: a bounce address with a + tag is refused (422)', $r['status'] === 422 && str_contains($r['body'], 'without a + tag'));
+$r = $admin->submit('/admin/settings/email', '/admin/settings/email/bounces', ['bounce_address' => 'bounces@example.test', 'per_domain_minute' => '30', 'mb_protocol' => 'off',
+    'mb_encryption' => 'ssl', 'mb_port' => '993', 'mb_max_messages' => '500', 'mb_max_age_days' => '30', 'wh_mailgun_key' => 'smoke-mailgun-key']);
+settings_all([]);
+$saved = bounce_settings();
+check('A5: bounce settings saved; the webhook key is stored encrypted and audited', $r['status'] === 303 && $saved['address'] === 'bounces@example.test'
+    && str_starts_with($saved['webhooks']['mailgun_key'], 'sb2:') && !str_contains(json_encode(setting_fresh('mail.bounce')), 'smoke-mailgun-key')
+    && q_val("SELECT id FROM audit_log WHERE summary = 'bounce handling settings'") !== null);
+check('A5: the settings page never prints the saved key', !str_contains($admin->get('/admin/settings/email')['body'], 'smoke-mailgun-key'));
+
+// Mailgun webhook over HTTP: no session, no CSRF token, the signature is the credential.
+$mgRow = db_insert('campaign_recipients', ['campaign_id' => $essId, 'email' => 'mg-smoke@recipient.example.test', 'name' => 'M', 'first_name' => 'M', 'status' => 'sent', 'sent_at' => utc_now()]);
+$ts = (string) time();
+$tok = bin2hex(random_bytes(20));
+$payload = json_encode(['signature' => ['timestamp' => $ts, 'token' => $tok, 'signature' => hash_hmac('sha256', $ts . $tok, 'smoke-mailgun-key')],
+    'event-data' => ['id' => 'smoke-' . $tok, 'event' => 'failed', 'severity' => 'permanent', 'recipient' => 'mg-smoke@recipient.example.test',
+        'delivery-status' => ['code' => 550, 'message' => '5.1.1 user unknown', 'enhanced-code' => '5.1.1'], 'user-variables' => ['gather_id' => verp_tag('c', $mgRow)]]]);
+$hook = new Browser($base);
+$r = $hook->post('/webhooks/email/mailgun', $payload, ['Content-Type: application/json']);
+check('A5: a signed Mailgun webhook is accepted without a CSRF token and records the hard bounce', $r['status'] === 200
+    && (email_suppression('mg-smoke@recipient.example.test')['reason'] ?? null) === 'hard_bounce' && q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$mgRow]) === 'hard');
+$r = $hook->post('/webhooks/email/mailgun', str_replace(hash_hmac('sha256', $ts . $tok, 'smoke-mailgun-key'), str_repeat('a', 64), $payload), ['Content-Type: application/json']);
+check('A5: a forged Mailgun signature is refused (401)', $r['status'] === 401);
+check('A5: an unconfigured provider answers 404', $hook->post('/webhooks/email/brevo', '{}', ['Content-Type: application/json'])['status'] === 404);
+check('A5: unknown providers do not match a route (404)', $hook->post('/webhooks/email/other', '{}')['status'] === 404);
+
+// Suppression list, member banner, delivery logs, health.
+$r = $admin->get('/admin/email-suppressions');
+check('A5: the suppression list shows the bounced address with a Clear button', $r['status'] === 200 && str_contains($r['body'], 'mg-smoke@recipient.example.test') && str_contains($r['body'], 'Hard bounce'));
+email_suppress('optin@example.test', 'hard_bounce', '550 5.1.1 user unknown', 'dsn');
+check('A5: a member whose address bounced sees a banner asking to update it', str_contains($opt->get('/account')['body'], 'are not getting through') && str_contains($opt->get('/account/preferences')['body'], 'update your email address'));
+$r = $admin->submit('/admin/email-suppressions', '/admin/email-suppressions/clear', ['email' => 'optin@example.test']);
+check('A5: an admin clears the bounce once the address is fixed (audited)', $r['status'] === 303 && !email_suppressed('optin@example.test')
+    && q_val("SELECT id FROM audit_log WHERE action = 'clear' AND summary LIKE 'optin@example.test%'") !== null);
+check('A5: the banner is gone', !str_contains($opt->get('/account')['body'], 'are not getting through'));
+$r = $admin->get('/admin/campaigns/' . $essId . '/log');
+check('A5: the campaign delivery log shows delivered / soft / hard / complaint / suppressed', $r['status'] === 200 && str_contains($r['body'], 'Soft bounces')
+    && str_contains($r['body'], 'Hard bounces') && str_contains($r['body'], 'Complaints') && str_contains($r['body'], 'Suppressed') && str_contains($r['body'], 'hard bounce'));
+$r = $admin->get('/admin/email-log');
+check('A5: the global delivery log has bounce columns', $r['status'] === 200 && str_contains($r['body'], 'Bounce / complaint'));
+$r = $admin->get('/admin/health');
+check('A5: health shows bounce and complaint rates', str_contains($r['body'], 'Bounce rate (7 days)') && str_contains($r['body'], 'Complaint rate (30 days)') && str_contains($r['body'], 'Bounce mailbox'));
+q("UPDATE campaigns SET status = 'paused', pause_reason = 'Smoke block' WHERE id = ?", [$essId]);
+$r = $admin->get('/admin/campaigns/' . $essId . '/log');
+check('A5: a paused campaign shows why, with a Resume button', str_contains($r['body'], 'Smoke block') && str_contains($r['body'], '/resume'));
+$r = $admin->submit('/admin/campaigns/' . $essId . '/log', '/admin/campaigns/' . $essId . '/resume', []);
+check('A5: resume puts the campaign back to sending (audited)', $r['status'] === 303 && q_val('SELECT status FROM campaigns WHERE id = ?', [$essId]) === 'sending'
+    && q_val("SELECT id FROM audit_log WHERE action = 'resume' AND item_id = ?", [$essId]) !== null);
+q("UPDATE campaign_recipients SET status = 'sent', sent_at = UTC_TIMESTAMP() WHERE campaign_id = ? AND status = 'queued'", [$essId]);
+mail_queue_run();
+
+// Sign-up list hygiene: no mail server (.invalid never exists) and typo suggestions.
+$typo = new Browser($base);
+$tokens = guard_tokens($typo, '/join/group');
+sleep(3);
+$groupBase = ['name' => 'Typo Club', 'contact_person' => 'Ty Po', 'country' => 'United Kingdom', 'password' => 'group-password-12', 'password_confirm' => 'group-password-12', 'consent' => '1'];
+$r = $typo->post('/join/group', $groupBase + ['email' => 'club@nomail.invalid'] + $tokens);
+check('A5: sign-up refuses a domain without a mail server', $r['status'] === 422 && str_contains($r['body'], 'could not find a mail server'));
+$r = $typo->post('/join/group', $groupBase + ['email' => 'typoclub@gmial.com'] + $tokens);
+check('A5: sign-up suggests a correction for an obvious typo', $r['status'] === 422 && str_contains($r['body'], 'Did you mean typoclub@gmail.com?') && str_contains($r['body'], 'name="email_checked" value="typoclub@gmial.com"'));
+$r = $typo->post('/join/group', $groupBase + ['email' => 'typoclub@gmial.com', 'email_checked' => 'typoclub@gmial.com'] + $tokens);
+check('A5: sending it again keeps the address as typed', $r['status'] === 303 && q_val("SELECT id FROM users WHERE email = 'typoclub@gmial.com'") !== null);

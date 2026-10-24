@@ -51,7 +51,7 @@ function expected_permission(string $path): ?string
         '#^/admin/(menus|pages|templates|layout)(/|$)#' => 'pages_menus',
         '#^/admin/events(/|$)#' => 'events',
         '#^/admin/(members|groups)(/|\.|$)#' => 'members',
-        '#^/admin/(campaigns|email-templates|email-log|notices|inbox)(/|$)#' => 'communications',
+        '#^/admin/(campaigns|email-templates|email-log|email-suppressions|notices|inbox)(/|$)#' => 'communications',
         '#^/admin/jobs(/|$)#' => 'jobs',
         '#^/admin/(comments|posts|downloads|leaders|leader-groups|awards|faqs|branches|categories)(/|$)#' => 'content',
         '#^/admin/radio(/|$)#' => 'radio',
@@ -255,6 +255,9 @@ check('visitors are sent to /login from every admin page', $anonWrong === [], im
 $csrfExempt = [
     // RFC 8058 one-click unsubscribe comes from mail clients without a session; the HMAC-signed token is the credential.
     '/unsubscribe/{token:[A-Za-z0-9_-]{4,300}\.[a-f0-9]{32}}' => 'signed token',
+    // A5 provider webhooks (SES/SNS, Mailgun, Postmark, SendGrid, Brevo) are called by the providers' servers without a
+    // session; each request must carry the provider's signature or shared secret (checked in webhook_handle()).
+    '/webhooks/email/{provider:ses|mailgun|postmark|sendgrid|brevo}' => 'provider signature',
 ];
 $noToken = [];
 $badToken = [];

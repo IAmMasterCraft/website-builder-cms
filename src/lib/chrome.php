@@ -89,6 +89,7 @@ function admin_nav(?array $user): array
             ['/admin/inbox', 'Inbox', 'inbox', 'communications'],
             ['/admin/email-templates', 'Email templates', 'file', 'communications'],
             ['/admin/email-log', 'Delivery log', 'clock', 'communications'],
+            ['/admin/email-suppressions', 'Suppression list', 'alert', 'communications'],
         ],
         'Radio' => [
             ['/admin/radio', 'Library', 'radio', 'radio'],

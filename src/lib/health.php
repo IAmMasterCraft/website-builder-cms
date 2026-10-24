@@ -233,7 +233,41 @@ function health_checks(?int $now = null): array
     $m[] = health_item('Scheduled backups', $b['enabled'] ? ($latest && $latest['time'] > $now - 26 * 3600 ? 'ok' : 'warn') : 'warn',
         ($b['enabled'] ? 'on, daily at ' . $b['time'] . ', keeping ' . $b['keep'] : 'off') . ($latest ? ' · newest ' . fmt_datetime(gmdate('Y-m-d H:i:s', $latest['time'])) : ' · none stored'));
     $g['Mail and site'] = $m;
+    $g['Bounces and complaints'] = health_bounce_items($now);
     return $g;
+}
+
+/** A5: bounce and complaint rates, blocks, paused campaigns, the bounce mailbox. @return list<array> */
+function health_bounce_items(int $now): array
+{
+    $out = [];
+    $pct = static fn (float $r): string => number_format($r * 100, 2) . '%';
+    foreach ([7, 30] as $days) {
+        $s = bounce_stats($days, $now);
+        $out[] = health_item("Bounce rate ($days days)", $s['bounce_rate'] > BOUNCE_RATE_WARN ? 'warn' : 'ok',
+            $pct($s['bounce_rate']) . ' (' . ($s['hard'] + $s['soft']) . ' of ' . $s['sent'] . ' sent)' . ($s['bounce_rate'] > BOUNCE_RATE_WARN ? ': above 2%. Clean the list: check recent imports and the suppression list' : ''));
+        $out[] = health_item("Complaint rate ($days days)", $s['complaint_rate'] > COMPLAINT_RATE_WARN ? 'warn' : 'ok',
+            $pct($s['complaint_rate']) . ' (' . $s['complaint'] . ')' . ($s['complaint_rate'] > COMPLAINT_RATE_WARN ? ': above 0.1%. Mail only people who opted in and make unsubscribing easy' : ''));
+    }
+    $blocks = bounce_stats(7, $now)['block'];
+    $paused = (int) q_val("SELECT COUNT(*) FROM campaigns WHERE status = 'paused'");
+    $out[] = health_item('Blocked as spam or by policy (7 days)', $blocks > 0 || $paused > 0 ? 'warn' : 'ok', $blocks === 0 && $paused === 0 ? 'none'
+        : $blocks . ' refusal(s)' . ($paused > 0 ? ', ' . $paused . ' campaign(s) paused: check content, SPF, DKIM and DMARC, then resume' : '') );
+    $b = bounce_settings();
+    $state = bounce_mailbox_state();
+    if ($b['mailbox']['protocol'] === 'off') {
+        $out[] = health_item('Bounce mailbox', 'warn', 'not set up: bounces that arrive later by email are not processed (unless a provider webhook is connected)');
+    } else {
+        $stale = $state['last_poll'] === 0 || $state['last_poll'] < $now - 30 * 60;
+        $status = $state['last_error'] !== '' ? 'bad' : ($stale ? 'warn' : 'ok');
+        $out[] = health_item('Bounce mailbox', $status, $state['last_error'] !== '' ? 'last check failed: ' . $state['last_error']
+            : ($state['last_poll'] > 0 ? 'checked ' . fmt_datetime(gmdate('Y-m-d H:i:s', $state['last_poll'])) . ' (' . $state['last_result'] . ')' : 'not checked yet'));
+    }
+    $unparsed = $state['unparsed'];
+    $out[] = health_item('Unprocessed bounce messages', $unparsed > 0 ? 'warn' : 'ok', $unparsed === 0 ? 'none'
+        : $unparsed . ' message(s) could not be read and were set aside (' . ($b['mailbox']['protocol'] === 'imap' ? 'folder “' . $b['mailbox']['aside_folder'] . '”' : 'storage/bounces/') . ')');
+    $out[] = health_item('Bounce address', $b['address'] !== '' ? 'ok' : 'warn', $b['address'] !== '' ? $b['address'] . ' (per-message VERP tags)' : 'not set: bounces go to the sender address and are matched by recipient only');
+    return $out;
 }
 
 /** Worst status across all checks: ok, warn or bad. */

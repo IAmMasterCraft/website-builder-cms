@@ -42,6 +42,9 @@ final class Account
         $user = $data['user'];
         $data += ['title' => $title, 'active' => $active, 'noindex' => true, 'is_group' => $user['role'] === 'group', 'extra_css' => ['assets/css/card.css']];
         $data['unread_notices'] = $user['status'] === 'active' ? notices_unread_count((int) $user['id']) : 0;
+        // A5: emails to this address bounce: ask the member to update it.
+        $sup = email_suppression((string) $user['email']);
+        $data['bounce_suppression'] = $sup !== null && in_array($sup['reason'], EMAIL_UNDELIVERABLE_REASONS, true) ? $sup : null;
         render('account/_shell', $data + ['inner' => view('account/' . $template, $data)], 'site', $status);
     }
 

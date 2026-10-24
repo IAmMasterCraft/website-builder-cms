@@ -16,7 +16,7 @@ foreach ($choices['events'] as $ev) { $eventOpts[(string) $ev['id']] = $ev['titl
   </div>
   <div class="audience-extra" data-audience-for="event"><?= field_html('audience_event_id', 'Event', 'select', $a['type'] === 'event' ? $a['value'] : '', null, ['options' => $eventOpts, 'prefix' => 'aud']) ?></div>
   <?php if ($reach !== null): ?>
-    <p class="reach" data-reach aria-live="polite"><?= icon('users') ?> <span><strong class="tabular" data-reach-count><?= count($reach['recipients']) ?></strong> <?= count($reach['recipients']) === 1 ? 'recipient' : 'recipients' ?><?php if ($reach['excluded'] > 0): ?> · <span class="muted"><?= (int) $reach['excluded'] ?> left out by their email preferences</span><?php endif ?></span></p>
+    <p class="reach" data-reach aria-live="polite"><?= icon('users') ?> <span><strong class="tabular" data-reach-count><?= count($reach['recipients']) ?></strong> <?= count($reach['recipients']) === 1 ? 'recipient' : 'recipients' ?><?php if ($reach['excluded'] > 0): ?> · <span class="muted"><?= (int) $reach['excluded'] ?> left out <?= !empty($essential) ? '(unsubscribed, bounced or complained)' : 'by their email preferences' ?></span><?php endif ?></span></p>
   <?php endif ?>
   <p class="hint"><?= !empty($essential) ? 'Essential notice: members receive it whatever their news email preference; anyone who unsubscribed, bounced or complained is still left out.' : 'Members only receive bulk email when “News and event updates” is on in their preferences; anyone who unsubscribed is always left out.' ?></p>
 </fieldset>

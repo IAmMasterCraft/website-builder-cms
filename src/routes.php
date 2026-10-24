@@ -71,6 +71,8 @@ function app_routes(): Router
     $unsub = '{token:[A-Za-z0-9_-]{4,300}\.[a-f0-9]{32}}';
     $r->get('/unsubscribe/' . $unsub, [Site\Unsubscribe::class, 'show']);
     $r->post('/unsubscribe/' . $unsub, [Site\Unsubscribe::class, 'confirm']);
+    // A5: bounce/complaint webhooks from sending providers (signed; CSRF-exempt, see EmailWebhooks)
+    $r->post('/webhooks/email/{provider:ses|mailgun|postmark|sendgrid|brevo}', [Site\EmailWebhooks::class, 'receive']);
     $r->post('/account/notices/read', [Account\Account::class, 'noticesRead']);
     $r->get('/jobs', [Site\Jobs::class, 'index']);
     $r->get('/jobs/{id:\d+}', [Site\Jobs::class, 'show']);
@@ -191,6 +193,10 @@ function app_routes(): Router
     $r->get('/admin/settings/email', [Admin\EmailSettings::class, 'edit']);
     $r->post('/admin/settings/email', [Admin\EmailSettings::class, 'update']);
     $r->post('/admin/settings/email/test', [Admin\EmailSettings::class, 'test']);
+    $r->post('/admin/settings/email/bounces', [Admin\EmailSettings::class, 'updateBounces']);
+    $r->post('/admin/settings/email/bounces/poll', [Admin\EmailSettings::class, 'pollBounces']);
+    $r->get('/admin/email-suppressions', [Admin\Suppressions::class, 'index']);
+    $r->post('/admin/email-suppressions/clear', [Admin\Suppressions::class, 'clear']);
     $r->get('/admin/campaigns', [Admin\Campaigns::class, 'index']);
     $r->post('/admin/campaigns', [Admin\Campaigns::class, 'store']);
     $r->get('/admin/campaigns/{id:\d+}', [Admin\Campaigns::class, 'edit']);
@@ -203,6 +209,7 @@ function app_routes(): Router
     $r->post('/admin/campaigns/{id:\d+}/delete', [Admin\Campaigns::class, 'delete']);
     $r->get('/admin/campaigns/{id:\d+}/log', [Admin\Campaigns::class, 'log']);
     $r->post('/admin/campaigns/{id:\d+}/retry', [Admin\Campaigns::class, 'retry']);
+    $r->post('/admin/campaigns/{id:\d+}/resume', [Admin\Campaigns::class, 'resume']);
     $r->get('/admin/email-templates', [Admin\EmailTemplates::class, 'index']);
     $r->get('/admin/email-templates/{key:[a-z_]+}', [Admin\EmailTemplates::class, 'edit']);
     $r->post('/admin/email-templates/{key:[a-z_]+}', [Admin\EmailTemplates::class, 'update']);

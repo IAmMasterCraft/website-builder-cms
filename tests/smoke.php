@@ -26,7 +26,8 @@ drop_all_tables(db());
 
 // Start the server with its own (not yet existing) config file.
 $installToken = bin2hex(random_bytes(16));
-$env = array_merge(getenv(), ['GATHER_CONFIG' => $configPath, 'GATHER_INSTALL_TOKEN' => $installToken]);
+// GATHER_DNS=off: the server never makes real DNS (MX) lookups during the smoke test.
+$env = array_merge(getenv(), ['GATHER_CONFIG' => $configPath, 'GATHER_INSTALL_TOKEN' => $installToken, 'GATHER_DNS' => 'off']);
 $proc = proc_open(
     [PHP_BINARY, '-S', "127.0.0.1:$port", '-t', BASE . '/public', BASE . '/public/index.php'],
     [0 => ['file', '/dev/null', 'r'], 1 => ['file', $serverLog, 'a'], 2 => ['file', $serverLog, 'a']],

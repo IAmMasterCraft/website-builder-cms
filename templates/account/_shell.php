@@ -29,6 +29,13 @@ $links = [
       </ul>
       <form method="post" action="/logout"><?= csrf_field() ?><button class="btn ghost small" type="submit"><?= icon('logout') ?> Log out</button></form>
     </nav>
-    <div class="account-main"><?= $inner ?></div>
+    <div class="account-main">
+      <?php if (!empty($bounce_suppression)): ?>
+        <div class="notice warn bounce-banner" role="status"><p><?= icon('alert') ?> <strong>Our emails to <?= e($user['email']) ?> are not getting through.</strong>
+          <?= $bounce_suppression['reason'] === 'hard_bounce' ? 'The mail server said the address does not exist or cannot receive mail.' : 'They bounced several times (for example because the mailbox is full).' ?>
+          We have stopped emailing it. Please <a href="/account/password">update your email address</a>, or contact us once the mailbox works again.</p></div>
+      <?php endif ?>
+      <?= $inner ?>
+    </div>
   </div>
 </section>

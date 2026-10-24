@@ -4,7 +4,7 @@ $err = static fn (string $k): ?string => $errors[$k] ?? null;
 $types = campaign_block_types();
 $imageOpts = ['' => 'Choose an image…'];
 foreach ($images as $im) { $imageOpts[(string) $im['id']] = ($im['title'] !== '' ? $im['title'] : $im['original_name']) . ' (#' . $im['id'] . ')'; }
-$statusLabel = ['draft' => 'Draft', 'scheduled' => 'Scheduled', 'sending' => 'Sending', 'sent' => 'Sent', 'cancelled' => 'Cancelled'][$c['status']] ?? $c['status'];
+$statusLabel = ['draft' => 'Draft', 'scheduled' => 'Scheduled', 'sending' => 'Sending', 'paused' => 'Paused', 'sent' => 'Sent', 'cancelled' => 'Cancelled'][$c['status']] ?? $c['status'];
 ?>
 <div class="page-head">
   <div><p class="crumbs"><a href="/admin/campaigns">Campaigns</a></p><h1><?= e($c['subject']) ?></h1>
@@ -16,10 +16,14 @@ $statusLabel = ['draft' => 'Draft', 'scheduled' => 'Scheduled', 'sending' => 'Se
   <div class="actions">
     <?php if ((int) $c['recipient_count'] > 0): ?><a class="btn ghost" href="/admin/campaigns/<?= (int) $c['id'] ?>/log"><?= icon('clock') ?> Delivery log</a><?php endif ?>
     <form method="post" action="/admin/campaigns/<?= (int) $c['id'] ?>/duplicate"><?= csrf_field() ?><button class="btn ghost" type="submit"><?= icon('layers') ?> Duplicate</button></form>
-    <?php if ($c['status'] !== 'sending'): ?><form method="post" action="/admin/campaigns/<?= (int) $c['id'] ?>/delete" data-confirm="Delete this campaign<?= $c['status'] === 'sent' ? ' and its delivery log' : '' ?>?"><?= csrf_field() ?><button class="btn danger-ghost" type="submit"><?= icon('trash') ?> Delete</button></form><?php endif ?>
+    <?php if (!in_array($c['status'], ['sending', 'paused'], true)): ?><form method="post" action="/admin/campaigns/<?= (int) $c['id'] ?>/delete" data-confirm="Delete this campaign<?= $c['status'] === 'sent' ? ' and its delivery log' : '' ?>?"><?= csrf_field() ?><button class="btn danger-ghost" type="submit"><?= icon('trash') ?> Delete</button></form><?php endif ?>
   </div>
 </div>
 <?= form_errors_html($errors) ?>
+<?php if ($c['status'] === 'paused'): ?>
+  <div class="flash error" role="status"><?= icon('alert') ?><span><strong>Sending is paused.</strong> <?= e($c['pause_reason']) ?></span>
+    <form method="post" action="/admin/campaigns/<?= (int) $c['id'] ?>/resume"><?= csrf_field() ?><button class="btn small" type="submit">Resume sending</button></form></div>
+<?php endif ?>
 
 <div class="campaign-layout">
   <div class="campaign-main">
