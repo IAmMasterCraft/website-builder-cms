@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Build the upload archive for the aaPanel server (see DEPLOY.md).
+#   bin/package [git-ref]        default: HEAD  ->  dist/gather-<date>-<commit>.tar.gz
+# Packages committed files only (git archive), then removes everything the
+# server must not get: config.php, storage contents, tests, dev tools and
+# developer notes. macOS metadata (._* files, xattrs) is kept out with
+# COPYFILE_DISABLE=1 and tar --no-xattrs --no-mac-metadata.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+ref="${1:-HEAD}"
+command -v git >/dev/null || { echo "git is needed to package" >&2; exit 1; }
+git rev-parse --verify --quiet "$ref^{commit}" >/dev/null || { echo "unknown git ref: $ref" >&2; exit 1; }
+if [ "$ref" = "HEAD" ] && [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "note: uncommitted changes are NOT included (the archive is built from $ref)" >&2
+fi
+commit_full=$(git rev-parse "$ref")
+name="gather-$(date -u +%Y%m%d)-${commit_full:0:7}"
+stage=$(mktemp -d "${TMPDIR:-/tmp}/gather-package.XXXXXX")
+trap 'rm -rf "$stage"' EXIT
+mkdir -p "$stage/gather" "$ROOT/dist"
+
+git archive --format=tar "$ref" | tar -x -C "$stage/gather"
+
+cd "$stage/gather"
+# Never shipped: secrets, runtime data, tests, dev tooling, developer notes.
+rm -rf config.php tests dev-tools .gitignore BUILD-NOTES.md bin/check bin/package demo-assets/make-radio-demo.php
+find storage public/uploads -mindepth 2 -type f ! -name '.gitkeep' ! -name '.htaccess' -delete 2>/dev/null || true
+find public/uploads -mindepth 1 -type f ! -name '.gitkeep' ! -name '.htaccess' -delete
+find . \( -name '._*' -o -name '.DS_Store' \) -type f -delete
+printf 'commit=%s\nbuilt=%s\n' "$commit_full" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > VERSION
+
+cd "$stage"
+COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata --exclude='._*' --exclude='.DS_Store' -czf "$ROOT/dist/$name.tar.gz" gather
+
+# Show what went in, and refuse to finish if anything private slipped through.
+list=$(tar -tzf "$ROOT/dist/$name.tar.gz")
+bad=$(printf '%s\n' "$list" | grep -E '^gather/config\.php$|^gather/tests/|^gather/dev-tools/|(^|/)\._|\.DS_Store$|^gather/storage/[^/]+/[^.][^/]*$|^gather/\.git/' || true)
+if [ -n "$bad" ]; then
+  echo "refusing: private files in the archive:" >&2
+  echo "$bad" >&2
+  rm -f "$ROOT/dist/$name.tar.gz"
+  exit 1
+fi
+printf 'dist/%s.tar.gz  (%s files, %s)\n' "$name" "$(printf '%s\n' "$list" | grep -vc '/$')" "$(du -h "$ROOT/dist/$name.tar.gz" | cut -f1)"

@@ -19,8 +19,8 @@ return [
         'pass' => '',
     ],
     'mail' => [
+        // Default transport until a super admin sets up SMTP in Admin -> Email settings.
         // 'file' writes every email to storage/mail/*.eml (development).
-        // 'smtp' will use the vendored PHPMailer once it is added (phase 5).
         'driver'     => 'file',
         'from_email' => 'no-reply@example.org',
         'from_name'  => 'Gather',
