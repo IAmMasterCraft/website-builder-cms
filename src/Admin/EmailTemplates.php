@@ -83,6 +83,7 @@ final class EmailTemplates
         $t = self::def($p['key']);
         $parts = email_template_render($t['key'], email_template_samples($t));
         $ok = mail_send_now(new Message((string) $user['email'], (string) $user['display_name'], '[Test] ' . $parts['subject'], $parts['text'], $parts['html']), 'test', false);
+        audit('test', 'email_template', null, $t['key'] . ($ok ? '' : ' (failed)'));
         flash($ok ? 'Test sent to ' . $user['email'] . '.' : 'The test email could not be sent. Check the email settings.', $ok ? 'success' : 'error');
         redirect('/admin/email-templates/' . $t['key']);
     }

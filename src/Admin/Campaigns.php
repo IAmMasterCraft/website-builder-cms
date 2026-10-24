@@ -129,6 +129,8 @@ final class Campaigns
             $reach = audience_resolve($aud);
             json_out(['ok' => true, 'errors' => $errors, 'saved_at' => fmt_date(utc_now(), 'H:i'), 'recipients' => count($reach['recipients']), 'excluded' => $reach['excluded']]);
         }
+        // Autosave (JSON) is not logged: it runs every few seconds. Form saves are.
+        audit('update', 'campaign', (int) $c['id'], $subject . ($op !== 'save' ? ' (' . $op . ')' : ''));
         if ($errors) {
             remember_input([], $errors);
         } elseif ($op === 'save') {
@@ -166,6 +168,7 @@ final class Campaigns
         }
         rate_hit('campaign-test:' . $user['id']);
         $ok = campaign_test_send($c, $to, explode(' ', (string) $user['display_name'])[0]);
+        audit('test', 'campaign', (int) $c['id'], 'test to ' . $to . ($ok ? '' : ' (failed)'));
         flash($ok ? 'Test sent to ' . $to . '.' : 'The test could not be sent. Check the email settings.', $ok ? 'success' : 'error');
         redirect('/admin/campaigns/' . $c['id']);
     }
@@ -215,6 +218,7 @@ final class Campaigns
         $c = self::find((int) $p['id']);
         if ($c['status'] === 'scheduled') {
             q("UPDATE campaigns SET status = 'draft', send_at = NULL WHERE id = ? AND status = 'scheduled'", [$c['id']]);
+            audit('cancel', 'campaign', (int) $c['id'], (string) $c['subject']);
             flash('The schedule is cancelled; the campaign is a draft again.');
         }
         redirect('/admin/campaigns/' . $c['id']);
@@ -226,6 +230,7 @@ final class Campaigns
         $user = require_permission('communications');
         $c = self::find((int) $p['id']);
         $id = db_insert('campaigns', ['subject' => mb_substr('Copy of ' . $c['subject'], 0, 200), 'preheader' => $c['preheader'], 'blocks' => $c['blocks'], 'audience' => $c['audience'], 'created_by' => $user['id']]);
+        audit('create', 'campaign', $id, 'copy of #' . $c['id']);
         flash('Copied. This is a new draft.');
         redirect('/admin/campaigns/' . $id);
     }

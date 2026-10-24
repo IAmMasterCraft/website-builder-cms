@@ -226,7 +226,8 @@ final class Radio
             redirect('/admin/radio');
         }
         $slug = unique_slug('radio_categories', slugify($name, 80) ?: 'category');
-        db_insert('radio_categories', ['name' => $name, 'slug' => $slug, 'sort' => (int) q_val('SELECT COALESCE(MAX(sort), 0) + 1 FROM radio_categories')]);
+        $catId = db_insert('radio_categories', ['name' => $name, 'slug' => $slug, 'sort' => (int) q_val('SELECT COALESCE(MAX(sort), 0) + 1 FROM radio_categories')]);
+        audit('create', 'radio_category', $catId, $name);
         flash('Category added.');
         redirect('/admin/radio');
     }
@@ -235,7 +236,11 @@ final class Radio
     {
         csrf_check();
         require_permission('radio');
+        $cat = q_one('SELECT id, name FROM radio_categories WHERE id = ?', [(int) $p['id']]);
         q('DELETE FROM radio_categories WHERE id = ?', [(int) $p['id']]);
+        if ($cat !== null) {
+            audit('delete', 'radio_category', (int) $cat['id'], (string) $cat['name']);
+        }
         flash('Category removed (its programmes are kept, without a category).');
         redirect('/admin/radio');
     }
@@ -353,6 +358,7 @@ final class Radio
             flash($e->getMessage() . ' Nothing was changed.', 'error');
             redirect('/admin/radio/playlists/' . $pl['id']);
         }
+        audit('update', 'radio_playlist', (int) $pl['id'], $name . ($op !== 'save' ? ' (' . $op . ')' : ''));
         flash('Playlist saved.');
         redirect('/admin/radio/playlists/' . $pl['id']);
     }

@@ -84,6 +84,17 @@ final class Browser
         return preg_match('/name="_csrf" value="([a-f0-9]{64})"/', $html, $m) ? $m[1] : '';
     }
 
+    /** POST and write the response body to $file (large downloads). Returns status and content type. */
+    public function postToFile(string $path, array $fields, string $file): array
+    {
+        $fh = fopen($file, 'wb');
+        $ch = curl_init($this->base . $path);
+        curl_setopt_array($ch, [CURLOPT_FILE => $fh, CURLOPT_COOKIEJAR => $this->jar, CURLOPT_COOKIEFILE => $this->jar, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $fields, CURLOPT_TIMEOUT => 300]);
+        curl_exec($ch);
+        fclose($fh);
+        return ['status' => (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE), 'type' => (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE)];
+    }
+
     private function request(string $method, string $path, array|string|null $fields, array $headers): array
     {
         $ch = curl_init($this->base . $path);
@@ -548,6 +559,9 @@ check('logout works', $r['status'] === 303 && $member->get('/admin')['status'] =
 
 // ---- Phases 5-6: communications, jobs, comments, radio --------------------
 require __DIR__ . '/smoke_comms.php';
+
+// ---- Phase 7: users & roles, audit, backups, health, permission matrix, CSRF --
+require __DIR__ . '/smoke_admin.php';
 
 // ---- Login safety ----------------------------------------------------------
 $r = $visitor->post('/login', ['email' => 'sam@example.test', 'password' => 'x']);

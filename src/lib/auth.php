@@ -221,12 +221,12 @@ function set_user_permissions(int $userId, array $permissions): void
 }
 
 /** Create a reset token (returns the raw token for the email link). */
-function create_password_reset(int $userId): string
+function create_password_reset(int $userId, int $hours = 1): string
 {
     $token = bin2hex(random_bytes(32));
     q('DELETE FROM password_resets WHERE user_id = ? OR expires_at < UTC_TIMESTAMP()', [$userId]);
     q(
-        'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, UTC_TIMESTAMP() + INTERVAL 1 HOUR)',
+        'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, UTC_TIMESTAMP() + INTERVAL ' . max(1, min(168, $hours)) . ' HOUR)',
         [$userId, hash('sha256', $token)]
     );
     return $token;

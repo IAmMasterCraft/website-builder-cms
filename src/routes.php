@@ -248,6 +248,26 @@ function app_routes(): Router
     $r->post('/admin/radio/schedule/{id:\d+}', [Admin\Radio::class, 'updateSlot']);
     $r->post('/admin/radio/schedule/{id:\d+}/delete', [Admin\Radio::class, 'deleteSlot']);
 
+    // Super admin: users & roles, audit log, backups, system health (§7)
+    $r->get('/admin/users', [Admin\Users::class, 'index']);
+    $r->get('/admin/users/new', [Admin\Users::class, 'create']);
+    $r->post('/admin/users', [Admin\Users::class, 'store']);
+    $r->get('/admin/users/{id:\d+}', [Admin\Users::class, 'edit']);
+    $r->post('/admin/users/{id:\d+}', [Admin\Users::class, 'update']);
+    $r->post('/admin/users/{id:\d+}/status', [Admin\Users::class, 'status']);
+    $r->post('/admin/users/{id:\d+}/reset', [Admin\Users::class, 'resetLink']);
+    $r->get('/admin/audit', [Admin\Audit::class, 'index']);
+    $r->get('/admin/audit.csv', [Admin\Audit::class, 'csv']);
+    $backup = '{name:gather-\d{8}-\d{6}-(?:db\.sql\.gz|db\.sql|uploads\.zip)}';
+    $r->get('/admin/backups', [Admin\Backups::class, 'index']);
+    $r->post('/admin/backups/database', [Admin\Backups::class, 'downloadDb']);
+    $r->post('/admin/backups/uploads', [Admin\Backups::class, 'downloadUploads']);
+    $r->post('/admin/backups/settings', [Admin\Backups::class, 'settings']);
+    $r->post('/admin/backups/run', [Admin\Backups::class, 'runNow']);
+    $r->get('/admin/backups/files/' . $backup, [Admin\Backups::class, 'file']);
+    $r->post('/admin/backups/files/' . $backup . '/delete', [Admin\Backups::class, 'delete']);
+    $r->get('/admin/health', [Admin\Health::class, 'index']);
+
     // Generic content CRUD (type key validated against the registry)
     $type = '{type:[a-z-]+}';
     $r->get('/admin/' . $type, [Admin\Content::class, 'index']);

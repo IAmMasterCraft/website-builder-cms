@@ -261,7 +261,8 @@ final class Members
             flash('Write a note (up to 2,000 characters).', 'error');
             redirect('/admin/members/' . $m['id'] . '#notes');
         }
-        db_insert('member_notes', ['member_id' => $m['id'], 'author_id' => $admin['id'], 'body' => $body]);
+        $noteId = db_insert('member_notes', ['member_id' => $m['id'], 'author_id' => $admin['id'], 'body' => $body]);
+        audit('create', 'member_note', $noteId, 'note on ' . member_full_name($m));
         flash('Note added.');
         redirect('/admin/members/' . $m['id'] . '#notes');
     }

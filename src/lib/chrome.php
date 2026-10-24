@@ -98,6 +98,10 @@ function admin_nav(?array $user): array
             ['/admin/settings', 'Site settings', 'settings', 'super_admin'],
             ['/admin/settings/membership', 'Membership settings', 'award', 'super_admin'],
             ['/admin/settings/email', 'Email settings', 'mail', 'super_admin'],
+            ['/admin/users', 'Users and roles', 'lock', 'super_admin'],
+            ['/admin/audit', 'Audit log', 'clock', 'super_admin'],
+            ['/admin/backups', 'Backups', 'download', 'super_admin'],
+            ['/admin/health', 'System health', 'check', 'super_admin'],
         ],
     ];
     $out = [];

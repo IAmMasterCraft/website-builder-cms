@@ -69,6 +69,7 @@ final class Albums
             $alt = isset($alts[$id]) && is_string($alts[$id]) ? $alts[$id] : '';
             q('UPDATE album_photos SET caption = ?, alt = ? WHERE id = ? AND album_id = ?', [mb_substr(trim($caption), 0, 300), mb_substr(trim($alt), 0, 300), (int) $id, $album['id']]);
         }
+        audit('update', 'album', (int) $album['id'], 'captions and alt text');
         flash('Captions saved.');
         redirect('/admin/albums/' . $album['id'] . '/photos');
     }
@@ -88,6 +89,7 @@ final class Albums
                     q('UPDATE album_photos SET sort = ? WHERE id = ?', [$i, $id]);
                 }
             });
+            audit('move', 'album_photo', (int) $p['photo'], 'album #' . $album['id'] . ' ' . (input('dir') === 'up' ? 'up' : 'down'));
         }
         redirect('/admin/albums/' . $album['id'] . '/photos#photo-' . (int) $p['photo']);
     }
@@ -106,6 +108,7 @@ final class Albums
         if (input('delete_file') === '1' && media_usage((int) $photo['media_id']) === []) {
             media_delete((int) $photo['media_id']);
         }
+        audit('delete', 'album_photo', (int) $photo['id'], 'from album #' . $album['id'] . (input('delete_file') === '1' ? ' (file deleted if unused)' : ''));
         flash('Photo removed from the album.');
         redirect('/admin/albums/' . $album['id'] . '/photos');
     }

@@ -603,3 +603,14 @@ code { overflow-wrap: anywhere; }
   .block-tools { position: static; width: max-content; margin: 0 0 0.5rem auto; }
 }
 .dash-grid > .panel + .panel, .form-layout > .panel + .panel { margin-top: 0; }
+
+/* Phase 7: users, audit, backups, health */
+.perm-grid { display: grid; gap: 0.35rem 1rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.nowrap { white-space: nowrap; }
+.backup-actions { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); margin-bottom: 1rem; }
+.backup-actions h3 { margin: 0 0 0.25rem; font-size: 1rem; }
+.backup-actions p { margin: 0 0 0.75rem; }
+.health-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); align-items: start; }
+.health-grid > .panel { margin: 0; }
+.health-list .row-title { overflow-wrap: anywhere; }
+.health-list p { overflow-wrap: anywhere; }

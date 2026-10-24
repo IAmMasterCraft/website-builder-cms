@@ -4,7 +4,7 @@ declare(strict_types=1);
 /*
  * One crontab entry (`* * * * * php bin/cron`) dispatches every due job.
  * Each job: an interval in minutes ('every') or a local time of day
- * ('daily_at', site time zone), and a function name. Backups arrive in phase 7.
+ * ('daily_at', site time zone), and a function name. Backups run daily when switched on.
  */
 function cron_jobs(): array
 {
@@ -16,7 +16,7 @@ function cron_jobs(): array
         'email_queue' => ['every' => 1, 'run' => 'cron_email_queue'],
         'birthdays' => ['daily_at' => birthday_time(), 'run' => 'cron_birthdays'],
         'job_expiry' => ['every' => 15, 'run' => 'cron_job_expiry'],
-        // 'backups'     => ['daily_at' => '03:00', 'run' => ...], phase 7
+        'backups' => ['daily_at' => backup_settings()['time'], 'run' => 'cron_backups'],
     ];
 }
 

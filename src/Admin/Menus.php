@@ -193,6 +193,7 @@ final class Menus
         $menu = self::menu($p);
         $item = self::item($menu, $p);
         menu_item_move((int) $item['id'], input('dir') === 'up' ? 'up' : 'down');
+        audit('move', 'menu_item', (int) $item['id'], $menu['name'] . ': ' . $item['label'] . ' ' . (input('dir') === 'up' ? 'up' : 'down'));
         redirect('/admin/menus/' . $menu['id'] . '#item-' . $item['id']);
     }
 
@@ -203,6 +204,7 @@ final class Menus
         $menu = self::menu($p);
         $item = self::item($menu, $p);
         db_update('menu_items', (int) $item['id'], ['is_hidden' => (int) $item['is_hidden'] === 1 ? 0 : 1]);
+        audit((int) $item['is_hidden'] === 1 ? 'show' : 'hide', 'menu_item', (int) $item['id'], $menu['name'] . ': ' . $item['label']);
         flash((int) $item['is_hidden'] === 1 ? 'Item is visible again.' : 'Item hidden (it stays in the menu so you can show it later).');
         redirect('/admin/menus/' . $menu['id'] . '#item-' . $item['id']);
     }

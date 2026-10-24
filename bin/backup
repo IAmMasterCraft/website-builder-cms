@@ -1,0 +1,17 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// Write a backup into storage/backups now (same as "Back up to the server now").
+//   php bin/backup [--uploads]
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require __DIR__ . '/../src/load.php';
+if (!app_installed()) {
+    fwrite(STDERR, "Not installed yet.\n");
+    exit(1);
+}
+foreach (backup_run(in_array('--uploads', $argv, true)) as $name) {
+    echo 'storage/backups/' . $name . "\n";
+}

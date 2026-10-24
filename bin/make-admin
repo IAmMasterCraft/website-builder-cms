@@ -45,10 +45,21 @@ if (($problem = password_problem($password)) !== null) {
     exit(1);
 }
 $name = (string) ($opts['name'] ?? strstr($email, '@', true));
-$existing = q_one('SELECT id FROM users WHERE email = ?', [strtolower($email)]);
+$existing = q_one('SELECT id, role FROM users WHERE email = ?', [strtolower($email)]);
 if ($existing !== null) {
-    q("UPDATE users SET role = ?, status = 'active', password_hash = ?, display_name = ? WHERE id = ?", [$role, hash_password($password), $name, $existing['id']]);
-    set_user_permissions((int) $existing['id'], $role === 'admin' ? $perms : []);
+    if (in_array($existing['role'], ['super_admin', 'admin'], true)) {
+        try {
+            // Same rule as the Users & roles screen: never remove the last active super admin.
+            staff_apply_change((int) $existing['id'], ['role' => $role, 'status' => 'active', 'display_name' => $name, 'permissions' => $perms]);
+        } catch (LastSuperAdminException $e) {
+            fwrite(STDERR, $e->getMessage() . "\n");
+            exit(1);
+        }
+        q('UPDATE users SET password_hash = ? WHERE id = ?', [hash_password($password), $existing['id']]);
+    } else {
+        q("UPDATE users SET role = ?, status = 'active', password_hash = ?, display_name = ? WHERE id = ?", [$role, hash_password($password), $name, $existing['id']]);
+        set_user_permissions((int) $existing['id'], $role === 'admin' ? $perms : []);
+    }
     echo "Updated {$email} ({$role}).\n";
 } else {
     create_user($email, $password, $role, $name, 'active', $role === 'admin' ? $perms : []);

@@ -1,0 +1,44 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// Restore a database backup made by Gather (Backups screen or bin/backup).
+//   php bin/restore <file.sql.gz|file.sql> [--yes]
+// Replaces every table in the database named in config.php with the backup.
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require __DIR__ . '/../src/load.php';
+
+$file = $argv[1] ?? '';
+if ($file === '' || str_starts_with($file, '--') || !is_file($file)) {
+    fwrite(STDERR, "Usage: php bin/restore <backup.sql.gz|backup.sql> [--yes]\n");
+    exit(1);
+}
+$head = (string) gzopen_head($file);
+if (!str_contains($head, 'Gather database backup') && !in_array('--yes', $argv, true)) {
+    fwrite(STDERR, "This does not look like a Gather backup. Add --yes to restore it anyway.\n");
+    exit(1);
+}
+$dbName = (string) config('db.name', '');
+if (!in_array('--yes', $argv, true)) {
+    echo "This replaces ALL tables in the database '$dbName' with " . basename($file) . ".\nType the database name to continue: ";
+    if (trim((string) fgets(STDIN)) !== $dbName) {
+        fwrite(STDERR, "Cancelled.\n");
+        exit(1);
+    }
+}
+$start = microtime(true);
+$n = backup_restore($file, db());
+printf("Restored %d statements in %.1fs. Now run: php bin/migrate\n", $n, microtime(true) - $start);
+
+function gzopen_head(string $file): string
+{
+    $h = gzopen($file, 'rb');
+    if ($h === false) {
+        return '';
+    }
+    $s = (string) gzread($h, 200);
+    gzclose($h);
+    return $s;
+}

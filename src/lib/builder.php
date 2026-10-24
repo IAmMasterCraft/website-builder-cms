@@ -557,6 +557,8 @@ function builder_save_draft(int $pageId, array $sections, int $baseRevision, ?in
             $draftId = (int) $draft['id'];
         } else {
             $draftId = db_insert('page_revisions', ['page_id' => $pageId, 'revision' => $next, 'sections' => $json, 'author_id' => $userId]);
+            // One audit entry per editing session (autosaves in between only update this draft).
+            audit('draft', 'page', $pageId, 'started a new draft (revision ' . $next . ')');
         }
         q('UPDATE pages SET revision = ?, draft_revision_id = ?, updated_by = ? WHERE id = ?', [$next, $draftId, $userId, $pageId]);
         builder_prune($pageId);

@@ -43,7 +43,7 @@ $err = static fn (string $k): ?string => $errors[$k] ?? null;
     <div class="form-actions"><button class="btn accent" type="submit"><?= icon('check') ?> Save email settings</button></div>
   </form>
   <div class="side">
-    <form class="panel" method="post" action="/admin/settings/email/test">
+    <form class="panel" id="test" method="post" action="/admin/settings/email/test">
       <?= csrf_field() ?>
       <div class="panel-head"><h2>Send a test email</h2></div>
       <div class="panel-body fields">

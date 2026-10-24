@@ -13,6 +13,12 @@ final class Router
     /** @var list<array{method:string, pattern:string, regex:string, handler:mixed}> */
     private array $routes = [];
 
+    /** @return list<array{method:string, pattern:string, handler:mixed}> every route, in order (tests enumerate them) */
+    public function routes(): array
+    {
+        return array_map(static fn (array $r): array => ['method' => $r['method'], 'pattern' => $r['pattern'], 'handler' => $r['handler']], $this->routes);
+    }
+
     public function get(string $pattern, mixed $handler): self
     {
         return $this->add('GET', $pattern, $handler);
