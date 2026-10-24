@@ -27,7 +27,7 @@ $inv = static fn (string $k): string => isset($errors[$k]) ? ' aria-invalid="tru
           <?= view('site/share', ['url' => $share_url, 'text' => $event['title']]) ?>
         <?php endif ?>
       </div>
-      <aside>
+      <div class="side-col">
         <div class="aside-box">
           <?php if (!$is_past): ?>
             <div class="countdown" data-countdown="<?= e(iso_date($event['start_at'])) ?>" aria-label="Time until the event starts">
@@ -90,7 +90,7 @@ $inv = static fn (string $k): string => isset($errors[$k]) ? ' aria-invalid="tru
           <?php endif ?>
         </div>
         <?php endif ?>
-      </aside>
+      </div>
     </div>
   </div>
 </article>

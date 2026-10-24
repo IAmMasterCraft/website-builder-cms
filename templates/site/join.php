@@ -44,7 +44,7 @@ $terms = safe_url($settings['terms_url']) ?: '/privacy-policy';
         </div>
       </form>
     </div>
-    <aside class="join-aside">
+    <div class="side-col join-aside">
       <div class="aside-box">
         <h2 class="h3">What happens next</h2>
         <ol class="steps-list">
@@ -53,7 +53,7 @@ $terms = safe_url($settings['terms_url']) ?: '/privacy-policy';
           <li><strong>Use your card.</strong> Download or print your digital member card with its QR code.</li>
         </ol>
       </div>
-    </aside>
+    </div>
   </div>
 </section>
 <script type="module" src="<?= e(asset('assets/js/photo-crop.js')) ?>"></script>

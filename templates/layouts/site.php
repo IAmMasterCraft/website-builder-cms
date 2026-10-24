@@ -34,7 +34,7 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
 <body class="<?= e($body_class ?? '') ?>">
 <a class="skip-link" href="#main">Skip to content</a>
 <?php if ($c['topbar']): ?>
-<div class="topbar">
+<div class="topbar" role="region" aria-label="Contact details and account links">
   <div class="container">
     <ul class="topbar-info">
       <?php if ($c['phone'] !== ''): ?><li><?= icon('phone') ?><a href="tel:<?= e(preg_replace('/[^0-9+]/', '', $c['phone'])) ?>"><?= e($c['phone']) ?></a></li><?php endif ?>

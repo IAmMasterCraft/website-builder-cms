@@ -53,11 +53,11 @@ foreach ($c['nav'] as $links) {
         <?= icon('search') ?><input type="search" id="admin-q" name="q" placeholder="Search content…" maxlength="100" value="<?= e(request_path() === '/admin/search' ? query_param('q') : '') ?>">
       </form>
       <div class="top-actions">
-        <a class="btn ghost small" href="/" target="_blank" rel="noopener"><?= icon('external') ?><span class="hide-sm">View site</span></a>
+        <a class="btn ghost small" href="/" target="_blank" rel="noopener" aria-label="View site (opens in a new tab)"><?= icon('external') ?><span class="hide-sm">View site</span></a>
         <a class="icon-btn" href="/admin#needs-attention"><?= icon('bell') ?><?php if ($c['notifications'] > 0): ?><span class="dot tabular"><?= (int) $c['notifications'] ?></span><?php endif ?><span class="sr-only"><?= (int) $c['notifications'] ?> items need attention</span></a>
         <button type="button" class="icon-btn" data-theme-toggle><?= icon('moon', 'icon when-light') ?><?= icon('sun', 'icon when-dark') ?><span class="sr-only">Switch light or dark mode</span></button>
         <details class="profile">
-          <summary><span class="avatar" aria-hidden="true"><?= e(mb_strtoupper(mb_substr((string) $u['display_name'], 0, 1))) ?></span><span class="hide-sm"><?= e($u['display_name']) ?></span></summary>
+          <summary aria-label="Account menu: <?= e($u['display_name']) ?>"><span class="avatar" aria-hidden="true"><?= e(mb_strtoupper(mb_substr((string) $u['display_name'], 0, 1))) ?></span><span class="hide-sm"><?= e($u['display_name']) ?></span></summary>
           <div class="menu">
             <p><strong><?= e($u['display_name']) ?></strong><br><span class="muted"><?= e($u['email']) ?></span><br><span class="badge"><?= e(str_replace('_', ' ', $u['role'])) ?></span></p>
             <form method="post" action="/logout"><?= csrf_field() ?><button type="submit" class="btn ghost small"><?= icon('logout') ?> Log out</button></form>

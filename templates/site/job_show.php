@@ -9,7 +9,7 @@ $live = $job['status'] === 'published' && ($job['expires_at'] === null || $job['
       <?php if (!$live): ?><p class="notice warn">This post is not on the board (<?= e($job['status']) ?>). Only you and the moderators can see it.</p><?php endif ?>
       <div class="prose"><?= nl2br(e((string) $job['description'])) ?></div>
     </article>
-    <aside>
+    <div class="side-col">
       <div class="aside-box">
         <h2>At a glance</h2>
         <ul class="event-facts">
@@ -35,6 +35,6 @@ $live = $job['status'] === 'published' && ($job['expires_at'] === null || $job['
           <?php endif ?>
         </div>
       <?php endif ?>
-    </aside>
+    </div>
   </div>
 </section>

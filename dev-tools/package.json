@@ -1,0 +1,12 @@
+{
+  "name": "gather-dev-tools",
+  "private": true,
+  "description": "Dev-only audit tools (axe-core, Lighthouse). Never deployed; bin/package excludes this folder.",
+  "scripts": {
+    "audit": "node audit.mjs"
+  },
+  "devDependencies": {
+    "axe-core": "4.11.0",
+    "lighthouse": "12.8.2"
+  }
+}

@@ -137,3 +137,28 @@ document.querySelectorAll('form[data-auto-read]').forEach(async (form) => {
     if (res.ok) form.hidden = true;
   } catch { /* leave the button */ }
 });
+
+// Tables that scroll sideways (narrow screens) must be reachable with the
+// keyboard: make the scroller focusable and name it after the table's
+// heading when it has no focusable content of its own.
+const scrollers = [...document.querySelectorAll('.table-wrap')];
+const markScrollers = () => {
+  scrollers.forEach((wrap) => {
+    const scrolls = wrap.scrollWidth > wrap.clientWidth + 1;
+    const focusable = wrap.querySelector('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (scrolls && !focusable) {
+      wrap.tabIndex = 0;
+      wrap.setAttribute('role', 'region');
+      const heading = wrap.closest('.panel')?.querySelector('h2')?.textContent?.trim();
+      wrap.setAttribute('aria-label', heading ? `${heading} (scrolls sideways)` : 'Table (scrolls sideways)');
+    } else if (wrap.getAttribute('role') === 'region') {
+      wrap.removeAttribute('tabindex');
+      wrap.removeAttribute('role');
+      wrap.removeAttribute('aria-label');
+    }
+  });
+};
+if (scrollers.length) {
+  markScrollers();
+  window.addEventListener('resize', markScrollers, { passive: true });
+}
