@@ -2,48 +2,15 @@
 import { initLightbox } from './lightbox.js';
 import { initCommunity } from './community.js';
 import { initRadio } from './radio.js';
+import { initHeader } from './header.js';
+import { initReveal, initCounters, initParallax, initSteps } from './motion.js';
+import { initHero } from './hero.js';
+import { initCarousels } from './carousel.js';
+import { initAccordions, initShowcase } from './accordion.js';
 
-// Mobile navigation toggle.
-const toggle = document.querySelector('.nav-toggle');
-const nav = document.getElementById('site-nav');
-if (toggle && nav) {
-  toggle.addEventListener('click', () => {
-    const open = toggle.getAttribute('aria-expanded') !== 'true';
-    toggle.setAttribute('aria-expanded', String(open));
-    nav.classList.toggle('open', open);
-  });
-}
-
-// Submenus: disclosure buttons; Escape and outside clicks close them.
-const subs = [...document.querySelectorAll('.site-nav .has-sub')];
-function closeAll(except) {
-  subs.forEach((li) => {
-    if (li !== except) {
-      li.classList.remove('open');
-      li.querySelector('.sub-toggle')?.setAttribute('aria-expanded', 'false');
-    }
-  });
-}
-subs.forEach((li) => {
-  const btn = li.querySelector('.sub-toggle');
-  btn?.addEventListener('click', () => {
-    const open = !li.classList.contains('open');
-    closeAll(li);
-    li.classList.toggle('open', open);
-    btn.setAttribute('aria-expanded', String(open));
-  });
-});
-document.addEventListener('click', (e) => {
-  if (!(e.target instanceof Element) || !e.target.closest('.has-sub')) closeAll();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
-  const openLi = subs.find((li) => li.classList.contains('open'));
-  if (openLi) {
-    closeAll();
-    openLi.querySelector('.sub-toggle')?.focus();
-  }
-});
+initHeader();
+initReveal();
+initHero();
 
 // Copy-link share button (shown only when the clipboard API exists).
 document.querySelectorAll('[data-copy]').forEach((btn) => {
@@ -130,28 +97,19 @@ document.querySelectorAll('[data-slider]').forEach((slider) => {
   }
 });
 
-// Stat counters count up once when they scroll into view.
-const counters = document.querySelectorAll('[data-count]');
-if (counters.length && !reducedMotion && 'IntersectionObserver' in window) {
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return;
-      io.unobserve(entry.target);
-      const el = entry.target;
-      const end = Number(el.dataset.count);
-      if (!Number.isFinite(end) || end <= 0) return;
-      const start = performance.now();
-      const step = (now) => {
-        const p = Math.min(1, (now - start) / 900);
-        el.textContent = String(Math.round(end * (1 - (1 - p) ** 3)));
-        if (p < 1) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    });
-  }, { threshold: 0.4 });
-  counters.forEach((c) => io.observe(c));
-}
-
 initLightbox();
 initCommunity();
 initRadio();
+initCounters();
+initParallax();
+initSteps();
+initCarousels();
+initAccordions();
+initShowcase();
+
+// Back to top (footer).
+document.querySelectorAll('[data-to-top]').forEach((a) => a.addEventListener('click', (e) => {
+  e.preventDefault();
+  window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+  document.getElementById('main')?.focus({ preventScroll: true });
+}));

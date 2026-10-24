@@ -1,6 +1,19 @@
 {
   "name": "Civic",
-  "description": "Navy and teal with a clean sans-serif: calm, trustworthy, easy to read.",
-  "swatches": ["#12355b", "#0b7577", "#f2b246", "#f3f6f9"],
-  "design": {"brand": "#12355b", "accent": "#0b7577", "surface": "#ffffff", "heading_font": "inter", "body_font": "inter", "radius": "rounded", "button": "pill"}
+  "description": "Navy and teal with a clean modern sans and a warm gold highlight: calm, trustworthy, easy to read.",
+  "swatches": [
+    "#12355b",
+    "#0b7577",
+    "#f2b246",
+    "#f2f5f8"
+  ],
+  "design": {
+    "brand": "#12355b",
+    "accent": "#0b7577",
+    "surface": "#ffffff",
+    "heading_font": "manrope",
+    "body_font": "instrument-sans",
+    "radius": "rounded",
+    "button": "pill"
+  }
 }

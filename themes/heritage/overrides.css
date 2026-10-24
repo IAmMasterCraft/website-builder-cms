@@ -1,15 +1,17 @@
-/* Heritage: woven-pattern hero, serif italics, softer cards. */
-body { font-size: calc(var(--step-0) * 1.03); }
-.brand-mark { background: var(--c-brand); border-radius: 50%; font-family: var(--font-heading); }
-.hero { background:
-  repeating-linear-gradient(45deg, color-mix(in srgb, var(--c-highlight) 7%, transparent) 0 2px, transparent 2px 18px),
-  repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c-highlight) 7%, transparent) 0 2px, transparent 2px 18px),
-  linear-gradient(160deg, var(--c-brand) 0%, var(--c-brand-strong) 70%); }
-.hero h1, .blk h2 { font-optical-sizing: auto; }
-.eyebrow { color: var(--c-accent-text); font-style: italic; text-transform: none; letter-spacing: 0; font-family: var(--font-heading); font-size: var(--step-0); font-weight: 500; }
-.hero .eyebrow, .bg-brand .eyebrow, .bg-image .eyebrow { color: var(--c-highlight); }
-.card { box-shadow: none; }
-.card:hover { box-shadow: var(--shadow-2); }
-.section-head h2, .blk-head h2 { position: relative; }
-.site-footer { background: var(--c-brand-strong); }
-.cta-band { background: linear-gradient(135deg, var(--c-brand), var(--c-brand-strong)); }
+/* Heritage: warm paper, characterful serif headlines, italic eyebrows with a
+   fine rule, round icon tiles and ochre accents on deep brown bands. */
+body { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .2 0 0 0 0 .1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.eyebrow { font-family: var(--font-heading); font-style: italic; }
+.eyebrow::before { width: 2rem; height: 1px; border-radius: 0; }
+.brand-mark { border-radius: 50%; background: var(--c-brand); color: var(--c-highlight); font-family: var(--font-heading); font-style: italic; }
+.icon-tile { border-radius: 50%; background: var(--c-brand); color: var(--c-highlight); box-shadow: none; }
+.icon-tile.light { background: var(--c-surface); color: var(--c-brand); }
+.hero-title, .page-hero h1, .sc-sticky :is(h1, h2), .footer-cta h2 { font-optical-sizing: auto; font-variation-settings: "SOFT" 60, "WONK" 1; }
+.blk-head :is(h1, h2) { font-variation-settings: "SOFT" 40; }
+.card, .feature, .stat, .tier, .faq, .dir-item { box-shadow: none; }
+.card:hover, .feature:hover, .tier:hover { box-shadow: var(--shadow-3); }
+.prose { font-size: calc(var(--step-0) * 1.06); }
+.stats.is-rules .stat, .metric, .ab-counters li { border-left-color: var(--c-highlight); }
+.tst-card blockquote p { font-style: italic; font-weight: 420; }
+.step-badge { background: transparent; color: var(--c-accent-text); padding: 0; font-family: var(--font-heading); font-style: italic; font-size: var(--step-0); letter-spacing: 0; }
+.footer-word { font-style: italic; }

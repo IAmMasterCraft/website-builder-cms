@@ -1,0 +1,19 @@
+{
+  "name": "Bold",
+  "description": "Near-black, crisp white and one strong crimson accent with a confident display grotesk: modern, striking, agency-made.",
+  "swatches": [
+    "#111214",
+    "#c8102e",
+    "#f4f4f1",
+    "#ffffff"
+  ],
+  "design": {
+    "brand": "#111214",
+    "accent": "#c8102e",
+    "surface": "#ffffff",
+    "heading_font": "bricolage-grotesque",
+    "body_font": "instrument-sans",
+    "radius": "rounded",
+    "button": "square"
+  }
+}

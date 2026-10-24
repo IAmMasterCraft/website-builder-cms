@@ -42,6 +42,8 @@ function site_chrome(): array
         'footer_blocks' => footer_blocks($path, $social),
         'listen_live' => listen_live_visible(),
         'footer_about' => (string) setting('site.footer_about', ''),
+        'footer_cta' => footer_cta_settings(),
+        'donate_links' => donate_links(),
         'user' => current_user(),
         'path' => $path,
         'flash' => flash(),
@@ -49,6 +51,17 @@ function site_chrome(): array
         // No analytics inside the builder/design preview frames.
         'analytics' => $themePreview || str_starts_with($path, '/admin') ? null : analytics_config(),
         'year' => (new DateTimeImmutable('now', site_tz()))->format('Y'),
+    ];
+}
+
+/** The footer's call-to-action strip and big wordmark (Header and footer screen). */
+function footer_cta_settings(): array
+{
+    return [
+        'footer_cta' => (bool) setting('footer.cta', true),
+        'footer_word' => (bool) setting('footer.wordmark', true),
+        'footer_cta_heading' => (string) setting('footer.cta_heading', 'Be part of what happens next.'),
+        'footer_cta_text' => (string) setting('footer.cta_text', 'Join as a member, volunteer an afternoon or simply come along to the next event.'),
     ];
 }
 

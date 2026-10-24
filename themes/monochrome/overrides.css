@@ -1,13 +1,20 @@
-/* Monochrome: hard rules instead of shadows, big type, one accent. */
-.brand-mark { background: var(--c-brand); border-radius: 0; font-family: var(--font-heading); }
-.hero { background: var(--c-brand-strong); border-bottom: 6px solid var(--c-accent); }
-.hero h1 { font-size: clamp(2.8rem, 2rem + 4vw, 5rem); line-height: 1.02; }
-.eyebrow { color: var(--c-accent-text); letter-spacing: 0.16em; }
-.hero .eyebrow, .bg-brand .eyebrow, .bg-image .eyebrow { color: var(--c-highlight); }
-.card, .event-row, .dir-item, .file-row, .faq, .stat, .aside-box { box-shadow: none; border-color: var(--c-ink); }
-.card:hover { box-shadow: 6px 6px 0 var(--c-ink); transform: translate(-2px, -2px); }
+/* Monochrome: an editorial newspaper look. Hairline and heavy rules instead
+   of soft shadows, serif headlines, one burnt-orange accent. */
+.eyebrow::before { height: 2px; }
+.brand-mark { border-radius: 0; background: var(--c-ink); color: var(--c-surface); font-family: var(--font-heading); font-size: 1.4rem; }
+.icon-tile { border-radius: 0; background: var(--c-ink); color: #fff; box-shadow: none; }
+.icon-tile.light { background: #fff; color: var(--c-ink); }
+.card, .feature, .tier, .dir-item, .faq, .event-row, .file-row, .stat, .aside-box, .person-card, .tst-card figure { border-color: var(--c-ink); box-shadow: none; }
+.card:hover, .feature:hover, .tier:hover, .event-row:hover, .dir-item:hover { box-shadow: 6px 6px 0 var(--c-ink); transform: translate(-3px, -3px); border-color: var(--c-ink); }
+.blk-head:not(.is-center), .section-head { border-top: 2px solid var(--c-ink); padding-top: var(--s-5); }
+:is(.bg-dark, .bg-brand, .bg-image) .blk-head, .hero-full .blk-head, .faq-split .blk-head { border-top-color: rgb(255 255 255 / 0.5); }
 .site-header { border-bottom: 2px solid var(--c-ink); }
-.section-head, .blk-head { border-top: 2px solid var(--c-ink); padding-top: var(--s-4); }
-.blk-hero .blk-head, .bg-brand .blk-head, .bg-image .blk-head { border-top: 0; padding-top: 0; }
+.site-footer, .hero-full { border-top: 6px solid var(--c-accent); }
+.hero-full { border-top: 0; border-bottom: 6px solid var(--c-accent); }
+.hero-title, .page-hero h1, .article-head h1, .sc-sticky :is(h1, h2) { font-weight: 450; }
+.blk-head :is(h1, h2), .split-copy :is(h1, h2), .sm-copy :is(h1, h2) { font-weight: 500; }
+.tst-card blockquote p { font-style: italic; }
 .chip[aria-current="true"], .chip[aria-current="page"] { background: var(--c-ink); border-color: var(--c-ink); }
-.site-footer { background: var(--c-brand-strong); border-top: 6px solid var(--c-accent); }
+.page-hero::before { mask-image: none; opacity: 0.6; }
+.date-badge, .date-tile, .step-badge { border-radius: 0; }
+.neu-btn { box-shadow: none; border: 1px solid currentColor; background: transparent; }

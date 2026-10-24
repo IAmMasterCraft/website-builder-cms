@@ -1,6 +1,19 @@
 {
   "name": "Heritage",
-  "description": "Warm earth tones on cream with characterful serif headings: rooted, welcoming, proud.",
-  "swatches": ["#6b2f1b", "#a2461f", "#d9a441", "#f7eee3"],
-  "design": {"brand": "#6b2f1b", "accent": "#a2461f", "surface": "#fffbf5", "heading_font": "fraunces", "body_font": "source-serif-4", "radius": "soft", "button": "rounded"}
+  "description": "Warm earth tones on cream with characterful serif headings and soft paper texture: rooted, welcoming, proud.",
+  "swatches": [
+    "#6b2f1b",
+    "#a2461f",
+    "#d9a441",
+    "#f7eee3"
+  ],
+  "design": {
+    "brand": "#6b2f1b",
+    "accent": "#a2461f",
+    "surface": "#fffbf5",
+    "heading_font": "fraunces",
+    "body_font": "newsreader",
+    "radius": "soft",
+    "button": "rounded"
+  }
 }

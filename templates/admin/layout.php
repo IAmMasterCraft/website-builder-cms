@@ -1,6 +1,6 @@
 <?php /** @var array $columns @var array $header @var array $errors @var array $widgets @var array $menus */ ?>
 <div class="page-head"><div><h1>Header and footer</h1><p>What appears around every page. Menus themselves are edited under <a href="/admin/menus">Menus</a>; the logo and contact details under <a href="/admin/settings">Site settings</a>.</p></div></div>
-<?php if ($errors): ?><div class="flash error" role="alert"><?= icon('alert') ?><span>Please fix the highlighted columns.</span></div><?php endif ?>
+<?php if ($errors): ?><div class="flash error" role="alert"><?= icon('alert') ?><span>Please fix the highlighted fields.</span></div><?php endif ?>
 <form method="post" action="/admin/layout">
   <?= csrf_field() ?>
   <div class="form-layout">
@@ -24,6 +24,12 @@
             </fieldset>
           <?php endforeach ?>
         </div>
+      </div></section>
+      <section class="panel"><div class="panel-head"><h2>Footer call to action</h2></div><div class="panel-body fields">
+        <label class="check"><input type="checkbox" name="footer_cta" value="1"<?= $header['footer_cta'] ? ' checked' : '' ?>> Show a large “join us” strip at the top of the footer</label>
+        <?= field_html('footer_cta_heading', 'Heading', 'text', $header['footer_cta_heading'], $errors['footer_cta_heading'] ?? null, ['max' => 120, 'prefix' => 'fc']) ?>
+        <?= field_html('footer_cta_text', 'Text', 'textarea', $header['footer_cta_text'], $errors['footer_cta_text'] ?? null, ['max' => 300, 'rows' => 2, 'prefix' => 'fc', 'hint' => 'The strip links to the sign-up page and, when set up in Site settings, your first donation link.']) ?>
+        <label class="check"><input type="checkbox" name="footer_word" value="1"<?= $header['footer_word'] ? ' checked' : '' ?>> Show the site name as a large outlined word at the very bottom</label>
       </div></section>
     </div>
     <div class="side">

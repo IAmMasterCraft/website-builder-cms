@@ -1,0 +1,35 @@
+/* Bold theme tokens (A6). Colour pairs used for text reach at least
+   4.5:1. Brand/accent families, fonts and radius are re-derived from
+   theme.json "design" (and the super admin's Design choices) after this file. */
+:root {
+  --c-brand: #111214;
+  --c-accent: #c8102e;
+  --c-highlight: #c8102e;
+  --c-highlight-strong: #a50d26;
+  --c-highlight-ink: #ffffff;
+  --c-ink: #121316;
+  --c-ink-soft: #383b42;
+  --c-muted: #5d6169;
+  --c-surface: #ffffff;
+  --c-surface-2: #f4f4f1;
+  --c-surface-3: #e8e8e3;
+  --c-line: #e2e2dc;
+  --c-input-border: #bfc0b9;
+  --c-header-bg: color-mix(in srgb, #ffffff 94%, transparent);
+  --c-success: #17663a;
+  --c-success-soft: #e3f4ea;
+  --c-warn: #8a5a00;
+  --c-warn-soft: #fdf1d8;
+  --c-danger: #b42318;
+  --c-danger-soft: #fdecea;
+  --c-dark: #0d0e10;
+  --c-glow: #c8102e;
+  --shadow-rgb: 17 18 22;
+  --heading-weight: 600;
+  --heading-tracking: -0.032em;
+  --display-weight: 600;
+  --display-tracking: -0.045em;
+  --eyebrow-tracking: 0.12em;
+  --eyebrow-weight: 500;
+  --c-dark-2: #17181b;
+}

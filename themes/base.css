@@ -1,0 +1,89 @@
+/* Shared design scales (Addendum A6). Every theme's tokens.css comes after
+   this file and may override any value; the super admin's Design choices
+   (brand, accent, fonts, radius, button shape) come last. */
+:root {
+  /* Fluid type scale: text steps stay calm, display steps grow to ~5.25rem. */
+  --step--2: clamp(0.72rem, 0.7rem + 0.08vw, 0.77rem);
+  --step--1: clamp(0.84rem, 0.82rem + 0.1vw, 0.9rem);
+  --step-0: clamp(1rem, 0.97rem + 0.15vw, 1.0625rem);
+  --step-1: clamp(1.17rem, 1.1rem + 0.35vw, 1.4rem);
+  --step-2: clamp(1.4rem, 1.27rem + 0.65vw, 1.85rem);
+  --step-3: clamp(1.72rem, 1.48rem + 1.2vw, 2.55rem);
+  --step-4: clamp(2.05rem, 1.65rem + 2vw, 3.45rem);
+  --step-5: clamp(2.4rem, 1.75rem + 3.25vw, 4.4rem);
+  --step-6: clamp(2.75rem, 1.8rem + 4.75vw, 5.25rem);
+  --heading-weight: 650;
+  --heading-tracking: -0.025em;
+  --heading-leading: 1.08;
+  --display-weight: 650;
+  --display-tracking: -0.042em;
+  --display-leading: 0.98;
+  --body-leading: 1.65;
+  --eyebrow-size: 0.75rem;
+  --eyebrow-weight: 600;
+  --eyebrow-tracking: 0.14em;
+  --eyebrow-case: uppercase;
+  --eyebrow-marker-size: 0.5rem;
+  --eyebrow-marker-radius: 1px;
+
+  /* Space and rhythm */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4.5rem;
+  --s-9: 6rem;
+  --s-10: 8rem;
+  --gutter: clamp(1rem, 0.55rem + 2.2vw, 2.5rem);
+  --section-y: clamp(4.25rem, 2.9rem + 5.6vw, 8rem);
+  --section-y-compact: clamp(2.75rem, 2.2rem + 2.6vw, 4.5rem);
+  --section-y-roomy: clamp(5.5rem, 3.5rem + 8vw, 10.5rem);
+  --container: 80rem;
+  --container-wide: 96rem;
+  --container-narrow: 46rem;
+  --header-h: 4.75rem;
+
+  /* Depth: layered ambient + key shadows, tinted by --shadow-rgb. */
+  --shadow-rgb: 16 19 26;
+  --shadow-1: 0 1px 2px rgb(var(--shadow-rgb) / 0.06), 0 1px 1px rgb(var(--shadow-rgb) / 0.04);
+  --shadow-2: 0 1px 2px rgb(var(--shadow-rgb) / 0.05), 0 4px 10px -2px rgb(var(--shadow-rgb) / 0.07), 0 14px 28px -12px rgb(var(--shadow-rgb) / 0.12);
+  --shadow-3: 0 2px 4px rgb(var(--shadow-rgb) / 0.04), 0 12px 24px -8px rgb(var(--shadow-rgb) / 0.12), 0 32px 56px -20px rgb(var(--shadow-rgb) / 0.2);
+  --shadow-4: 0 4px 8px rgb(var(--shadow-rgb) / 0.05), 0 20px 40px -12px rgb(var(--shadow-rgb) / 0.18), 0 56px 96px -28px rgb(var(--shadow-rgb) / 0.32);
+  --shadow-neu: 6px 6px 16px rgb(var(--shadow-rgb) / 0.12), -6px -6px 16px rgb(255 255 255 / 0.85), inset 0 1px 0 rgb(255 255 255 / 0.7);
+  --shadow-neu-dark: 6px 6px 18px rgb(0 0 0 / 0.45), -4px -4px 14px rgb(255 255 255 / 0.05), inset 0 1px 0 rgb(255 255 255 / 0.08);
+
+  /* Materials */
+  --glass-blur: 18px;
+  --glass-light: rgb(255 255 255 / 0.72);
+  --glass-light-solid: #ffffff;
+  --glass-light-line: rgb(255 255 255 / 0.65);
+  --glass-dark: rgb(14 15 18 / 0.46);
+  --glass-dark-solid: #1a1b1f;
+  --glass-dark-line: rgb(255 255 255 / 0.16);
+  --hairline: rgb(var(--shadow-rgb) / 0.1);
+  --overlay-strong: linear-gradient(180deg, rgb(8 9 12 / 0.38) 0%, rgb(8 9 12 / 0.28) 38%, rgb(8 9 12 / 0.82) 100%);
+  --overlay-medium: linear-gradient(180deg, rgb(8 9 12 / 0.25) 0%, rgb(8 9 12 / 0.18) 40%, rgb(8 9 12 / 0.72) 100%);
+  --overlay-light: linear-gradient(180deg, rgb(8 9 12 / 0.12) 0%, rgb(8 9 12 / 0.06) 45%, rgb(8 9 12 / 0.62) 100%);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-1: 150ms;
+  --dur-2: 280ms;
+  --dur-3: 650ms;
+  --dur-4: 1000ms;
+
+  /* Dark sections default to the brand's deepest shade. */
+  --c-dark: var(--c-brand-strong);
+  --c-dark-2: color-mix(in srgb, var(--c-dark) 88%, #ffffff);
+  --c-dark-ink: #ffffff;
+  --c-dark-text: rgb(255 255 255 / 0.8);
+  --c-dark-muted: rgb(255 255 255 / 0.68);
+  --c-dark-line: rgb(255 255 255 / 0.14);
+  --c-glow: var(--c-accent);
+
+  --radius-pill: 999px;
+}

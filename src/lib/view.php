@@ -54,6 +54,42 @@ function render(string $template, array $data = [], string $layout = 'site', int
     echo view('layouts/' . $layout, $layoutData);
 }
 
+/**
+ * Per-request page flags set while sections render (the layout is rendered
+ * afterwards): e.g. 'overlay_header' when a full-height hero opens the page.
+ */
+function page_flag(string $key, mixed $value = null): mixed
+{
+    static $flags = [];
+    if (func_num_args() > 1) {
+        $flags[$key] = $value;
+    }
+    return $flags[$key] ?? null;
+}
+
+/** <link rel="preload"> tags collected for the layout's <head> (hero image, fonts). */
+function head_preloads(?string $tag = null): array
+{
+    static $tags = [];
+    if ($tag !== null && !in_array($tag, $tags, true)) {
+        $tags[] = $tag;
+    }
+    return $tags;
+}
+
+/** Preload the responsive image that will be the largest paint (LCP). */
+function preload_image(?array $m, string $sizes): void
+{
+    if ($m === null || $m['kind'] !== 'image' || $m['visibility'] !== 'public' || $m['variants'] === []) {
+        return;
+    }
+    $srcset = [];
+    foreach (array_keys($m['variants']) as $w) {
+        $srcset[] = media_variant_url($m, $w) . ' ' . $w . 'w';
+    }
+    head_preloads('<link rel="preload" as="image" imagesrcset="' . e(implode(', ', $srcset)) . '" imagesizes="' . e($sizes) . '" fetchpriority="high">');
+}
+
 /** Cache-busted URL for a file under public/. */
 function asset(string $path): string
 {

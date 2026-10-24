@@ -1,0 +1,14 @@
+/* Bold: near-black, white and crimson. Square-cornered uppercase buttons,
+   square eyebrow markers, deep black bands with a crimson glow. */
+.btn { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.875rem; font-weight: 600; }
+.btn.large { font-size: 0.95rem; }
+.btn.small { font-size: 0.78rem; }
+.brand-mark { border-radius: 8px; background: var(--c-accent); }
+.site-nav > ul > li > a, .site-nav > ul > li > .sub-toggle { font-weight: 500; }
+.hero-title, .page-hero h1, .article-head h1 { font-weight: 600; }
+.blk.bg-dark, .site-footer, .tier.is-featured, .cta-band.tone-dark { background-color: #0b0c0e; }
+.icon-tile { border-radius: 6px; }
+.stat-value, .metric-value { font-weight: 600; }
+.date-badge, .date-tile { border-radius: 6px; }
+.step-badge { border-radius: 4px; }
+.card, .feature, .tier, .dir-item, .faq, .person-card, .sc-card, .ab-media, .sm-media, .cta-band { border-radius: var(--radius-l); }

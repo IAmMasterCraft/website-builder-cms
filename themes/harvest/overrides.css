@@ -1,14 +1,17 @@
-/* Harvest: sunny hero, rounded everything, wavy dividers. */
+/* Harvest: sunny gold on fresh green, rounded everything, pill eyebrows and
+   soft organic blobs behind tinted sections. */
 .brand-mark { background: var(--c-highlight); color: var(--c-highlight-ink); border-radius: 14px; }
-.hero { background:
-  radial-gradient(36rem 36rem at 92% 8%, color-mix(in srgb, var(--c-highlight) 38%, transparent), transparent 62%),
-  radial-gradient(50rem 26rem at 0% 100%, color-mix(in srgb, var(--c-accent) 50%, transparent), transparent 60%),
-  var(--c-brand); }
-.eyebrow { color: var(--c-accent-text); }
-.hero .eyebrow, .bg-brand .eyebrow, .bg-image .eyebrow { color: var(--c-highlight); }
-.section.soft, .blk.bg-soft { background:
-  radial-gradient(30rem 14rem at 100% 0%, color-mix(in srgb, var(--c-highlight) 12%, transparent), transparent 70%),
+.eyebrow { padding: 0.35rem 0.8rem 0.35rem 0.55rem; border-radius: 999px; background: var(--c-accent-soft); }
+.on-dark .eyebrow, .bg-dark .eyebrow, .bg-brand .eyebrow, .bg-image .eyebrow, .hero-full .eyebrow { background: rgb(255 255 255 / 0.12); }
+.icon-tile { background: var(--c-highlight); color: var(--c-highlight-ink); border-radius: 18px; box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--c-highlight) 80%, transparent); }
+.icon-tile.soft { background: var(--c-accent-soft); color: var(--c-accent-text); }
+.blk.bg-soft { background:
+  radial-gradient(28rem 18rem at 100% 0%, color-mix(in srgb, var(--c-highlight) 16%, transparent), transparent 70%),
+  radial-gradient(24rem 16rem at 0% 100%, color-mix(in srgb, var(--c-accent) 10%, transparent), transparent 70%),
   var(--c-surface-2); }
-.stat strong { color: var(--c-accent-text); }
-.card { border-width: 2px; border-color: var(--c-surface-3); }
-.date-tile { border-radius: var(--radius-l); }
+.hero-full .hero-stage::before { background: linear-gradient(100deg, color-mix(in srgb, var(--c-brand-strong) 70%, transparent) 0%, transparent 70%); }
+.card, .feature, .tier { border-width: 2px; border-color: var(--c-surface-3); }
+.stats.is-rules .stat, .metric, .ab-counters li { border-left: 0; padding-left: 0; }
+.stats.is-rules .stat::before, .metric::before { content: ""; display: block; width: 2.5rem; height: 6px; border-radius: 3px; background: var(--c-highlight); margin-bottom: var(--s-2); }
+.date-badge { border-radius: 18px; }
+.btn { font-weight: 700; }

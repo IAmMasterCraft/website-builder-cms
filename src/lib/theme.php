@@ -53,6 +53,7 @@ function theme_css(?string $key = null, bool $custom = true): string
     $key ??= active_theme();
     $dir = BASE . '/themes/' . $key;
     $css = '/* theme: ' . $key . " */\n" . design_font_faces();
+    $css .= (string) file_get_contents(BASE . '/themes/base.css') . "\n";
     foreach (['tokens.css', 'overrides.css'] as $f) {
         if (is_file($dir . '/' . $f)) {
             $css .= (string) file_get_contents($dir . '/' . $f) . "\n";
@@ -66,7 +67,7 @@ function theme_css(?string $key = null, bool $custom = true): string
 function theme_css_url(?string $key = null, bool $custom = true): string
 {
     $key ??= active_theme();
-    $v = (int) filemtime(BASE . '/src/lib/design.php');
+    $v = max((int) filemtime(BASE . '/src/lib/design.php'), (int) filemtime(BASE . '/themes/base.css'));
     foreach (['tokens.css', 'overrides.css', 'theme.json'] as $f) {
         $file = BASE . '/themes/' . $key . '/' . $f;
         $v = max($v, is_file($file) ? (int) filemtime($file) : 0);

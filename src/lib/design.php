@@ -277,3 +277,23 @@ function design_tokens_css(array $tokens): string
     }
     return $css . "}\n";
 }
+
+/**
+ * Latin woff2 files of the active heading and body fonts, preloaded in the
+ * page head so text renders in its final face without a late swap.
+ * @return list<string> URLs
+ */
+function design_preload_fonts(): array
+{
+    [$theme, $preview] = request_theme();
+    $d = $preview ? theme_design_defaults($theme) : design_effective($theme);
+    $fonts = design_fonts();
+    $out = [];
+    foreach ([$d['heading_font'], $d['body_font']] as $key) {
+        $files = $fonts[$key]['files'] ?? null;
+        if ($files !== null) {
+            $out[] = '/assets/fonts/' . $files . '-latin-wght-normal.woff2';
+        }
+    }
+    return array_values(array_unique($out));
+}

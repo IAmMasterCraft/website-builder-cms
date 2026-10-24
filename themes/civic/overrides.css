@@ -1,8 +1,9 @@
-/* Civic: small touches on top of the shared site styles. */
-.brand-mark { background: linear-gradient(135deg, var(--c-accent), var(--c-brand)); }
-.hero, .blk.bg-brand.hero-like { background:
-  radial-gradient(60rem 30rem at 85% -10%, color-mix(in srgb, var(--c-accent) 55%, transparent), transparent 60%),
-  radial-gradient(40rem 24rem at -10% 110%, color-mix(in srgb, var(--c-highlight) 18%, transparent), transparent 60%),
-  var(--c-brand-strong); }
-.eyebrow { color: var(--c-accent-text); }
-.hero .eyebrow, .bg-brand .eyebrow, .bg-image .eyebrow { color: var(--c-highlight); }
+/* Civic: navy and teal, round dot markers, pill buttons, cool airy surfaces
+   and a navy-tinted photo overlay. */
+.brand-mark { background: linear-gradient(135deg, var(--c-accent), var(--c-brand)); border-radius: 50%; }
+.hero-full .hero-stage::before { background: linear-gradient(100deg, color-mix(in srgb, var(--c-brand-strong) 78%, transparent) 0%, color-mix(in srgb, var(--c-brand-strong) 25%, transparent) 55%, transparent 80%); }
+.icon-tile { border-radius: 50%; background: linear-gradient(135deg, var(--c-accent), color-mix(in srgb, var(--c-accent) 60%, var(--c-brand))); }
+.blk.bg-dark::before { background: radial-gradient(60rem 36rem at 12% 0%, color-mix(in srgb, var(--c-accent) 36%, transparent), transparent 62%), radial-gradient(48rem 30rem at 100% 100%, color-mix(in srgb, var(--c-highlight) 14%, transparent), transparent 60%); }
+.stats.is-rules .stat, .metric { border-left-color: var(--c-highlight); }
+.eyebrow::before { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-accent) 18%, transparent); }
+.page-hero { background: linear-gradient(180deg, var(--c-surface-2), var(--c-surface)); }
