@@ -35,7 +35,7 @@ COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata --exclude='._*' --exclude='
 
 # Show what went in, and refuse to finish if anything private slipped through.
 list=$(tar -tzf "$ROOT/dist/$name.tar.gz")
-bad=$(printf '%s\n' "$list" | grep -E '^gather/config\.php$|^gather/tests/|^gather/dev-tools/|(^|/)\._|\.DS_Store$|^gather/storage/[^/]+/[^.][^/]*$|^gather/\.git/' || true)
+bad=$(printf '%s\n' "$list" | grep -E '^gather/config\.php$|^gather/storage/install-token$|^gather/tests/|^gather/dev-tools/|(^|/)\._|\.DS_Store$|^gather/storage/[^/]+/[^.][^/]*$|^gather/\.git/' || true)
 if [ -n "$bad" ]; then
   echo "refusing: private files in the archive:" >&2
   echo "$bad" >&2

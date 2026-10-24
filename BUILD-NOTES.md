@@ -18,11 +18,14 @@ database).
 - Views with `e()`, layouts, flash/old-input, PRG; CSRF on every POST (419).
 - Session auth for one `users` table with roles super_admin/admin/member/group;
   admin permission checks (8 permission keys, super admin has all); Argon2id;
-  lockout after 10 failures per IP+email for 15 min; session regeneration;
-  login, logout (POST), forgot password, single-use 1-hour reset tokens.
+  lockout after 10 failures per IP+email (also 50 per IP, 30 per email) for
+  15 min; session regeneration; session version per account (see "Code
+  review fixes"); login, logout (POST), forgot password, single-use 1-hour
+  reset tokens.
 - Migrations (`migrations/001..004`) + `bin/migrate`; `bin/make-admin`;
   `bin/cron` dispatcher (publish scheduled items, cleanup; slots for later jobs).
-- `/install` wizard: DB check → writes `config.php` (`installed => false`) →
+- `/install` wizard (needs a one-time install token, see "Code review
+  fixes"): DB check → writes `config.php` (`installed => false`) →
   migrations → super admin → theme → optional demo content → sets
   `installed => true` (all `/install` routes then 404). Later steps only work
   for the browser session that wrote the config.
@@ -112,8 +115,9 @@ database).
   social, donate, join button). Site settings gained donation details (bank
   text + up to three links) used by the Donate section and widget.
 - Contact form (`POST /contact`): honeypot + signed time token + 5/hour per
-  IP; stored in `contact_messages` and emailed to the organisation with a copy
-  to the sender.
+  IP; stored in `contact_messages` and emailed to the organisation; the
+  sender gets a short confirmation (without the message) only when they tick
+  the box, at most 2 a day per address.
 - Themes: Heritage, Harvest, Monochrome added (tokens, overrides, preview.png
   rendered from the demo site). Design screen (`/admin/design`, super admin):
   theme cards, brand and accent colours, heading/body fonts from a curated
@@ -181,9 +185,12 @@ database).
 - Queue (`email_queue` + `campaign_recipients`): `bin/cron` sends batches up to
   the per-minute limit (counted over the last 60 s across both tables, so a
   second cron run in the same minute sends nothing extra). A row is claimed
-  (queued -> sending) before sending; failures retry with back-off and become
-  `failed` after 3 attempts; rows a crashed run left in `sending` are marked
-  failed ("interrupted"), never re-sent. Unique (campaign, email) means a
+  (queued -> sending) before sending; failures retry with back-off (5 min,
+  30 min, 2 h, 6 h) and become `failed` after 5 attempts; an unreachable
+  SMTP server pauses the queue instead (no attempts used); rows a crashed
+  run left in `sending` are marked failed and flagged `interrupted`, never
+  re-sent (not even by "Retry failed"). Bulk rows are re-checked against
+  unsubscribes/preferences/account status when sent (`suppressed`). Unique (campaign, email) means a
   recipient can never get a campaign twice; queued rows resume.
 - Campaigns (`/admin/campaigns`): block editor (heading, text, image, button,
   divider, latest posts, upcoming events) as a server-rendered form (add,
@@ -380,8 +387,13 @@ database).
 
 ## Tests
 
-`bin/check`: lint of every PHP file, `tests/run.php` (146 unit/DB tests) and
-`tests/smoke.php` (325 checks through `php -S`). Phases 1-2 coverage as
+`bin/check`: lint of every PHP file, `tests/run.php` (231 unit/DB tests after
+the code review fixes) and `tests/smoke.php` (403 checks through `php -S`).
+The review fixes added 57 unit/DB tests and 11 smoke checks (install token,
+site address and hidden DB errors in the installer, sign-up without login,
+identical answer for an existing address, opt-in contact confirmation and
+its per-address limit, manual backup naming); counts per phase below are
+as they were when each phase was finished. Phases 1-2 coverage as
 before (router, escaping, CSRF, sanitiser, auth, lockout, permissions, uploads,
 content types, events, menus, search, feeds, installer, cron). Phase 3 adds:
 every section type rendering with defaults, hidden sections, schema validation
@@ -542,8 +554,11 @@ playwright-core; tools in `dev-tools/`, never deployed):
 - Join: "full name" is collected as first + last name (the members table has
   both). Required: name, birthday day+month, country of residence, photo,
   email, password, consent; the rest is optional. Region and gender options
-  are settings. After sign-up the user is logged in (unverified) so they see
-  "check your email" straight away.
+  are settings. After sign-up the visitor is sent to the log-in page with a
+  "check your email" message; they are logged in when they confirm the
+  link (or can log in with their password to see "check your email" and
+  resend). An address that already has an account gets the same answer on
+  screen and an "already have an account" email instead (review fixes S4/S7).
 - Verification links work for 14 days (the purge window) and need a click on a
   confirm button, so mail scanners that prefetch links do not verify accounts.
 - Custom field "visible to members" = asked at sign-up and editable by the
@@ -615,19 +630,135 @@ playwright-core; tools in `dev-tools/`, never deployed):
 - Email change: members and groups only (staff email is changed by a super
   admin in Users & roles).
 
+## Code review fixes (2026-10-24)
+
+Two reviews (security-reviewer, plain-php-reviewer) after phase 7. Every
+finding was checked against the code; all were confirmed and fixed (one
+sub-item turned out not to be a bug, noted below). Regression tests:
+`tests/security_review_test.php`, `tests/mail_cron_review_test.php`,
+`tests/integrity_review_test.php` plus new smoke checks. Migrations
+`010_sessions`, `011_mail_queue`, `012_integrity`.
+
+Security
+- S1/S2/S11 media: member photos (and any private file) can never be
+  attached to content, picked, or served as a download; `Downloads::file`
+  checks `media_can_view`. Media follow the items that use them
+  (`media_references()` -> `media_sync_visibility()` after every content
+  save and in `bin/migrate`): used by any public item -> public; only by
+  members-only/hidden items or card artwork -> members (WebP variants move
+  from `public/uploads` to `storage/variants`); uploads for members-only
+  items are written members-only from the start. Builder sections and
+  campaigns still require public images (so an image used there stays
+  public); images embedded in rich text are "pinned" (never moved, the
+  link would break). `img_html()` prints nothing for images the viewer
+  cannot open. Member photos: owner, super admin, or the members
+  permission (other staff no longer).
+- S3 app_key: refused when empty, `change-me` or < 32 characters (the site
+  answers 500 with a neutral message, `bin/cron` refuses, health shows an
+  error); no fallback key. `app_subkey()` derives separate HKDF keys for
+  signing and secret storage. SMTP passwords sealed with the old key
+  (`sb1:`) are read and re-encrypted (`sb2:`) on first use and by
+  `bin/migrate`; unsubscribe links in emails sent before the change still
+  verify.
+- S4/R13 sessions: `users.session_version` is stored in the session at
+  login and compared on every request; it is bumped on password reset and
+  change, suspension (members, groups, staff), email verification and email
+  change (members, admin edits, staff). The browser making the change keeps
+  its session. Sign-up no longer logs in (pre-hijack).
+- S5 abuse of outgoing mail: per-address daily limits for emails visitors
+  can aim at an address (contact confirmation 2, guest event confirmation
+  3, "already have an account" 2) and a global cap of 60 an hour; the
+  contact confirmation is opt-in and never repeats the message.
+- S6 login: also locked after 50 failures from one IP (any emails) or 30
+  for one email (any IPs) in 15 minutes; the dummy hash for unknown emails
+  uses `hash_password()` (Argon2id).
+- S7 sign-up enumeration: same answer for new and existing addresses; the
+  owner of an existing address gets the new "Sign-up with an existing
+  address" template.
+- S8 `safe_url()` refuses `/\host`, `/<tab>/host`, `//host`, whitespace,
+  control characters and backslashes in relative URLs.
+- S9 installer: one-time install token (`GATHER_INSTALL_TOKEN` or
+  `storage/install-token`, deleted when the install finishes; without one
+  `/install` shows how to create it), the site address is a validated form
+  field (pre-filled, not trusted from Host), database errors are logged,
+  not shown.
+- S10 overview: birthdays need the members permission; the activity panel
+  shows everyone's actions to super admins and "your recent activity" to
+  other admins.
+- S12 deployment: code owned by root, only `storage/` and `public/uploads/`
+  writable by `www`, `config.php` root:www 640 (DEPLOY.md); optional
+  `trusted_proxies` (off by default) for X-Forwarded-For/Proto; HSTS adds
+  `includeSubDomains` (no preload).
+
+Mail, cron and backups
+- R4 bulk mail is re-checked when it is sent: unsubscribed, newsletters
+  off, or account not active -> `suppressed` (shown as "Not sent (opted
+  out)" in the logs); deleting an account removes its queued emails.
+- R6 SMTP outages: connection/TLS/login failures (`TransportException`)
+  put the row back without using an attempt and pause the whole queue
+  (5 min doubling to 1 h, `mail.pause`), shown in the delivery logs and
+  health; "Retry N failed" on a campaign's delivery log re-queues failed
+  rows that were never handed over (interrupted rows are excluded).
+- R9 notices: copies use `notice:<id>:<sha256(email)>` as dedupe key,
+  `emailed_at` is set after the loop (a crash half-way is completed by
+  publishing again), taking a notice down is audited.
+- R10 campaigns: saves (form and autosave) run under a row lock and get
+  409 once the campaign is queued; the subject is frozen in
+  `subject_snapshot` with the HTML/text snapshot.
+- R14 notices: one query for the notices plus one per distinct audience,
+  cached for the request (badge, widget and list share it).
+- R5/R12 cron: each job's result is saved immediately (row-locked JSON in
+  `cron.jobs`); a daily job that throws is not marked done but noted in
+  `cron.failed` and retried every 15 minutes (health shows it red); backups
+  run after the main cron lock is released, under their own
+  `storage/cache/backup.lock`, so a long backup never delays the mail queue.
+- R11 backups: every write is checked (short writes, `ZLIB_FINISH`,
+  `fflush`, `fclose`); stored dumps are verified against the gzip trailer
+  (CRC-32 + length) or the end marker, zips against the bytes written;
+  stale `.part` files are removed when the next backup starts; "Back up
+  now" and `bin/backup` write `gather-…-manual-…` files, pruned separately
+  from the daily ones.
+- Low: sent/suppressed rows in `email_queue` are purged after 90 days.
+
+Data integrity
+- R1 CSV import (update mode) only changes columns present in the file; one
+  leading `'` added by `csv_safe()` is removed on import (`csv_unsafe()`).
+- R2 `media_usage()` also covers live builder sections (incl. background
+  images and repeaters), page revisions, saved templates, campaign blocks
+  and the card background/signature settings, so deleting is refused.
+- R3 a comment with replies is blanked and shown as "[deleted]" (author
+  removed) when its author or a moderator deletes it; replies stay. FK
+  changed to `ON DELETE SET NULL`.
+- R7 `users.job_rejections` (backfilled from rejected posts) keeps a poster
+  untrusted after deleting a rejected post.
+- R8 the unverified purge waits until the account's latest verification
+  link has expired (a resent link gives 14 more days) and re-checks the
+  status under a row lock (`account_delete($id, true)`).
+- Low: card "valid until" clamps to month end (`card_valid_until()`);
+  account deletion also anonymises guest registrations made with the same
+  address; every job approval sets a fresh `published_at`; replies under a
+  rejected (or re-queued) comment are not counted; a time in the
+  daylight-saving gap gets "There is no 01:30 on 29 Mar 2026…" (content,
+  radio slots, campaign schedule); radio slot overlap check + write and
+  playlist resyncs run under one schedule lock row; changing the site time
+  zone warns when radio repeats would clash.
+- Not a bug: "a trusted owner editing an expired job relists it". The code
+  keeps an expired job expired when a trusted owner edits it (covered by a
+  test); the real issue was the stale `published_at` on re-approval, fixed
+  above.
+
 ## Known gaps / next steps
 
 - Not run here: PHP 8.2 and MySQL 8 (local runs use PHP 8.5 and MariaDB);
   the code was scanned for post-8.2 syntax/functions and none are used.
   Do one install on the server's PHP version (DEPLOY.md step 8 lints with it).
-- `plain-php-reviewer` and `security-reviewer` were not run from this
-  builder session (no agent access); the php-plain-security checklist and
-  greps were applied by hand. Run both reviewers before go-live.
+- `plain-php-reviewer` and `security-reviewer` were run by the lead after
+  phase 7; their findings were fixed (see "Code review fixes"). A second
+  review of the fixes from a fresh context is advisable before go-live.
 - Deployment itself is not done (by instruction); DEPLOY.md and
   `bin/package` are ready.
-- Phases 5-6 gaps: no bounce/complaint handling or open/click tracking; no
-  "retry failed recipients" button (failed rows stay failed so nobody gets a
-  duplicate); campaign/notice images must be public media; the campaign editor
+- Phases 5-6 gaps: no bounce/complaint handling or open/click tracking;
+  campaign/notice images must be public media; the campaign editor
   has no drag and drop (up/down buttons); notice email copies are not re-sent
   when a notice is edited. The radio has no persistent mini player across page
   loads (D9), no per-programme on-demand detail pages, and the overlap check
@@ -668,4 +799,4 @@ playwright-core; tools in `dev-tools/`, never deployed):
 | 11 | Admin without "members" gets 403; member cannot open /admin | Met | full permission matrix over every admin route (smoke) + unit matrix |
 | 12 | CSRF rejection, PHP upload rejected, XSS neutralised, lockout | Met | CSRF enumeration of every POST route; upload/sanitiser/lockout tests |
 | 13 | Lighthouse >= 90 and axe no serious issues on home, news, event, join, dashboard | Met | axe 0 violations (78 runs); Lighthouse mobile 95-97 perf, 100 a11y/best practices (local php -S) |
-| 14 | Lint, tests green, plain-php-reviewer + security-reviewer no high findings | Partial | lint + 174 tests + 392 smoke checks green; the two reviewer agents still need to be run by the lead |
+| 14 | Lint, tests green, plain-php-reviewer + security-reviewer no high findings | Met (pending re-review) | both reviews run by the lead; every HIGH/MEDIUM/LOW finding fixed with a regression test (see "Code review fixes"); lint + 231 tests + 403 smoke checks green. A fresh-context review of the fixes is still advisable |

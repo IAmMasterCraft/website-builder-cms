@@ -21,12 +21,14 @@ See [BUILD-NOTES.md](BUILD-NOTES.md) for what is done and what is left.
 ## Run locally
 
 ```bash
-# Option A: the web installer
+# Option A: the web installer (needs a one-time install token you create first)
+php -r 'echo bin2hex(random_bytes(16)), PHP_EOL;' > storage/install-token   # or set GATHER_INSTALL_TOKEN
 php -S 127.0.0.1:8080 -t public public/index.php
-# open http://127.0.0.1:8080/install  (DB details -> admin -> theme -> demo content)
+# open http://127.0.0.1:8080/install  (token, site address, DB details -> admin -> theme -> demo content)
 
 # Option B: by hand
-cp config.example.php config.php          # fill in the DB section, set 'installed' => true
+cp config.example.php config.php          # fill in the DB section and an app_key of 32+ characters, set 'installed' => true
+php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'   # a suitable app_key
 php bin/migrate
 GATHER_ADMIN_PASSWORD='choose-a-long-one' php bin/make-admin you@example.org --name="Your Name"
 php bin/demo you@example.org              # optional demo content
@@ -84,8 +86,11 @@ tests/             run.php (runner), *_test.php, smoke.php
 
 Target: the aaPanel server (Apache + PHP-FPM + MySQL). Follow
 [DEPLOY.md](DEPLOY.md): `bin/check`, commit, `bin/package`, create the site
-with running directory `/public`, upload and unpack, enable HTTPS, run
-`/install`, add the one cron line, then check Admin -> System health.
+with running directory `/public`, upload and unpack (code owned by root,
+only `storage/` and `public/uploads/` writable by the web server), enable
+HTTPS, create the install token, run `/install`, add the one cron line, then
+check Admin -> System health. The site refuses to run without an `app_key` of
+at least 32 characters. Behind a proxy/CDN, list it in `trusted_proxies`.
 
 ## Accessibility audit (dev only)
 

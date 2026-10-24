@@ -77,15 +77,21 @@ cd <site>
 tar -xzf gather-*.tar.gz --strip-components=1   # unpack gather/* into the site folder
 rm gather-*.tar.gz
 find . -name '._*' -type f -delete               # belt and braces
-chown -R www:www .
-find . -type d -exec chmod 755 {} \;
-find . -type f -exec chmod 644 {} \;
+# Code belongs to root and is read-only for the web server (skip aaPanel's immutable .user.ini).
+find . -path ./.user.ini -prune -o -exec chown root:root {} +
+find . -path ./.user.ini -prune -o -type d -exec chmod 755 {} +
+find . -path ./.user.ini -prune -o -type f -exec chmod 644 {} +
 chmod 755 bin/*
+# Only these two folders are writable by the web server user.
+chown -R www:www storage public/uploads
 ```
 
-The web server user (`www`) must be able to write to `storage/` and
-`public/uploads/` (it owns them now) and, **during the install only**, to the
-site folder itself (to create `config.php`).
+The web server user (`www`) can only write to `storage/` and
+`public/uploads/`. If PHP is ever tricked into writing a file, it cannot
+change Gather's code. (A deploy user instead of root is fine too: what
+matters is that `www` does not own the code.) During the install only, the
+site folder itself is made writable for `www` so the wizard can create
+`config.php` (step 5).
 
 ## 4. PHP settings
 
@@ -112,14 +118,32 @@ aaPanel → **App Store** → your PHP version → **Settings**:
 
 ## 5. Install
 
-Open `https://<domain>/install` **straight after uploading** (until the
-install finishes, the wizard is open to anyone who finds it; it locks itself
-at the end):
+The installer only runs for someone who knows a **one-time install token**
+that you create on the server. In the Terminal:
 
-1. **Database**: host `localhost` (or `127.0.0.1`), port `3306`, the database
-   name, user and password from step 2. The wizard checks the connection,
-   writes `config.php` (mode 640) with a fresh random `app_key`, and runs the
-   migrations. Only your browser session can continue from here.
+```bash
+cd <site>
+php -r 'echo bin2hex(random_bytes(16)), PHP_EOL;' > storage/install-token   # the token
+cat storage/install-token                                                    # copy it for the form
+chown www:www storage/install-token && chmod 600 storage/install-token
+# let the wizard create config.php in the site folder (taken back after the install)
+chown root:www . && chmod 775 .
+```
+
+(Instead of the file you can set the environment variable
+`GATHER_INSTALL_TOKEN` for PHP-FPM.) Without a token `/install` only shows
+these instructions. The file is deleted when the install finishes.
+
+Then open `https://<domain>/install`:
+
+1. **Database**: the **install token**, the **site address**
+   (`https://<domain>`; it is pre-filled but check it, it is used in every
+   email link), host `localhost` (or `127.0.0.1`), port `3306`, the database
+   name, user and password from step 2. The wizard checks the connection
+   (a failure shows a generic message; the details go to
+   `storage/logs/php-error.log`), writes `config.php` (mode 640) with a fresh
+   random `app_key`, and runs the migrations. Only your browser session can
+   continue from here.
 2. **Admin**: organisation name and the first **super admin** (name, email,
    password of at least 10 characters).
 3. **Theme**: pick one of the four themes (changeable later under Design).
@@ -127,22 +151,34 @@ at the end):
    with original artwork and radio programmes) to see every feature, or start
    empty. The wizard then locks: every `/install` URL returns 404.
 
-Then take write access to the site folder away again (config.php is
-already 640):
+Then take write access to the site folder away again and make
+`config.php` readable, but not writable, by the web server:
 
 ```bash
 cd <site>
-chown root:root . && chmod 755 .      # web user can no longer create files in the root
-ls -l config.php                      # -rw-r----- www www
+chown root:root . && chmod 755 .               # web user can no longer create files in the root
+chown root:www config.php && chmod 640 config.php
+ls -l config.php                               # -rw-r----- root www
+rm -f storage/install-token                    # normally already gone
 ```
 
 (`storage/` and `public/uploads/` stay owned by `www`.)
 
 Installing by hand instead: `cp config.example.php config.php`, fill in the
-values with the aaPanel file editor (generate `app_key` on the server with
-`php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'`), `chmod 640 config.php`,
-then as the web user: `su -s /bin/sh -c "php bin/migrate && php bin/make-admin you@example.org --name='Your Name'" www`
+values with the aaPanel file editor, including an `app_key` of at least 32
+characters generated on the server with
+`php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'` (the site refuses to run,
+and cron refuses to start, while `app_key` is empty, `change-me` or too
+short), `chown root:www config.php && chmod 640 config.php`, then as the web
+user: `su -s /bin/sh -c "php bin/migrate && php bin/make-admin you@example.org --name='Your Name'" www`
 (it asks for the password).
+
+**Behind a proxy or CDN** (Cloudflare, a load balancer): Gather ignores
+`X-Forwarded-For` / `X-Forwarded-Proto` unless you list the proxy's IP
+addresses in `config.php`: `'trusted_proxies' => ['203.0.113.10']`. Without
+that, rate limits see the proxy's address and HTTPS is detected from the
+direct connection only. Leave it empty when Apache faces the internet
+directly (the normal aaPanel setup).
 
 ## 6. Cron (one line)
 
@@ -201,8 +237,9 @@ tail -n 20 storage/logs/php-error.log 2>/dev/null
 ```
 
 Expected headers: `Content-Security-Policy`, `X-Content-Type-Options:
-nosniff`, `Strict-Transport-Security`, `X-Frame-Options: SAMEORIGIN`, and no
-`X-Powered-By`. Then open the site on a phone, sign up as a test member, use
+nosniff`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+(so every subdomain of `<domain>` must serve HTTPS too; Gather does not send
+`preload`), `X-Frame-Options: SAMEORIGIN`, and no `X-Powered-By`. Then open the site on a phone, sign up as a test member, use
 the contact form, and play the radio once.
 
 ## 9. Backups
@@ -237,10 +274,15 @@ unzip -o /path/gather-YYYYmmdd-HHMMSS-uploads.zip -d <site> && chown -R www:www 
    cd <site>
    tar -xzf gather-*.tar.gz --strip-components=1 && rm gather-*.tar.gz
    find . -name '._*' -type f -delete
-   chown -R www:www src templates themes public migrations bin vendor demo-assets
+   chown -R root:root src templates themes migrations bin vendor demo-assets VERSION
+   find public -path public/uploads -prune -o -exec chown root:root {} +
    chmod 755 bin/*
+   chown -R www:www storage public/uploads
    su -s /bin/sh -c "/www/server/php/<ver>/bin/php bin/migrate" www     # forward-only SQL migrations
    ```
+   `bin/migrate` also moves media files to match the visibility of the items
+   that use them and re-encrypts a stored SMTP password after an upgrade; it
+   warns if `app_key` is missing or too short.
    `config.php`, `storage/`, `public/uploads/` contents and `.user.ini` are
    not in the archive, so they survive. Files removed from Gather in a new
    version stay behind; they are harmless (only `public/` is served), or
@@ -263,4 +305,7 @@ unzip -o /path/gather-YYYYmmdd-HHMMSS-uploads.zip -d <site> && chown -R www:www 
 | Emails not arriving | Email settings → Send a test email; Delivery log; System health → Mail transport; cron running? |
 | Scheduled posts late, campaigns not sending | Cron line (step 6): full PHP path, runs as `www`; System health → Cron |
 | Files in `storage/` owned by root | Cron ran as root: fix the cron line, then `chown -R www:www storage public/uploads` |
+| "This site is not configured correctly: the secret key…" | `app_key` in `config.php` is empty, `change-me` or shorter than 32 characters: generate one (step 5) |
+| `/install` says "Set an install token first" | Create `storage/install-token` (step 5) |
+| Emails stop, health says "Mail server unreachable" | Sending pauses (5 min up to 1 h) while the SMTP server is down or rejects the login; nothing is lost. Fix the settings or wait; the next cron run resumes |
 | Radio seeking does not work | PHP serves media with byte ranges; check nothing in front (CDN) strips `Range` headers |
