@@ -16,6 +16,7 @@ function cron_jobs(): array
         'email_queue' => ['every' => 1, 'run' => 'cron_email_queue'],
         'birthdays' => ['daily_at' => birthday_time(), 'run' => 'cron_birthdays'],
         'job_expiry' => ['every' => 15, 'run' => 'cron_job_expiry'],
+        'bounce_mailbox' => ['every' => 5, 'run' => 'cron_bounce_mailbox'],
         // Backups can take long: they run after the main lock is released, under their own lock.
         'backups' => ['daily_at' => backup_settings()['time'], 'run' => 'cron_backups', 'own_lock' => true],
     ];
@@ -53,6 +54,19 @@ function cron_email_queue(): string
 {
     $s = mail_queue_run();
     return "{$s['sent']} sent, {$s['retry']} to retry, {$s['failed']} failed";
+}
+
+/** A5: read the bounce mailbox (when one is configured). */
+function cron_bounce_mailbox(): string
+{
+    $s = bounce_mailbox_poll();
+    if ($s['error'] === 'off') {
+        return 'bounce mailbox not configured';
+    }
+    if ($s['error'] !== '') {
+        throw new RuntimeException('bounce mailbox: ' . $s['error']);
+    }
+    return "{$s['read']} read, {$s['recorded']} recorded, {$s['ignored']} ignored, {$s['unparsed']} unprocessed, {$s['pruned']} pruned";
 }
 
 function cron_job_expiry(): string

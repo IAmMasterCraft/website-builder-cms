@@ -1,0 +1,44 @@
+Delivered-To: bounces+{{TAG}}@harbourside.example.test
+Return-Path: <>
+From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>
+To: bounces+{{TAG}}@harbourside.example.test
+Auto-Submitted: auto-replied
+Subject: Delivery Status Notification (Failure)
+Date: Sat, 24 Oct 2026 03:01:44 -0700 (PDT)
+MIME-Version: 1.0
+Content-Type: multipart/report; boundary="000000000000c1d2e30625352b11"; report-type=delivery-status
+
+--000000000000c1d2e30625352b11
+Content-Type: text/plain; charset="UTF-8"
+
+** Message not delivered **
+
+Your message couldn't be delivered to {{EMAIL}} because the remote server is misconfigured. See technical details below for more information.
+
+The response from the remote server was:
+452 4.2.2 The email account that you tried to reach is over quota.
+
+--000000000000c1d2e30625352b11
+Content-Type: message/delivery-status
+
+Reporting-MTA: dns; googlemail.com
+Arrival-Date: Fri, 23 Oct 2026 23:00:31 -0700 (PDT)
+
+Final-Recipient: rfc822; {{EMAIL}}
+Action: failed
+Status: 4.2.2
+Diagnostic-Code: smtp; 452-4.2.2 The email account that you tried to reach is over quota. Please direct
+ 452-4.2.2 the recipient to https://support.google.com/mail/?p=OverQuotaTemp
+ 452 4.2.2 d75a77b69052e-460ab1c2d3esi123456781cf.61 - gsmtp
+Last-Attempt-Date: Sat, 24 Oct 2026 03:01:44 -0700 (PDT)
+
+--000000000000c1d2e30625352b11
+Content-Type: text/rfc822-headers
+
+From: Harbourside Community Association <news@harbourside.example.test>
+To: {{EMAIL}}
+Subject: Coming up this month
+Message-ID: <{{TAG}}.0a0b0c0d0e0f@harbourside.example.test>
+X-Gather-Message-Id: {{TAG}}
+
+--000000000000c1d2e30625352b11--

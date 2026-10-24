@@ -91,6 +91,9 @@ function notice_publish(int $id, ?int $now = null): int
         . email_button('Open your dashboard', base_url('/account/notices'), $c);
     $queued = 0;
     foreach (audience_resolve(audience_decode($n['audience']), true, new DateTimeImmutable('@' . $now))['recipients'] as $r) {
+        if (email_domain_status(email_domain($r['email'])) === 'none') {
+            continue; // A5: never queue an address whose domain cannot receive mail
+        }
         $html = email_layout($bodyHtml, ['colours' => $c, 'unsubscribe_url' => unsubscribe_url($r['email']), 'preheader' => excerpt($n['body'], 120),
             'footer_note' => 'A notice from ' . setting('site.name') . ' to members. It is also in your dashboard.']);
         $text = $n['title'] . "\n\n" . html_to_text(rich($n['body'])) . "\n\nOpen your dashboard: " . base_url('/account/notices') . "\nUnsubscribe: " . unsubscribe_url($r['email']) . "\n" . email_prefs_text() . "\n";

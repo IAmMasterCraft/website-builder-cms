@@ -40,6 +40,12 @@ final class Join
         // registered): the owner gets an email instead and the visitor sees the usual answer.
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
             $errors['email'] = 'Enter a valid email address.';
+        } elseif (($problem = email_domain_problem($email)) !== null) {
+            // A5 list hygiene: the domain has no mail server (MX/A lookup, cached).
+            $errors['email'] = $problem;
+        } elseif (($suggest = email_typo_suggestion($email)) !== null && strtolower(trim((string) ($in['email_checked'] ?? ''))) !== $email) {
+            // Asked once: sending the form again with the same address keeps it.
+            $errors['email'] = 'Did you mean ' . $suggest . '? Correct the address, or send the form again to keep ' . $email . '.';
         }
         $password = is_string($in['password'] ?? null) ? $in['password'] : '';
         if (($problem = password_problem($password)) !== null) {
@@ -51,6 +57,17 @@ final class Join
             $errors['consent'] = 'Please agree to the terms and privacy policy to continue.';
         }
         return $errors;
+    }
+
+    /** After a typo suggestion, remember the address so sending it again keeps it. */
+    private static function typoChecked(array $values, array $errors): array
+    {
+        if (str_starts_with($errors['email'] ?? '', 'Did you mean ')) {
+            $values['email_checked'] = strtolower((string) ($values['email'] ?? ''));
+        } else {
+            unset($values['email_checked']);
+        }
+        return $values;
     }
 
     /** The same answer for a new sign-up and for an address that already has an account. */
@@ -117,7 +134,7 @@ final class Join
             }
         }
         if ($errors) {
-            self::render($values, $errors, 422);
+            self::render(self::typoChecked($values, $errors), $errors, 422);
             return;
         }
         try {
@@ -195,7 +212,7 @@ final class Join
             }
         }
         if ($errors) {
-            self::renderGroup($values, $errors, 422);
+            self::renderGroup(self::typoChecked($values, $errors), $errors, 422);
             return;
         }
         try {

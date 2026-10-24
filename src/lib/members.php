@@ -837,6 +837,12 @@ function members_import_csv(string $path, bool $update = false): array
             $report['skipped']++;
             continue;
         }
+        if (email_domain_status(email_domain($email)) === 'none') {
+            // A5 list hygiene: never import an address whose domain cannot receive mail.
+            $report['errors'][] = "Row $line: “{$email}”: the domain has no mail server.";
+            $report['skipped']++;
+            continue;
+        }
         if (!isset($in['birth_day']) || $in['birth_day'] === '') {
             $in['birth_day'] = '1';
             $in['birth_month'] = $in['birth_month'] ?? '1';

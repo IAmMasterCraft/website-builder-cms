@@ -69,12 +69,17 @@ final class SmtpMailer implements Mailer
             $m->clearReplyTos();
             $m->clearCustomHeaders();
             $m->setFrom($this->fromEmail, $this->fromName, false);
+            // Envelope sender: the VERP bounce address when one is set, otherwise the From address.
+            $m->Sender = $message->returnPath ?? '';
+            $m->MessageID = '';
             $m->addAddress($message->toEmail, $message->toName);
             if ($message->replyTo !== null && filter_var($message->replyTo, FILTER_VALIDATE_EMAIL)) {
                 $m->addReplyTo($message->replyTo);
             }
             foreach ($message->headers as $name => $value) {
-                if (preg_match('/^[A-Za-z-]+$/', $name) && !preg_match('/[\r\n]/', $value)) {
+                if ($name === 'Message-ID') {
+                    $m->MessageID = $value;
+                } elseif (preg_match('/^[A-Za-z-]+$/', $name) && !preg_match('/[\r\n]/', $value)) {
                     $m->addCustomHeader($name, $value);
                 }
             }
@@ -90,13 +95,43 @@ final class SmtpMailer implements Mailer
             }
             $m->send();
         } catch (MailerException $e) {
+            // The server's reply code for the failed command (RCPT TO / DATA), read before closing.
+            $err = $m->getSMTPInstance()->getError();
             // Drop the connection so the next message starts clean.
             $m->smtpClose();
+            $rejection = self::rejection($e->getMessage(), (string) ($err['smtp_code'] ?? ''), (string) ($err['smtp_code_ex'] ?? ''), (string) ($err['detail'] ?? ''));
+            if ($rejection !== null) {
+                throw new RecipientRejectedException($rejection[0], $rejection[1], $rejection[2], 'SMTP: ' . $e->getMessage(), $e);
+            }
             if (self::isTransportProblem($e->getMessage())) {
                 throw new TransportException('SMTP: ' . $e->getMessage(), 0, $e);
             }
             throw new \RuntimeException('SMTP: ' . $e->getMessage(), 0, $e);
         }
+    }
+
+    /**
+     * A recipient or message refused by the relay: [code, enhanced code, detail]
+     * or null. Only for "recipients failed" / "data not accepted"; a 421
+     * (service closing) is a server problem, not a rejection.
+     * @return array{0:int,1:string,2:string}|null
+     */
+    public static function rejection(string $error, string $code, string $enhanced, string $detail): ?array
+    {
+        if (!preg_match('/recipients? failed|data not accepted/i', $error)) {
+            return null;
+        }
+        $n = (int) $code;
+        if ($n === 0 && preg_match('/\b([45]\d\d)[ -]/', $error . ' ' . $detail, $mm)) {
+            $n = (int) $mm[1];
+        }
+        if ($n < 400 || $n > 599 || $n === 421) {
+            return null;
+        }
+        if ($enhanced === '' && preg_match('/\b([45]\.\d{1,3}\.\d{1,3})\b/', $detail . ' ' . $error, $mm)) {
+            $enhanced = $mm[1];
+        }
+        return [$n, $enhanced, trim(mb_substr($detail !== '' ? $detail : $error, 0, 400))];
     }
 
     /**

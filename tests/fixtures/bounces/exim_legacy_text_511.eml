@@ -1,0 +1,32 @@
+Return-path: <>
+Envelope-to: bounces@harbourside.example.test
+Received: from mailnull by mx.oldhost.example.test with local (Exim 4.69)
+	id 1KJhaq-0002Xb-Gk
+	for bounces@harbourside.example.test; Sat, 24 Oct 2026 11:30:02 +0100
+X-Failed-Recipients: {{EMAIL}}
+Auto-Submitted: auto-replied
+From: Mail Delivery System <Mailer-Daemon@mx.oldhost.example.test>
+To: bounces@harbourside.example.test
+Subject: Mail delivery failed: returning message to sender
+Message-Id: <E1KJhaq-0002Xb-Gk@mx.oldhost.example.test>
+Date: Sat, 24 Oct 2026 11:30:02 +0100
+
+This message was created automatically by mail delivery software.
+
+A message that you sent could not be delivered to one or more of its
+recipients. This is a permanent error. The following address(es) failed:
+
+  {{EMAIL}}
+    SMTP error from remote mail server after RCPT TO:<{{EMAIL}}>:
+    host mail.oldhost.example.test [203.0.113.9]: 550 5.1.1 <{{EMAIL}}>... User unknown
+
+------ This is a copy of the message, including all the headers. ------
+
+Return-path: <news@harbourside.example.test>
+From: Harbourside Community Association <news@harbourside.example.test>
+To: {{EMAIL}}
+Subject: News from Harbourside
+Message-ID: <{{TAG}}.ccddeeff0011@harbourside.example.test>
+X-Gather-Message-Id: {{TAG}}
+
+Hello from the committee.

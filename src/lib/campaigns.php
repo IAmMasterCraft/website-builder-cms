@@ -335,8 +335,12 @@ function campaign_queue(int $id, ?int $now = null): int
         $aud = audience_resolve(audience_decode($c['audience']), true, $nowDt, (bool) $c['essential']);
         $n = 0;
         foreach ($aud['recipients'] as $r) {
-            $n += q('INSERT IGNORE INTO campaign_recipients (campaign_id, user_id, email, name, first_name, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $r['user_id'], $r['email'], mb_substr($r['name'], 0, 120), mb_substr($r['first_name'], 0, 80), gmdate('Y-m-d H:i:s', $now)])->rowCount();
+            // A5: an address whose domain cannot receive mail is listed as not sent, never queued.
+            $noMail = email_domain_status(email_domain($r['email'])) === 'none';
+            $added = q('INSERT IGNORE INTO campaign_recipients (campaign_id, user_id, email, name, first_name, status, error, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [$id, $r['user_id'], $r['email'], mb_substr($r['name'], 0, 120), mb_substr($r['first_name'], 0, 80), $noMail ? 'suppressed' : 'queued',
+                    $noMail ? 'Not sent: the domain has no mail server (MX lookup).' : '', gmdate('Y-m-d H:i:s', $now)])->rowCount();
+            $n += $noMail ? 0 : $added;
         }
         $total = (int) q_val('SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = ?', [$id]);
         q("UPDATE campaigns SET status = ?, queued_at = ?, html_snapshot = ?, subject_snapshot = ?, text_snapshot = ?, recipient_count = ?, completed_at = ? WHERE id = ?",
@@ -368,11 +372,17 @@ function campaigns_finish(int $now): void
 /** Delivery counts per status for one campaign. */
 function campaign_counts(int $id): array
 {
-    $out = ['queued' => 0, 'sending' => 0, 'sent' => 0, 'failed' => 0, 'suppressed' => 0, 'retryable' => 0];
-    $out['retryable'] = (int) q_val("SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = ? AND status = 'failed' AND interrupted = 0", [$id]);
+    $out = ['queued' => 0, 'sending' => 0, 'sent' => 0, 'failed' => 0, 'suppressed' => 0, 'retryable' => 0,
+        'delivered' => 0, 'soft' => 0, 'hard' => 0, 'block' => 0, 'complaint' => 0];
+    $out['retryable'] = (int) q_val("SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = ? AND status = 'failed' AND interrupted = 0 AND (bounce IS NULL OR bounce = 'block')", [$id]);
     foreach (q_all('SELECT status, COUNT(*) AS n FROM campaign_recipients WHERE campaign_id = ? GROUP BY status', [$id]) as $r) {
         $out[$r['status']] = (int) $r['n'];
     }
+    // A5 outcomes: bounces reported at SMTP time or later (DSN, webhook); a complaint was delivered.
+    foreach (q_all('SELECT bounce, COUNT(*) AS n FROM campaign_recipients WHERE campaign_id = ? AND bounce IS NOT NULL GROUP BY bounce', [$id]) as $r) {
+        $out[$r['bounce']] = (int) $r['n'];
+    }
+    $out['delivered'] = (int) q_val("SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = ? AND status = 'sent' AND (bounce IS NULL OR bounce = 'complaint')", [$id]);
     return $out;
 }
 

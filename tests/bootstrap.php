@@ -13,3 +13,6 @@ $_SESSION = [];
 $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
 // Expected failures (simulated SMTP errors) are logged here, not printed.
 ini_set('error_log', BASE . '/storage/logs/test-error.log');
+// Tests never hit real DNS (A5 MX checks): unknown domains answer "unknown"
+// unless a test injects its own resolver; reserved test names need no lookup.
+dns_resolver(static fn (string $domain): string => 'unknown');

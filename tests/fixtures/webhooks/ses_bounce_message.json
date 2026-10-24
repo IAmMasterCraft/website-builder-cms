@@ -1,0 +1,28 @@
+{
+  "notificationType": "Bounce",
+  "bounce": {
+    "feedbackId": "0102019abcde1234-5678abcd-90ef-4a1b-8c2d-3e4f5a6b7c8d-000000",
+    "bounceType": "Permanent",
+    "bounceSubType": "General",
+    "bouncedRecipients": [
+      {"emailAddress": "{{EMAIL}}", "action": "failed", "status": "5.1.1", "diagnosticCode": "smtp; 550 5.1.1 user unknown"}
+    ],
+    "timestamp": "2026-10-24T09:00:01.000Z",
+    "remoteMtaIp": "192.0.2.44",
+    "reportingMTA": "dns; e226-55.smtp-out.eu-west-2.amazonses.com"
+  },
+  "mail": {
+    "timestamp": "2026-10-24T09:00:00.000Z",
+    "source": "news@harbourside.example.test",
+    "sourceArn": "arn:aws:ses:eu-west-2:123456789012:identity/harbourside.example.test",
+    "messageId": "0102019abcde0000-11112222-3333-4444-5555-666677778888-000000",
+    "destination": ["{{EMAIL}}"],
+    "headersTruncated": false,
+    "headers": [
+      {"name": "From", "value": "Harbourside Community Association <news@harbourside.example.test>"},
+      {"name": "To", "value": "{{EMAIL}}"},
+      {"name": "X-Gather-Message-Id", "value": "{{TAG}}"}
+    ],
+    "tags": {"gather_id": ["{{TAG}}"], "ses:configuration-set": ["gather"]}
+  }
+}

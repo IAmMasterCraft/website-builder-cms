@@ -66,3 +66,6 @@ function local_in(string $modify, string $time = '10:00'): string
 {
     return (new DateTimeImmutable('now', site_tz()))->modify($modify)->format('Y-m-d') . 'T' . $time;
 }
+
+// A5 per-domain throttling is off by default in tests (most test addresses share example.test).
+setting_set('mail.bounce', ['per_domain_minute' => 0]);

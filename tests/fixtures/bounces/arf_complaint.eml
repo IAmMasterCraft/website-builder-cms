@@ -1,0 +1,43 @@
+Return-Path: <feedbackloop@feedback.mailbox.example.test>
+From: Feedback Loop <feedbackloop@feedback.mailbox.example.test>
+To: bounces+{{TAG}}@harbourside.example.test
+Subject: FW: News from Harbourside
+Date: Sat, 24 Oct 2026 13:14:15 +0000
+Message-ID: <fbl-2026-10-24-0001@feedback.mailbox.example.test>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=feedback-report;
+	boundary="part1_13d.2e68ed54_boundary"
+
+--part1_13d.2e68ed54_boundary
+Content-Type: text/plain; charset="US-ASCII"
+Content-Transfer-Encoding: 7bit
+
+This is an email abuse report for an email message received from IP 192.0.2.10 on Sat, 24 Oct 2026 13:10:02 +0000.
+For more information about this format please see http://www.mipassoc.org/arf/.
+
+--part1_13d.2e68ed54_boundary
+Content-Type: message/feedback-report
+
+Feedback-Type: abuse
+User-Agent: ExampleFBL/1.0
+Version: 1
+Original-Mail-From: <bounces+{{TAG}}@harbourside.example.test>
+Arrival-Date: Sat, 24 Oct 2026 13:10:02 +0000
+Source-IP: 192.0.2.10
+Reported-Domain: harbourside.example.test
+
+--part1_13d.2e68ed54_boundary
+Content-Type: message/rfc822
+Content-Disposition: inline
+
+Return-Path: <bounces+{{TAG}}@harbourside.example.test>
+From: Harbourside Community Association <news@harbourside.example.test>
+To: redacted@mailbox.example.test
+Subject: News from Harbourside
+Message-ID: <{{TAG}}.feedfacecafe@harbourside.example.test>
+X-Gather-Message-Id: {{TAG}}
+Date: Sat, 24 Oct 2026 13:10:00 +0000
+
+Hello from the committee.
+
+--part1_13d.2e68ed54_boundary--

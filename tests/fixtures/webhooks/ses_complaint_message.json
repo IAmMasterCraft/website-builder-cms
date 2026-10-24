@@ -1,0 +1,19 @@
+{
+  "notificationType": "Complaint",
+  "complaint": {
+    "feedbackId": "0102019abcdeffff-aaaabbbb-cccc-dddd-eeee-ffff00001111-000000",
+    "complaintSubType": null,
+    "complainedRecipients": [{"emailAddress": "{{EMAIL}}"}],
+    "timestamp": "2026-10-24T10:30:00.000Z",
+    "userAgent": "ExampleMail-Feedback/1.0",
+    "complaintFeedbackType": "abuse",
+    "arrivalDate": "2026-10-24T10:20:00.000Z"
+  },
+  "mail": {
+    "timestamp": "2026-10-24T10:19:58.000Z",
+    "source": "news@harbourside.example.test",
+    "messageId": "0102019abcde9999-11112222-3333-4444-5555-666677778888-000000",
+    "destination": ["{{EMAIL}}"],
+    "tags": {"gather_id": ["{{TAG}}"]}
+  }
+}

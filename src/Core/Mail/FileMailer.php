@@ -27,6 +27,9 @@ final class FileMailer implements Mailer
     public static function toMime(Message $m, string $fromEmail, string $fromName): string
     {
         $h = [];
+        if ($m->returnPath !== null) {
+            $h[] = 'Return-Path: <' . $m->returnPath . '>';
+        }
         $h[] = 'Date: ' . gmdate(DATE_RFC2822);
         $h[] = 'From: ' . self::address($fromEmail, $fromName);
         $h[] = 'To: ' . self::address($m->toEmail, $m->toName);
@@ -34,7 +37,9 @@ final class FileMailer implements Mailer
             $h[] = 'Reply-To: ' . $m->replyTo;
         }
         $h[] = 'Subject: ' . mb_encode_mimeheader($m->subject, 'UTF-8', 'Q');
-        $h[] = 'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . (explode('@', $fromEmail)[1] ?? 'localhost') . '>';
+        if (!isset($m->headers['Message-ID'])) {
+            $h[] = 'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . (explode('@', $fromEmail)[1] ?? 'localhost') . '>';
+        }
         foreach ($m->headers as $name => $value) {
             if (preg_match('/^[A-Za-z-]+$/', $name) && !preg_match('/[\r\n]/', $value)) {
                 $h[] = $name . ': ' . $value;

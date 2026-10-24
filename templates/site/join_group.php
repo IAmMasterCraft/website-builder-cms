@@ -25,6 +25,7 @@ $terms = safe_url($settings['terms_url']) ?: '/privacy-policy';
       </fieldset>
       <fieldset class="form-section"><legend>Account</legend>
         <?= view('partials/ffield', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'required' => true, 'auto' => 'email', 'extra' => ' maxlength="190"'] + $fv) ?>
+          <?php if (!empty($values['email_checked'])): ?><input type="hidden" name="email_checked" value="<?= e((string) $values['email_checked']) ?>"><?php endif ?>
         <div class="form-row">
           <?= view('partials/ffield', ['name' => 'password', 'label' => 'Password', 'type' => 'password', 'required' => true, 'auto' => 'new-password', 'hint' => 'At least 10 characters.', 'extra' => ' minlength="10" maxlength="200"'] + $fv) ?>
           <?= view('partials/ffield', ['name' => 'password_confirm', 'label' => 'Repeat password', 'type' => 'password', 'required' => true, 'auto' => 'new-password', 'extra' => ' maxlength="200"'] + $fv) ?>

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use Core\Mail\Message;
+use Core\Mail\RecipientRejectedException;
 use Core\Mail\TransportException;
 
 /*
@@ -90,17 +91,48 @@ function mail_pause_state(?int $now = null): ?array
     return ['until' => (int) $p['until'], 'seconds' => (int) ($p['seconds'] ?? MAIL_PAUSE_MIN_SECONDS), 'error' => (string) ($p['error'] ?? ''), 'active' => (int) $p['until'] > ($now ?? time())];
 }
 
+/** Domain part of an address, lower case. */
+function email_domain(string $email): string
+{
+    return strtolower(substr((string) strrchr($email, '@'), 1));
+}
+
+/** Messages per domain sent in the 60 seconds before $now (both tables). @return array<string,int> */
+function mail_sent_last_minute_by_domain(int $now): array
+{
+    $since = gmdate('Y-m-d H:i:s', $now - 60);
+    $out = [];
+    foreach ([['email_queue', 'to_email'], ['campaign_recipients', 'email']] as [$table, $col]) {
+        foreach (q_all('SELECT LOWER(SUBSTRING_INDEX(' . db_ident($col) . ", '@', -1)) AS d, COUNT(*) AS n FROM " . db_ident($table) . ' WHERE sent_at > ? GROUP BY d', [$since]) as $r) {
+            $out[(string) $r['d']] = ($out[(string) $r['d']] ?? 0) + (int) $r['n'];
+        }
+    }
+    return $out;
+}
+
+/**
+ * Why a transactional email must not go to this address, or null: the
+ * address bounced (hard, or soft three times). Unsubscribes and complaints
+ * only stop bulk mail.
+ */
+function mail_undeliverable_reason(string $email): ?string
+{
+    $sup = email_suppression($email);
+    return $sup !== null && in_array($sup['reason'], EMAIL_UNDELIVERABLE_REASONS, true) ? 'Not sent: ' . email_suppression_label((string) $sup['reason']) . '.' : null;
+}
+
 /**
  * Send one batch. Returns counts: sent, failed, retry, interrupted,
  * suppressed, budget, paused (1 when sending is paused after the mail
- * server could not be reached).
+ * server could not be reached), rejected (refused for good by the relay:
+ * hard bounce or block), throttled (left for later by the per-domain limit).
  * @return array<string,int>
  */
 function mail_queue_run(?int $now = null, ?int $perMinute = null): array
 {
     $now ??= time();
     $nowSql = gmdate('Y-m-d H:i:s', $now);
-    $stats = ['sent' => 0, 'failed' => 0, 'retry' => 0, 'interrupted' => 0, 'suppressed' => 0, 'budget' => 0, 'paused' => 0];
+    $stats = ['sent' => 0, 'failed' => 0, 'retry' => 0, 'interrupted' => 0, 'suppressed' => 0, 'budget' => 0, 'paused' => 0, 'rejected' => 0, 'throttled' => 0];
 
     // Rows a crashed run left in "sending": delivery unknown, never re-sent (not even by "retry failed").
     $stuck = gmdate('Y-m-d H:i:s', $now - MAIL_STUCK_SECONDS);
@@ -117,14 +149,29 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
 
     $budget = max(0, ($perMinute ?? mail_per_minute()) - mail_sent_last_minute($now));
     $stats['budget'] = $budget;
+    // A5: at most N per minute to one domain (0 = no limit), so a big list never looks like abuse to one provider.
+    $perDomain = bounce_settings()['per_domain_minute'];
+    $domainSent = $perDomain > 0 ? mail_sent_last_minute_by_domain($now) : [];
+    $throttled = static function (string $email) use (&$domainSent, $perDomain): bool {
+        return $perDomain > 0 && ($domainSent[email_domain($email)] ?? 0) >= $perDomain;
+    };
+    $fetch = (int) min(5000, $budget * 4 + 20);
     $down = false;
     if ($budget > 0) {
-        $rows = q_all("SELECT * FROM email_queue WHERE status = 'queued' AND next_attempt_at <= ? ORDER BY id LIMIT " . (int) $budget, [$nowSql]);
+        $rows = q_all("SELECT * FROM email_queue WHERE status = 'queued' AND next_attempt_at <= ? ORDER BY id LIMIT " . $fetch, [$nowSql]);
         foreach ($rows as $row) {
+            if ($budget <= 0) {
+                break;
+            }
+            if ($throttled((string) $row['to_email'])) {
+                $stats['throttled']++;
+                continue;
+            }
             if (!mail_claim('email_queue', (int) $row['id'], $nowSql)) {
                 continue;
             }
-            if (in_array($row['kind'], MAIL_BULK_KINDS, true) && ($reason = mail_bulk_block_reason((string) $row['to_email'])) !== null) {
+            $reason = in_array($row['kind'], MAIL_BULK_KINDS, true) ? mail_bulk_block_reason((string) $row['to_email']) : mail_undeliverable_reason((string) $row['to_email']);
+            if ($reason !== null) {
                 q("UPDATE email_queue SET status = 'suppressed', last_error = ? WHERE id = ?", [$reason, $row['id']]);
                 $stats['suppressed']++;
                 continue;
@@ -132,14 +179,17 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
             $headers = json_decode((string) ($row['headers'] ?? ''), true);
             try {
                 $m = new Message((string) $row['to_email'], (string) $row['to_name'], (string) $row['subject'], (string) $row['text_body'], $row['html_body'], $row['reply_to'], is_array($headers) ? $headers : []);
-                mailer()->send($m);
+                mailer()->send(mail_with_envelope($m, verp_tag('q', (int) $row['id'])));
                 q("UPDATE email_queue SET status = 'sent', sent_at = ?, last_error = '' WHERE id = ?", [$nowSql, $row['id']]);
                 $stats['sent']++;
+                $domainSent[email_domain((string) $row['to_email'])] = ($domainSent[email_domain((string) $row['to_email'])] ?? 0) + 1;
             } catch (TransportException $e) {
                 mail_release('email_queue', 'last_error', $row, $e, $now);
                 mail_pause($e, $now);
                 $down = true;
                 break;
+            } catch (RecipientRejectedException $e) {
+                $stats[mail_rejected('email_queue', 'last_error', $row, $e, $now)]++;
             } catch (Throwable $e) {
                 $stats[mail_fail('email_queue', 'last_error', $row, $e, $now)]++;
             }
@@ -149,33 +199,48 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
     if ($budget > 0 && !$down) {
         $rows = q_all(
             "SELECT r.* FROM campaign_recipients r JOIN campaigns c ON c.id = r.campaign_id
-              WHERE c.status = 'sending' AND r.status = 'queued' AND r.next_attempt_at <= ? ORDER BY r.campaign_id, r.id LIMIT " . (int) $budget,
+              WHERE c.status = 'sending' AND r.status = 'queued' AND r.next_attempt_at <= ? ORDER BY r.campaign_id, r.id LIMIT " . $fetch,
             [$nowSql]
         );
         $campaigns = [];
         foreach ($rows as $row) {
-            if (!mail_claim('campaign_recipients', (int) $row['id'], $nowSql)) {
-                continue;
+            if ($budget <= 0) {
+                break;
             }
             $cid = (int) $row['campaign_id'];
             $campaigns[$cid] ??= q_one('SELECT * FROM campaigns WHERE id = ?', [$cid]);
+            if (($campaigns[$cid]['status'] ?? '') !== 'sending') {
+                continue; // paused by a block earlier in this run
+            }
+            if ($throttled((string) $row['email'])) {
+                $stats['throttled']++;
+                continue;
+            }
+            if (!mail_claim('campaign_recipients', (int) $row['id'], $nowSql)) {
+                continue;
+            }
             if (($reason = mail_bulk_block_reason((string) $row['email'], (bool) $campaigns[$cid]['essential'])) !== null) {
                 q("UPDATE campaign_recipients SET status = 'suppressed', error = ? WHERE id = ?", [$reason, $row['id']]);
                 $stats['suppressed']++;
                 continue;
             }
             try {
-                mailer()->send(campaign_message_for($campaigns[$cid], $row));
+                mailer()->send(mail_with_envelope(campaign_message_for($campaigns[$cid], $row), verp_tag('c', (int) $row['id']), $cid));
                 q("UPDATE campaign_recipients SET status = 'sent', sent_at = ?, error = '' WHERE id = ?", [$nowSql, $row['id']]);
                 $stats['sent']++;
+                $domainSent[email_domain((string) $row['email'])] = ($domainSent[email_domain((string) $row['email'])] ?? 0) + 1;
             } catch (TransportException $e) {
                 mail_release('campaign_recipients', 'error', $row, $e, $now);
                 mail_pause($e, $now);
                 $down = true;
                 break;
+            } catch (RecipientRejectedException $e) {
+                $stats[mail_rejected('campaign_recipients', 'error', $row, $e, $now)]++;
+                $campaigns[$cid]['status'] = (string) q_val('SELECT status FROM campaigns WHERE id = ?', [$cid]);
             } catch (Throwable $e) {
                 $stats[mail_fail('campaign_recipients', 'error', $row, $e, $now)]++;
             }
+            $budget--;
         }
     }
     if ($down) {
@@ -185,6 +250,31 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
     }
     campaigns_finish($now);
     return $stats;
+}
+
+/**
+ * The relay refused the recipient or message (A5 "at SMTP time"):
+ * 5xx -> hard bounce or block, failed at once and recorded (no retries);
+ * 4xx -> soft: retried with back-off, recorded as a soft bounce when the
+ * attempts run out. Returns the stats key.
+ */
+function mail_rejected(string $table, string $errorCol, array $row, RecipientRejectedException $e, int $now): string
+{
+    $type = bounce_classify($e->enhancedCode, $e->smtpCode, $e->detail);
+    $email = (string) ($row['email'] ?? $row['to_email']);
+    $tag = verp_tag($table === 'campaign_recipients' ? 'c' : 'q', (int) $row['id']);
+    $event = ['email' => $email, 'status' => $e->enhancedCode, 'smtp_code' => $e->smtpCode, 'detail' => $e->detail, 'source' => 'smtp', 'tag' => $tag, 'now' => $now];
+    if (!$e->permanent()) {
+        $key = mail_fail($table, $errorCol, $row, $e, $now);
+        if ($key === 'failed') {
+            bounce_record($event + ['type' => 'soft']);
+        }
+        return $key;
+    }
+    $type = in_array($type, ['hard', 'block'], true) ? $type : 'hard';
+    q('UPDATE ' . db_ident($table) . ' SET status = \'failed\', ' . db_ident($errorCol) . ' = ? WHERE id = ?', [mb_substr(($type === 'block' ? 'Blocked: ' : 'Rejected: ') . $e->smtpCode . ' ' . $e->enhancedCode . ' ' . $e->detail, 0, 500), $row['id']]);
+    bounce_record($event + ['type' => $type]);
+    return 'rejected';
 }
 
 /** queued -> sending; true when this run owns the row. */
@@ -236,12 +326,13 @@ function campaign_retry_failed(int $campaignId, ?int $now = null): int
     $nowSql = gmdate('Y-m-d H:i:s', $now ?? time());
     return db_tx(static function () use ($campaignId, $nowSql): int {
         $c = q_one('SELECT status FROM campaigns WHERE id = ? FOR UPDATE', [$campaignId]);
-        if ($c === null || !in_array($c['status'], ['sending', 'sent'], true)) {
+        if ($c === null || !in_array($c['status'], ['sending', 'sent', 'paused'], true)) {
             return 0;
         }
-        $n = q("UPDATE campaign_recipients SET status = 'queued', attempts = 0, error = '', next_attempt_at = ? WHERE campaign_id = ? AND status = 'failed' AND interrupted = 0", [$nowSql, $campaignId])->rowCount();
+        // Bounced addresses are never retried; recipients refused as spam/policy (block) may be, once fixed.
+        $n = q("UPDATE campaign_recipients SET status = 'queued', attempts = 0, error = '', next_attempt_at = ? WHERE campaign_id = ? AND status = 'failed' AND interrupted = 0 AND (bounce IS NULL OR bounce = 'block')", [$nowSql, $campaignId])->rowCount();
         if ($n > 0) {
-            q("UPDATE campaigns SET status = 'sending', completed_at = NULL WHERE id = ?", [$campaignId]);
+            q("UPDATE campaigns SET status = 'sending', pause_reason = '', completed_at = NULL WHERE id = ?", [$campaignId]);
         }
         return $n;
     });
@@ -354,6 +445,7 @@ function bulk_headers(string $email): array
         'List-Unsubscribe' => '<' . unsubscribe_url($email) . '>',
         'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',
         'Precedence' => 'bulk',
+        'Auto-Submitted' => 'auto-generated',
     ];
 }
 

@@ -1,0 +1,54 @@
+Return-path: <>
+Envelope-to: bounces+{{TAG}}@harbourside.example.test
+Delivery-date: Sat, 24 Oct 2026 10:05:13 +0100
+Received: from mailnull by mail.harbourside.example.test with local (Exim 4.98)
+	id 1t3ZxA-0007kP-2b
+	for bounces+{{TAG}}@harbourside.example.test; Sat, 24 Oct 2026 10:05:13 +0100
+X-Failed-Recipients: {{EMAIL}}
+Auto-Submitted: auto-replied
+From: Mail Delivery System <Mailer-Daemon@mail.harbourside.example.test>
+To: bounces+{{TAG}}@harbourside.example.test
+References: <{{TAG}}.77aa88bb99cc@harbourside.example.test>
+Content-Type: multipart/report; report-type=delivery-status; boundary=1729760713-eximdsn-1804289383
+MIME-Version: 1.0
+Subject: Mail delivery failed: returning message to sender
+Message-Id: <E1t3ZxA-0007kP-2b@mail.harbourside.example.test>
+Date: Sat, 24 Oct 2026 10:05:13 +0100
+
+--1729760713-eximdsn-1804289383
+Content-type: text/plain; charset=us-ascii
+
+This message was created automatically by mail delivery software.
+
+A message that you sent could not be delivered to one or more of its
+recipients. This is a permanent error. The following address(es) failed:
+
+  {{EMAIL}}
+    host mx.strict.example.test [198.51.100.7]
+    SMTP error from remote mail server after end of data:
+    550 5.7.1 Message rejected due to content restrictions (spam score too high). Listed in a block list.
+
+--1729760713-eximdsn-1804289383
+Content-type: message/delivery-status
+
+Reporting-MTA: dns; mail.harbourside.example.test
+
+Action: failed
+Final-Recipient: rfc822;{{EMAIL}}
+Status: 5.7.1
+Remote-MTA: dns; mx.strict.example.test
+Diagnostic-Code: smtp; 550 5.7.1 Message rejected due to content restrictions (spam score too high). Listed in a block list.
+
+--1729760713-eximdsn-1804289383
+Content-type: message/rfc822
+
+Return-path: <bounces+{{TAG}}@harbourside.example.test>
+From: Harbourside Community Association <news@harbourside.example.test>
+To: {{EMAIL}}
+Subject: WIN BIG at our raffle!!!
+Message-ID: <{{TAG}}.77aa88bb99cc@harbourside.example.test>
+X-Gather-Message-Id: {{TAG}}
+
+Raffle tickets on sale now.
+
+--1729760713-eximdsn-1804289383--

@@ -1,0 +1,30 @@
+Return-Path: <>
+From: MAILER-DAEMON@mail.harbourside.example.test (Mail Delivery System)
+Subject: Delayed Mail (still being retried)
+To: bounces+{{TAG}}@harbourside.example.test
+Auto-Submitted: auto-replied
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=delivery-status;
+	boundary="9D3E1B2C4A.1729790000/mail.harbourside.example.test"
+
+--9D3E1B2C4A.1729790000/mail.harbourside.example.test
+Content-Type: text/plain; charset=us-ascii
+
+This is the mail system at host mail.harbourside.example.test.
+
+####################################################################
+# THIS IS A WARNING ONLY.  YOU DO NOT NEED TO RESEND YOUR MESSAGE. #
+####################################################################
+
+--9D3E1B2C4A.1729790000/mail.harbourside.example.test
+Content-Type: message/delivery-status
+
+Reporting-MTA: dns; mail.harbourside.example.test
+
+Final-Recipient: rfc822; {{EMAIL}}
+Action: delayed
+Status: 4.4.1
+Diagnostic-Code: X-Postfix; connect to mx.slow.example.test[192.0.2.80]:25: Connection timed out
+Will-Retry-Until: Sat, 29 Oct 2026 09:00:00 +0000 (GMT)
+
+--9D3E1B2C4A.1729790000/mail.harbourside.example.test--

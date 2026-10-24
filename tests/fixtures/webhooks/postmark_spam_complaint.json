@@ -1,0 +1,16 @@
+{
+  "RecordType": "SpamComplaint",
+  "MessageStream": "outbound",
+  "ID": 4323372036854775999,
+  "Type": "SpamComplaint",
+  "TypeCode": 512,
+  "Name": "Spam complaint",
+  "MessageID": "11111111-2222-3333-4444-555555555555",
+  "Metadata": {"gather-id": "{{TAG}}"},
+  "Description": "The subscriber explicitly marked this message as spam.",
+  "Details": "Test spam complaint details",
+  "Email": "{{EMAIL}}",
+  "From": "news@harbourside.example.test",
+  "BouncedAt": "2026-10-24T11:00:00Z",
+  "Subject": "News from Harbourside"
+}

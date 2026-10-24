@@ -1,0 +1,25 @@
+{
+  "signature": {"timestamp": "{{TS}}", "token": "{{TOKEN}}", "signature": "{{SIGNATURE}}"},
+  "event-data": {
+    "id": "G9Bn5sl1TC6nu79C8C0bwg",
+    "timestamp": {{TS}}.123456,
+    "log-level": "error",
+    "event": "failed",
+    "severity": "permanent",
+    "reason": "bounce",
+    "recipient": "{{EMAIL}}",
+    "recipient-domain": "recipient.example.test",
+    "delivery-status": {
+      "attempt-no": 1,
+      "code": 550,
+      "message": "5.1.1 The email account that you tried to reach does not exist.",
+      "description": "",
+      "enhanced-code": "5.1.1",
+      "mx-host": "mx.recipient.example.test",
+      "tls": true
+    },
+    "message": {"headers": {"to": "{{EMAIL}}", "message-id": "{{TAG}}.abc@harbourside.example.test", "from": "news@harbourside.example.test", "subject": "News"}},
+    "user-variables": {"gather_id": "{{TAG}}"},
+    "flags": {"is-routed": false, "is-authenticated": true, "is-system-test": false, "is-test-mode": false}
+  }
+}

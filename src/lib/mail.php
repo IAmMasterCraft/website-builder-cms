@@ -4,6 +4,7 @@ declare(strict_types=1);
 use Core\Mail\FileMailer;
 use Core\Mail\Mailer;
 use Core\Mail\Message;
+use Core\Mail\RecipientRejectedException;
 use Core\Mail\SmtpMailer;
 
 /*
@@ -135,22 +136,70 @@ function secret_upgrade_smtp_password(): bool
 // ---- Sending ----------------------------------------------------------------------------
 
 /**
- * Send one message now. On failure it goes to the email queue (retried by
- * cron) unless $queueOnFailure is false. Returns true when delivered now.
+ * Send one message now (transactional mail, inbox replies). A5: each one is
+ * logged as an email_queue row first (subject only, no body kept once it is
+ * sent) so it gets a VERP tag and later bounces map to it. A permanent
+ * refusal by the relay is recorded as a bounce and never retried; other
+ * failures put the full message in the queue for cron to retry, unless
+ * $queueOnFailure is false. 'test' sends are not logged. Returns true when
+ * delivered now.
  */
 function mail_send_now(Message $m, string $kind = 'transactional', bool $queueOnFailure = true): bool
 {
+    if ($kind === 'test') {
+        try {
+            mailer()->send($m->withEnvelope(verp_return_path(null), []));
+            return true;
+        } catch (Throwable $e) {
+            error_log('Mail failed (test): ' . $e->getMessage());
+            return false;
+        }
+    }
+    $nowSql = gmdate('Y-m-d H:i:s');
+    $id = db_insert('email_queue', [
+        'kind' => mb_substr($kind, 0, 20), 'to_email' => $m->toEmail, 'to_name' => mb_substr($m->toName, 0, 120), 'subject' => mb_substr($m->subject, 0, 250),
+        'text_body' => '', 'html_body' => null, 'reply_to' => $m->replyTo, 'status' => 'sending', 'attempts' => 1, 'claimed_at' => $nowSql, 'next_attempt_at' => $nowSql,
+    ]);
     try {
-        mailer()->send($m);
+        mailer()->send(mail_with_envelope($m, verp_tag('q', $id)));
+        q("UPDATE email_queue SET status = 'sent', sent_at = ? WHERE id = ?", [gmdate('Y-m-d H:i:s'), $id]);
         return true;
+    } catch (RecipientRejectedException $e) {
+        error_log('Mail refused (' . $kind . '): ' . $e->getMessage());
+        if (!$e->permanent() && $queueOnFailure) {
+            mail_requeue_direct($id, $m, $e);
+        } else {
+            $row = q_one('SELECT * FROM email_queue WHERE id = ?', [$id]);
+            mail_rejected('email_queue', 'last_error', ['attempts' => MAIL_MAX_ATTEMPTS] + $row, $e, time());
+        }
+        return false;
     } catch (Throwable $e) {
         error_log('Mail failed (' . $kind . '): ' . $e->getMessage());
         if ($queueOnFailure) {
-            mail_queue_message($m, $kind, null, 1, mb_substr($e->getMessage(), 0, 500));
+            mail_requeue_direct($id, $m, $e);
+        } else {
+            q("UPDATE email_queue SET status = 'failed', last_error = ? WHERE id = ?", [mb_substr($e->getMessage(), 0, 500), $id]);
         }
         return false;
     }
 }
+
+/** A direct send failed for a temporary reason: keep the full message for cron to retry (first retry after 5 minutes). */
+function mail_requeue_direct(int $id, Message $m, Throwable $e): void
+{
+    q("UPDATE email_queue SET status = 'queued', text_body = ?, html_body = ?, headers = ?, last_error = ?, next_attempt_at = ? WHERE id = ?", [
+        $m->text, $m->html, $m->headers ? json_encode($m->headers, JSON_THROW_ON_ERROR) : null, mb_substr($e->getMessage(), 0, 500),
+        gmdate('Y-m-d H:i:s', time() + mail_retry_delay(1)), $id,
+    ]);
+}
+
+/**
+ * Templates still sent to an address that bounced: the person asked for
+ * them just now on the site (a working address proves itself by the link
+ * being used). Automated mail (welcome, birthday, replies, job news…) is
+ * skipped for bounced addresses.
+ */
+const MAIL_BOUNCE_BYPASS_TEMPLATES = ['verify_email', 'password_reset', 'email_change', 'admin_invite', 'signup_existing', 'event_registration', 'contact_copy', 'contact_reply'];
 
 /**
  * Send a transactional email built from an editable template
@@ -159,6 +208,10 @@ function mail_send_now(Message $m, string $kind = 'transactional', bool $queueOn
  */
 function send_template_mail(string $toEmail, string $toName, string $template, array $vars = []): bool
 {
+    if (!in_array($template, MAIL_BOUNCE_BYPASS_TEMPLATES, true) && ($reason = mail_undeliverable_reason($toEmail)) !== null) {
+        error_log('Mail not sent (' . $template . '): ' . $reason);
+        return false;
+    }
     $parts = email_template_render($template, $vars + ['first_name' => $toName]);
     try {
         $message = new Message($toEmail, $toName, $parts['subject'], $parts['text'], $parts['html'], $parts['reply_to'] ?? null);
