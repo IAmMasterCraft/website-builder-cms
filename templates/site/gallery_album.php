@@ -15,10 +15,10 @@
       <div class="notice"><p><strong><?= e(t('members.only')) ?>.</strong> <?= e(t('members.login_to_view')) ?></p><a class="btn" href="/login?next=<?= e(rawurlencode('/gallery/' . $album['slug'])) ?>">Log in</a></div>
     <?php elseif ($photos): ?>
       <p class="muted tabular"><?= e(pluralise($total, 'photo')) ?> · select a photo to view it larger</p>
-      <ul class="photo-grid" data-lightbox>
+      <ul class="photo-masonry" data-lightbox data-reveal-group>
         <?php foreach ($photos as $ph): $m = media_find((int) $ph['media_id']); if ($m === null) { continue; } ?>
-          <li><a href="<?= e(media_url($m, 1600)) ?>" data-caption="<?= e($ph['caption']) ?>">
-            <?= img_html($m, '(min-width: 72rem) 14rem, (min-width: 40rem) 30vw, 50vw', $ph['alt'] !== '' ? $ph['alt'] : ($ph['caption'] !== '' ? $ph['caption'] : $m['alt']), '', true, 400) ?>
+          <li data-reveal><a href="<?= e(media_url($m, 1600)) ?>" data-caption="<?= e($ph['caption']) ?>">
+            <?= img_html($m, '(min-width: 72rem) 24rem, (min-width: 40rem) 45vw, 100vw', $ph['alt'] !== '' ? $ph['alt'] : ($ph['caption'] !== '' ? $ph['caption'] : $m['alt']), '', true, 800) ?>
           </a></li>
         <?php endforeach ?>
       </ul>

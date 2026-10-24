@@ -3,19 +3,19 @@ $verified = $user['status'] === 'active';
 $links = [
     ['home', '/account', 'Overview', 'home', true],
     ['profile', '/account/profile', $is_group ? 'Group profile' : 'Profile and photo', 'user', true],
-    ['card', '/account/card', 'Member card', 'award', !$is_group && $verified],
+    ['card', '/account/card', 'Member card', 'id-card', !$is_group && $verified],
     ['events', '/account/events', 'My events', 'calendar', $verified],
-    ['jobs', '/account/jobs', 'Jobs', 'flag', $verified],
-    ['downloads', '/account/downloads', 'Downloads', 'download', $verified],
+    ['jobs', '/account/jobs', 'Jobs', 'briefcase', $verified],
+    ['downloads', '/account/downloads', 'Downloads', 'file-down', $verified],
     ['notices', '/account/notices', 'Notices', 'bell', $verified],
     ['preferences', '/account/preferences', 'Email preferences', 'mail', $verified],
     ['password', '/account/password', 'Email and password', 'lock', true],
-    ['privacy', '/account/privacy', 'Your data', 'file', true],
+    ['privacy', '/account/privacy', 'Your data', 'shield', true],
 ];
 ?>
 <div class="account-head">
   <div class="container">
-    <p class="eyebrow">My account</p>
+    <p class="eyebrow">My account<?= !empty($user['display_name']) ? ' · ' . e($user['display_name']) : '' ?></p>
     <h1><?= e($title) ?></h1>
   </div>
 </div>

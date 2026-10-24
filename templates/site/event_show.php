@@ -8,18 +8,20 @@ $err = static fn (string $k): string => isset($errors[$k]) ? '<p class="error" i
 $inv = static fn (string $k): string => isset($errors[$k]) ? ' aria-invalid="true" aria-describedby="err-' . e($k) . '"' : '';
 ?>
 <article>
-  <div class="page-hero">
+  <div class="page-hero on-dark<?= $cover ? ' has-image' : '' ?>">
+    <?php if ($cover): preload_image($cover, '100vw'); ?><?= img_html($cover, '100vw', '', 'page-hero-img', false, 1600) ?><?php endif ?>
     <div class="container">
       <nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/events">Events</a></li><li><span aria-current="page"><?= e($event['title']) ?></span></li></ol></nav>
       <?php if ($event['status'] !== 'published' && !($event['status'] === 'scheduled' && $event['publish_at'] <= utc_now())): ?><p class="notice warn">Preview: this event is not published yet.</p><?php endif ?>
+      <span class="eyebrow"><?= e($start->format('l j F Y')) ?><?= $event['venue_name'] ? ' · ' . e($event['venue_name']) : '' ?></span>
       <h1><?= e($event['title']) ?></h1>
       <?php if ($event['summary']): ?><p><?= e($event['summary']) ?></p><?php endif ?>
+      <?php if (!$locked && (int) $event['registration_open'] === 1 && !$is_past): ?><p class="hero-actions"><a class="btn highlight large" href="#register">Register now <?= icon('arrow-right') ?></a><a class="btn on-dark large" href="/events/<?= e($event['slug']) ?>.ics"><?= icon('calendar') ?> Add to calendar</a></p><?php endif ?>
     </div>
   </div>
   <div class="section">
     <div class="container layout-with-aside">
       <div>
-        <?php if ($cover): ?><figure class="article-cover"><?= img_html($cover, '(min-width: 60rem) 46rem, 100vw', '', '', false, 1600) ?></figure><?php endif ?>
         <?php if ($locked): ?>
           <div class="notice"><p><strong><?= e(t('members.only')) ?>.</strong> <?= e(t('members.login_to_view')) ?></p><a class="btn" href="/login?next=<?= e(rawurlencode(event_url($event))) ?>">Log in</a></div>
         <?php else: ?>

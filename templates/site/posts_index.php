@@ -13,7 +13,7 @@
     <?php endif ?>
     <p class="muted tabular" role="status"><?= e(pluralise($total, 'post')) ?></p>
     <?php if ($rows): ?>
-      <div class="grid"><?php foreach ($rows as $post): ?><?= view('partials/post_card', ['post' => $post, 'headingTag' => 'h2']) ?><?php endforeach ?></div>
+      <div class="grid cols-3" data-reveal-group><?php foreach ($rows as $i => $post): ?><?= view('partials/post_card', ['post' => $post, 'headingTag' => 'h2', 'feature' => $i === 0 && $page === 1 && $when === '' && $category === '' && $tag === '']) ?><?php endforeach ?></div>
     <?php else: ?>
       <?= view('partials/empty', ['message' => 'No posts match these filters.']) ?>
     <?php endif ?>

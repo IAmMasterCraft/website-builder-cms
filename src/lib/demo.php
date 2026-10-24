@@ -3,9 +3,64 @@ declare(strict_types=1);
 
 /*
  * Demo content (D12): a fictional community organisation, written for this
- * build. Images are abstract artwork generated with GD at install time, so
- * no third-party pictures are shipped.
+ * build. Photos come from demo-assets/photos (Unsplash licence, credits in
+ * CREDITS.md) and go through the normal media pipeline (re-encoded, WebP
+ * variants, focal point) so they behave like real uploads. When the photos
+ * are missing (a trimmed package), abstract GD artwork is generated instead.
  */
+
+/** Demo photos: key => [file, alt text, focal x %, focal y %]. */
+const DEMO_PHOTOS = [
+    'wave' => ['hero-community-wave.jpg', 'Friends waving hello together in a sunny park', 55, 40],
+    'selfie' => ['hero-friends-selfie.jpg', 'A group of friends taking a selfie outdoors', 55, 40],
+    'porch' => ['family-group-porch.jpg', 'A large family group gathered on a porch', 50, 42],
+    'family' => ['family-laughing.jpg', 'Parents laughing together with their baby', 50, 32],
+    'sorting' => ['volunteers-sorting-food.jpg', 'Volunteers sorting donated tins at a food bank', 50, 45],
+    'packing' => ['volunteers-packing-bags.jpg', 'Volunteers packing paper bags of food for families', 45, 45],
+    'handing' => ['volunteer-food-distribution.jpg', 'A volunteer handing out bags of fresh food', 50, 35],
+    'cleanup' => ['volunteers-cleanup.jpg', 'Volunteers in matching T-shirts with litter bags after a clean-up', 50, 40],
+    'aprons' => ['volunteers-aprons.jpg', 'Two smiling volunteers in aprons', 50, 30],
+    'helpdesk' => ['event-helpdesk.jpg', 'A volunteer helping visitors at an event information desk', 45, 40],
+    'smiling' => ['event-volunteers-smiling.jpg', 'Two smiling volunteers with lanyards at an outdoor event', 48, 38],
+    'meeting' => ['meeting-audience.jpg', 'An audience listening at a community meeting', 50, 55],
+    'festival' => ['festival-celebration.jpg', 'A crowd celebrating at an outdoor music festival', 55, 40],
+    'field' => ['festival-outdoor.jpg', 'A festival crowd on a green field on a summer day', 50, 55],
+    'picnic' => ['picnic-gathering.jpg', 'People relaxing on the grass at a summer gathering', 40, 60],
+    'elder1' => ['elder-portrait-1.jpg', 'Portrait of an older man in a blue shirt', 50, 32],
+    'elder2' => ['elder-portrait-2.jpg', 'Portrait of a man in an embroidered tunic', 50, 25],
+    'elder3' => ['elder-portrait-3.jpg', 'Portrait of an older man in glasses and a blue cap', 45, 28],
+    'elder4' => ['elder-portrait-4.jpg', 'Portrait of an older man in a flat cap and scarf', 62, 35],
+    'story' => ['youth-storytelling.jpg', 'A storyteller with children sitting on the grass in a park', 50, 50],
+    'youth' => ['youth-park-session.jpg', 'Children listening to a storyteller under the trees', 50, 55],
+    'presenter' => ['radio-presenter.jpg', 'A presenter at the desk of a radio studio', 35, 40],
+    'mic' => ['radio-microphone.jpg', 'A studio microphone in front of a screen', 50, 40],
+    'dining' => ['dining-together.jpg', 'Friends sharing dishes around a long wooden table', 50, 50],
+    'supper' => ['community-dinner.jpg', 'A community supper at a long table in a timber hall', 50, 72],
+    'street' => ['london-street.jpg', 'A city street leading to a cathedral dome', 50, 45],
+];
+
+/** Import every demo photo through the media pipeline. @return array<string,int> key => media id */
+function demo_photos(int $userId): array
+{
+    $out = [];
+    $seed = 101;
+    foreach (DEMO_PHOTOS as $key => [$file, $alt, $fx, $fy]) {
+        $src = BASE . '/demo-assets/photos/' . $file;
+        if (!is_file($src)) {
+            $out[$key] = demo_media_image($seed++, ucfirst(str_replace(['-', '.jpg'], [' ', ''], $file)), $alt, $userId);
+            continue;
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'gphoto');
+        $copy = $tmp . '.jpg';
+        rename($tmp, $copy);
+        copy($src, $copy);
+        $out[$key] = media_store($copy, $file, (int) filesize($copy), $userId, false, [
+            'alt' => $alt, 'title' => ucfirst(str_replace(['-', '.jpg'], [' ', ''], $file)), 'folder' => 'demo', 'focal_x' => $fx, 'focal_y' => $fy,
+        ]);
+        is_file($copy) && unlink($copy);
+    }
+    return $out;
+}
 
 const DEMO_PALETTES = [
     [[18, 52, 86], [20, 140, 140], [242, 178, 70]],
@@ -128,31 +183,24 @@ function demo_seed(int $userId): void
     setting_set('org.charity_number', '1000000 (demo)');
     setting_set('social', ['facebook' => 'https://www.facebook.com/', 'x' => 'https://x.com/', 'instagram' => 'https://www.instagram.com/', 'youtube' => '', 'linkedin' => '']);
 
-    $img = [];
-    $titles = [
-        'Harbour festival', 'Community garden', 'Youth workshop', 'Winter supper', 'Volunteer day', 'Annual meeting',
-        'Coastal walk', 'Music evening', 'Reading club', 'Market stalls', 'Family picnic', 'Skills fair',
-    ];
-    foreach ($titles as $i => $t) {
-        $img[$i] = demo_media_image(101 + $i, $t, 'Abstract artwork for "' . $t . '"', $userId);
-    }
+    $ph = demo_photos($userId);
 
     // Posts: spread across today, this month, this year and last year so every archive filter has results.
     $catId = static fn (string $slug): string => (string) q_val('SELECT id FROM categories WHERE slug = ?', [$slug]);
     $posts = [
-        ['news', 'Harbour festival returns this summer', 'Stalls, music and food from every corner of our neighbourhood.', 'today', 0, 'festival, summer'],
-        ['news', 'New volunteers welcomed at spring induction', 'Twenty-two new helpers joined us this month.', '-3 days', 4, 'volunteering'],
-        ['news', 'Community garden wins a local green award', 'The raised beds behind the hall have become a favourite meeting spot.', '-40 days', 1, 'garden, awards'],
-        ['news', 'Annual meeting: what we agreed', 'A summary of the decisions, budget and plans for the year ahead.', '-5 months', 5, 'governance'],
-        ['news', 'Looking back on our winter supper', 'Over two hundred plates served and a hall full of laughter.', '-14 months', 3, 'food, winter'],
-        ['blog', 'Why we walk the coast path every month', 'A volunteer reflects on friendship, fresh air and fixing stiles.', '-6 days', 6, 'walks, wellbeing'],
-        ['blog', 'Five things I learned running a reading club', 'Biscuits matter more than you would think.', '-2 months', 8, 'reading'],
-        ['blog', 'A beginner’s guide to our skills fair', 'How to share what you know, even if you think it is nothing special.', '-16 months', 11, 'skills'],
-        ['projects', 'Youth workshop programme', 'Weekly creative sessions for 11–18 year olds, run with local schools.', '-20 days', 2, 'youth, education'],
-        ['projects', 'Harbourside history archive', 'Collecting photos and memories from long-time residents.', '-7 months', 9, 'history'],
-        ['projects', 'Warm spaces this winter', 'Keeping the hall open, heated and welcoming on cold evenings.', '-13 months', 3, 'winter, support'],
+        ['news', 'Harbour festival returns this summer', 'Stalls, music and food from every corner of our neighbourhood.', 'today', 'field', 'festival, summer'],
+        ['news', 'New volunteers welcomed at spring induction', 'Twenty-two new helpers joined us this month.', '-3 days', 'smiling', 'volunteering'],
+        ['news', 'Community garden wins a local green award', 'The raised beds behind the hall have become a favourite meeting spot.', '-40 days', 'picnic', 'garden, awards'],
+        ['news', 'Annual meeting: what we agreed', 'A summary of the decisions, budget and plans for the year ahead.', '-5 months', 'meeting', 'governance'],
+        ['news', 'Looking back on our winter supper', 'Over two hundred plates served and a hall full of laughter.', '-14 months', 'supper', 'food, winter'],
+        ['blog', 'Why our Saturday walking group keeps growing', 'A volunteer reflects on friendship, fresh air and the best café stops.', '-6 days', 'wave', 'walks, wellbeing'],
+        ['blog', 'Five things I learned running a reading club', 'Biscuits matter more than you would think.', '-2 months', 'dining', 'reading'],
+        ['blog', 'A beginner’s guide to our skills fair', 'How to share what you know, even if you think it is nothing special.', '-16 months', 'helpdesk', 'skills'],
+        ['projects', 'Youth workshop programme', 'Weekly creative sessions for 11–18 year olds, run with local schools.', '-20 days', 'story', 'youth, education'],
+        ['projects', 'Harbourside history archive', 'Collecting photos and memories from long-time residents.', '-7 months', 'porch', 'history'],
+        ['projects', 'Warm spaces this winter', 'Keeping the hall open, heated and welcoming on cold evenings.', '-13 months', 'aprons', 'winter, support'],
     ];
-    foreach ($posts as $i => [$cat, $title, $summary, $when, $imgIdx, $tags]) {
+    foreach ($posts as $i => [$cat, $title, $summary, $when, $photo, $tags]) {
         demo_save('posts', [
             'title' => $title, 'summary' => $summary, 'category_id' => $catId($cat), 'tags' => $tags,
             'body' => demo_html(
@@ -162,7 +210,7 @@ function demo_seed(int $userId): void
                 'Members can read more in the newsletter, and everyone is welcome to come along and say hello at our next open evening.',
                 '<ul><li>Open to everyone</li><li>Run by volunteers</li><li>Free to attend</li></ul>'
             ),
-            'cover_media_id' => (string) $img[$imgIdx], 'status' => 'published',
+            'cover_media_id' => (string) $ph[$photo], 'status' => 'published',
             'publish_at' => $when === 'today' ? (new DateTimeImmutable('now', site_tz()))->modify('-1 minute')->format('Y-m-d\TH:i') : demo_local($when),
             'visibility' => $i === 6 ? 'members' : 'public', 'allow_likes' => '1', 'allow_comments' => '1',
         ], $userId);
@@ -175,15 +223,16 @@ function demo_seed(int $userId): void
 
     // Events.
     $events = [
-        ['Harbour festival', '+12 days', '11:00', '+12 days', '18:00', 'Quayside Green', 0, true, true, 300, [['Adult', 'Free'], ['Family (up to 4)', 'Free']]],
-        ['Community garden planting morning', '+5 days', '09:30', '+5 days', '12:30', 'Hall Garden', 1, true, true, 25, []],
-        ['Members’ annual meeting', '+30 days', '19:00', '+30 days', '21:00', 'Harbourside Hall', 5, true, false, null, [['Member', 'No charge']]],
-        ['Coffee morning', '+0 days', '10:00', '+0 days', '23:30', 'Harbourside Hall', 7, false, true, null, []],
-        ['Winter supper', '-60 days', '18:30', '-60 days', '22:00', 'Harbourside Hall', 3, false, true, 120, [['Supper', '£8 on the door']]],
-        ['Skills fair', '-120 days', '10:00', '-120 days', '16:00', 'Quay Street School', 11, false, true, null, []],
+        ['Harbour festival', '+12 days', '11:00', '+12 days', '18:00', 'Quayside Green', 'festival', true, true, 300, [['Adult', 'Free'], ['Family (up to 4)', 'Free']]],
+        ['Park and beach clean-up morning', '+5 days', '09:30', '+5 days', '12:30', 'Hall Garden', 'cleanup', true, true, 25, []],
+        ['Members’ annual meeting', '+30 days', '19:00', '+30 days', '21:00', 'Harbourside Hall', 'meeting', true, false, null, [['Member', 'No charge']]],
+        ['Coffee morning', '+0 days', '10:00', '+0 days', '23:30', 'Harbourside Hall', 'dining', false, true, null, []],
+        ['Winter supper', '-60 days', '18:30', '-60 days', '22:00', 'Harbourside Hall', 'supper', false, true, 120, [['Supper', '£8 on the door']]],
+        ['Skills fair', '-120 days', '10:00', '-120 days', '16:00', 'Quay Street School', 'helpdesk', false, true, null, []],
     ];
-    foreach ($events as [$title, $sd, $st, $ed, $et, $venue, $imgIdx, $regOpen, $guests, $cap, $tickets]) {
-        demo_save('events', [
+    $eventIds = [];
+    foreach ($events as [$title, $sd, $st, $ed, $et, $venue, $photo, $regOpen, $guests, $cap, $tickets]) {
+        $eventIds[$title] = demo_save('events', [
             'title' => $title, 'summary' => 'Join neighbours for ' . lcfirst($title) . '. Everyone is welcome.',
             'body' => demo_html('Come along, bring a friend and meet the people who make Harbourside special.', 'Step-free access is available. Please tell us about any access needs when you register.'),
             'start_at' => demo_local($sd, $st), 'end_at' => demo_local($ed, $et), 'timezone' => site_tz()->getName(),
@@ -191,21 +240,24 @@ function demo_seed(int $userId): void
             'registration_open' => $regOpen ? '1' : '', 'guest_registration' => $guests ? '1' : '',
             'capacity' => $cap === null ? '' : (string) $cap,
             'ticket_name' => array_column($tickets, 0), 'ticket_price' => array_column($tickets, 1),
-            'cover_media_id' => (string) $img[$imgIdx], 'status' => 'published', 'publish_at' => demo_local('-90 days'), 'visibility' => 'public',
+            'cover_media_id' => (string) $ph[$photo], 'status' => 'published', 'publish_at' => demo_local('-90 days'), 'visibility' => 'public',
         ], $userId);
     }
 
     // Albums with photos.
-    $albums = [['Harbour festival', 0, '-300 days'], ['Community garden through the seasons', 1, '-100 days'], ['Winter supper', 3, '-60 days']];
-    foreach ($albums as $ai => [$title, $coverIdx, $date]) {
+    $albums = [
+        ['Harbour festival', 'festival', '-300 days', ['festival', 'field', 'picnic', 'wave', 'selfie', 'smiling', 'helpdesk', 'family']],
+        ['Volunteers in action', 'sorting', '-100 days', ['sorting', 'packing', 'handing', 'cleanup', 'aprons', 'helpdesk', 'smiling', 'meeting']],
+        ['Suppers, stories and get-togethers', 'supper', '-60 days', ['supper', 'dining', 'porch', 'story', 'youth', 'picnic', 'family', 'wave']],
+    ];
+    foreach ($albums as [$title, $cover, $date, $keys]) {
         $albumId = demo_save('albums', [
             'title' => $title, 'summary' => 'Photos from ' . lcfirst($title) . '.', 'body' => demo_html('A selection of moments shared by volunteers.'),
             'album_date' => (new DateTimeImmutable('now', site_tz()))->modify($date)->format('Y-m-d'),
-            'cover_media_id' => (string) $img[$coverIdx], 'status' => 'published', 'publish_at' => demo_local($date), 'visibility' => 'public',
+            'cover_media_id' => (string) $ph[$cover], 'status' => 'published', 'publish_at' => demo_local($date), 'visibility' => 'public',
         ], $userId);
-        for ($p = 0; $p < 8; $p++) {
-            $mid = demo_media_image(500 + $ai * 10 + $p, $title . ' photo ' . ($p + 1), 'Abstract artwork, ' . strtolower($title) . ' set, image ' . ($p + 1), $userId, $p % 3 === 0 ? 1000 : 1600, $p % 3 === 0 ? 1300 : 1050, 'gallery');
-            db_insert('album_photos', ['album_id' => $albumId, 'media_id' => $mid, 'caption' => 'Moment ' . ($p + 1) . ' from ' . lcfirst($title), 'alt' => 'Abstract artwork, image ' . ($p + 1), 'sort' => $p]);
+        foreach ($keys as $p => $key) {
+            db_insert('album_photos', ['album_id' => $albumId, 'media_id' => $ph[$key], 'caption' => DEMO_PHOTOS[$key][1], 'alt' => DEMO_PHOTOS[$key][1], 'sort' => $p]);
         }
     }
 
@@ -225,17 +277,21 @@ function demo_seed(int $userId): void
     $exec = demo_save('leader-groups', ['name' => 'Executive committee', 'description' => 'Elected each year at the annual meeting.', 'sort' => '1'], $userId);
     $trustees = demo_save('leader-groups', ['name' => 'Trustees', 'description' => 'Responsible for governance and finances.', 'sort' => '2'], $userId);
     $people = [
-        [$exec, 'Amara Okafor', 'Chairperson', 1, '', ''], [$exec, 'Tomasz Nowak', 'Secretary', 2, '', ''],
-        [$exec, 'Priya Raman', 'Treasurer', 3, '', ''], [$exec, 'Daniel Mensah', 'Events lead', 4, '', ''],
-        [$trustees, 'Helen Carter', 'Trustee', 1, '', ''], [$trustees, 'Yusuf Ali', 'Trustee', 2, '', ''],
-        [$exec, 'Grace Liu', 'Former chairperson', 9, '-4 years', '-1 year'],
+        [$exec, 'Samuel Mensah', 'Chairperson', 1, '', '', 'elder3', ['linkedin' => 'https://www.linkedin.com/', 'website' => 'https://example.org/']],
+        [$exec, 'Joseph Adeyemi', 'Secretary', 2, '', '', 'elder2', ['facebook' => 'https://www.facebook.com/']],
+        [$exec, 'Emmanuel Osei', 'Treasurer', 3, '', '', 'elder1', ['linkedin' => 'https://www.linkedin.com/']],
+        [$exec, 'Kofi Boateng', 'Events lead', 4, '', '', 'elder4', ['instagram' => 'https://www.instagram.com/', 'x' => 'https://x.com/']],
+        [$trustees, 'Helen Carter', 'Trustee', 1, '', '', null, ['linkedin' => 'https://www.linkedin.com/']],
+        [$trustees, 'Ama Owusu', 'Trustee', 2, '', '', null, []],
+        [$exec, 'Grace Liu', 'Former chairperson', 9, '-4 years', '-1 year', null, []],
     ];
-    foreach ($people as $i => [$group, $name, $role, $sort, $start, $end]) {
+    foreach ($people as $i => [$group, $name, $role, $sort, $start, $end, $photo, $social]) {
         demo_save('leaders', [
             'name' => $name, 'role_title' => $role, 'group_id' => (string) $group, 'sort' => (string) $sort,
             'bio' => demo_html($name . ' has volunteered with the association for several years. (Fictional person for demo content.)'),
             'email' => 'committee@example.org', 'show_email' => $i === 0 ? '1' : '', 'show_bio' => '1',
-            'photo_media_id' => (string) $img[($i + 6) % 12], 'status' => 'published',
+            ...array_combine(array_map(static fn (string $k): string => 'social_' . $k, array_keys($social)), array_values($social)),
+            'photo_media_id' => $photo !== null ? (string) $ph[$photo] : '', 'status' => 'published',
             'term_start' => (new DateTimeImmutable('now', site_tz()))->modify($start !== '' ? $start : '-1 year')->format('Y-m-d'),
             'term_end' => $end !== '' ? (new DateTimeImmutable('now', site_tz()))->modify($end)->format('Y-m-d') : '',
         ], $userId);
@@ -244,11 +300,11 @@ function demo_seed(int $userId): void
     // Awards, FAQs, branches, groups.
     $y = current_year();
     foreach ([
-        [$y - 1, 'Volunteer of the Year', 'Samira Haddad', 4], [$y - 1, 'Young Achiever', 'Leo Brennan', 2],
-        [$y - 2, 'Volunteer of the Year', 'Marcus Reid', 6], [$y - 2, 'Lifetime Contribution', 'Joan Whitfield', 9],
-    ] as $i => [$year, $award, $who, $imgIdx]) {
+        [$y - 1, 'Volunteer of the Year', 'Samira Haddad', 'aprons'], [$y - 1, 'Young Achiever', 'Leo Brennan', 'youth'],
+        [$y - 2, 'Volunteer of the Year', 'Marcus Reid', 'handing'], [$y - 2, 'Lifetime Contribution', 'Joan Whitfield', 'porch'],
+    ] as $i => [$year, $award, $who, $photo]) {
         demo_save('awards', ['year' => (string) $year, 'title' => $award, 'recipient' => $who, 'sort' => (string) $i,
-            'citation' => demo_html('For outstanding commitment to the community. (Fictional recipient.)'), 'photo_media_id' => (string) $img[$imgIdx], 'status' => 'published'], $userId);
+            'citation' => demo_html('For outstanding commitment to the community. (Fictional recipient.)'), 'photo_media_id' => (string) $ph[$photo], 'status' => 'published'], $userId);
     }
     foreach ([
         ['Membership', 'Who can join?', 'Anyone who lives, works or studies in the area, or feels part of the community.'],
@@ -282,7 +338,7 @@ function demo_seed(int $userId): void
         'Harbourside Community Association is a fictional organisation used to demonstrate the Gather website builder.',
         '<h2>Our mission</h2>', 'To bring neighbours together, support one another and celebrate the place we share.',
         '<h2>How we work</h2>', 'We are run by volunteers and governed by trustees elected by our members.'
-    ), 'status' => 'published', 'visibility' => 'public', 'cover_media_id' => (string) $img[4]], $userId);
+    ), 'status' => 'published', 'visibility' => 'public', 'cover_media_id' => (string) $ph['porch']], $userId);
     $involved = demo_save('pages', ['title' => 'Get involved', 'summary' => 'Volunteer, join or support us.', 'body' => demo_html(
         'There are lots of ways to help: volunteer at an event, join a branch, or share your skills at the next skills fair.',
         '<ul><li>Volunteer a few hours a month</li><li>Become a member</li><li>Donate to our winter appeal</li></ul>'
@@ -318,31 +374,21 @@ function demo_seed(int $userId): void
         });
     }
 
-    // Builder pages (§3.1): the home page, the contact page and a membership page.
+    // Builder pages (§3.1): home, about, contact and membership, built from the A6 sections.
     setting_set('donate.bank_text', "Harbourside Community Association (demo)\nSort code 00-00-00 · Account 00000000\nReference: DONATION");
     setting_set('donate.links', [['label' => 'Give online', 'url' => 'https://example.org/donate']]);
+    $festival = q_one('SELECT slug FROM events WHERE id = ?', [$eventIds['Harbour festival']]);
     $home = demo_save('pages', ['title' => 'Home', 'summary' => 'Neighbours helping neighbours, by the water and beyond.', 'status' => 'published', 'visibility' => 'public', 'is_home' => '1'], $userId);
-    builder_initialise($home, [
-        builder_make('hero', ['eyebrow' => 'Welcome to Harbourside', 'heading' => 'Neighbours helping neighbours',
-            'text' => 'Events, learning and support for everyone who lives, works or grew up by the harbour.',
-            'slides' => [['media_id' => $img[0], 'caption' => 'Harbour festival'], ['media_id' => $img[1], 'caption' => 'Community garden'], ['media_id' => $img[9], 'caption' => 'Market stalls']]]),
-        builder_make('stats'),
-        builder_make('radio_player', ['heading' => 'Harbourside Radio', 'size' => 'mini'], ['spacing' => 'compact']),
-        builder_make('features', ['eyebrow' => 'What we do', 'heading' => 'Three ways we bring people together']),
-        builder_make('upcoming_events', ['eyebrow' => 'Get together'], ['background' => 'soft']),
-        builder_make('latest_posts', ['eyebrow' => 'Latest']),
-        builder_make('gallery', ['eyebrow' => 'Moments', 'count' => 8], ['background' => 'soft']),
-        builder_make('birthdays', ['hide_when_empty' => true]),
-        builder_make('cta'),
-    ], $userId);
-    $contact = demo_save('pages', ['title' => 'Contact', 'summary' => 'Get in touch.', 'status' => 'published', 'visibility' => 'public'], $userId);
+    builder_initialise($home, demo_home_sections($ph, $festival !== null ? event_url($festival) : '/events'), $userId);
+    builder_initialise($about, demo_about_sections($ph), $userId);
+    $contact = demo_save('pages', ['title' => 'Contact', 'summary' => 'Questions, ideas or offers of help: we would love to hear from you.', 'status' => 'published', 'visibility' => 'public'], $userId);
     builder_initialise($contact, [
         builder_make('contact', ['show_map' => false]),
-        builder_make('faq', ['heading' => 'Before you write', 'count' => 4], ['background' => 'soft']),
+        builder_make('faq', ['eyebrow' => 'Good to know', 'heading' => 'Before you write', 'intro' => 'Quick answers to the questions we hear most often.', 'count' => 4], ['background' => 'soft']),
         builder_make('donate'),
     ], $userId);
     $membership = demo_save('pages', ['title' => 'Membership', 'summary' => 'Join our community.', 'status' => 'published', 'visibility' => 'public'], $userId);
-    builder_initialise($membership, builder_template_sections('starter:membership') ?? [], $userId);
+    builder_initialise($membership, demo_membership_sections($ph), $userId);
 
     // Menus.
     $main = db_insert('menus', ['name' => 'Main navigation', 'location' => 'main']);
@@ -388,6 +434,142 @@ function demo_seed(int $userId): void
 }
 
 
+/** Demo home page: every A6 pattern in one long, finished-looking page. */
+function demo_home_sections(array $ph, string $festivalUrl): array
+{
+    return [
+        builder_make('hero', [
+            'layout' => 'fullscreen', 'height' => 'full', 'overlay' => 'medium', 'kenburns' => true, 'autoplay' => true,
+            'eyebrow' => 'Harbourside Community Association', 'heading' => 'Neighbours helping neighbours',
+            'text' => 'Festivals, food support, youth clubs and a warm welcome for everyone who lives, works or grew up by the harbour.',
+            'button1_label' => 'See what’s on', 'button1_url' => '/events', 'button2_label' => 'Become a member', 'button2_url' => '/join',
+            'slides' => [['media_id' => $ph['wave'], 'caption' => 'Saturday walking group'], ['media_id' => $ph['festival'], 'caption' => 'Harbour festival'], ['media_id' => $ph['cleanup'], 'caption' => 'Park clean-up']],
+            'proof_avatars' => [['media_id' => $ph['elder3']], ['media_id' => $ph['smiling']], ['media_id' => $ph['family']], ['media_id' => $ph['elder4']]],
+            'proof_count' => '+1k', 'proof_text' => 'Join 1,200 neighbours who already take part',
+            'float_title' => 'Next up: Harbour festival', 'float_text' => 'Quayside Green · free for everyone', 'float_url' => $festivalUrl, 'float_icon' => 'calendar',
+        ], ['background' => 'dark', 'width' => 'full']),
+        builder_make('stats', ['eyebrow' => '', 'heading' => '', 'intro' => '', 'layout' => 'band', 'items' => [
+            ['metric' => 'custom', 'value' => '1,200+', 'label' => 'Members and friends', 'icon' => 'users'],
+            ['metric' => 'custom', 'value' => '600+', 'label' => 'Volunteer hours a month', 'icon' => 'hand-heart'],
+            ['metric' => 'events', 'value' => '', 'label' => 'Events this year', 'icon' => 'calendar-check'],
+            ['metric' => 'custom', 'value' => '18', 'label' => 'Community projects', 'icon' => 'sprout'],
+        ]], ['background' => 'dark', 'spacing' => 'compact']),
+        builder_make('logos', ['eyebrow' => 'Proudly supported by', 'items' => [
+            ['name' => 'Harbour Town Council', 'media_id' => null, 'icon' => 'landmark', 'url' => ''],
+            ['name' => 'Quayside Fund', 'media_id' => null, 'icon' => 'hand-heart', 'url' => ''],
+            ['name' => 'North Shore Library', 'media_id' => null, 'icon' => 'book-open', 'url' => ''],
+            ['name' => 'Marina Arts Trust', 'media_id' => null, 'icon' => 'palette', 'url' => ''],
+            ['name' => 'Seaview School', 'media_id' => null, 'icon' => 'graduation-cap', 'url' => ''],
+            ['name' => 'Riverside Health', 'media_id' => null, 'icon' => 'stethoscope', 'url' => ''],
+            ['name' => 'Old Town Bakery', 'media_id' => null, 'icon' => 'coffee', 'url' => ''],
+        ]]),
+        builder_make('split_metrics', [
+            'eyebrow' => 'Who we are', 'heading' => 'A neighbourhood that looks after its own',
+            'text' => 'From the first welcome to a lifetime of friendships, our volunteers make sure nobody by the harbour is left on their own. We are independent, volunteer-run and open to everyone.',
+            'button_label' => 'Our story', 'button_url' => '/about-us', 'media_id' => $ph['aprons'], 'image_position' => 'left',
+            'chip_value' => '48+', 'chip_label' => 'volunteers on shift every week',
+            'metrics' => [['value' => '30', 'label' => 'Years by the harbour'], ['value' => '1,200', 'label' => 'Members and friends']],
+        ], ['background' => 'soft']),
+        builder_make('features', ['eyebrow' => 'What we do', 'heading' => 'Four ways we bring people together', 'intro' => 'Hover over a card to see a little of each programme in action.', 'head_layout' => 'center', 'columns' => '4', 'style' => 'reveal', 'cards' => [
+            ['icon' => 'calendar', 'title' => 'Festivals and events', 'text' => 'The Harbour festival, coffee mornings, suppers and more, all year round.', 'link_label' => 'See events', 'link_url' => '/events', 'media_id' => $ph['field']],
+            ['icon' => 'utensils', 'title' => 'Food support', 'text' => 'A weekly food bank and hot meals, run with dignity and no questions asked.', 'link_label' => 'How it works', 'link_url' => '/get-involved', 'media_id' => $ph['sorting']],
+            ['icon' => 'graduation-cap', 'title' => 'Youth programmes', 'text' => 'Storytelling, workshops and clubs with local schools for ages 5 to 18.', 'link_label' => 'Youth projects', 'link_url' => '/projects', 'media_id' => $ph['story']],
+            ['icon' => 'hand-heart', 'title' => 'A warm welcome', 'text' => 'Friendly advice and a helping hand for newcomers and anyone going through a hard time.', 'link_label' => 'Get in touch', 'link_url' => '/contact', 'media_id' => $ph['helpdesk']],
+        ]]),
+        builder_make('about_band', [
+            'eyebrow' => 'About us', 'heading' => 'Rooted by the harbour for thirty years',
+            'text' => "We started as a handful of neighbours with a kettle and a borrowed hall. Today more than a thousand members run festivals, clubs, a food bank and a radio station.\n\nEverything we do is decided by members and delivered by volunteers, so every hour you give stays right here in Harbourside.",
+            'button_label' => 'Meet the committee', 'button_url' => '/leaders', 'media_id' => $ph['porch'],
+            'counters' => [['value' => '30', 'label' => 'Years of service'], ['value' => '120', 'label' => 'Events a year'], ['value' => '600+', 'label' => 'Volunteer hours a month']],
+        ], ['background' => 'dark']),
+        builder_make('upcoming_events', ['eyebrow' => 'Get together', 'heading' => 'What’s on next', 'intro' => 'Free, friendly and open to everyone. Some events ask you to book a place.', 'count' => 3, 'layout' => 'cards', 'link_label' => 'Open the calendar', 'link_url' => '/events/calendar'], ['background' => 'none']),
+        builder_make('process', ['eyebrow' => 'Get involved', 'heading' => 'Joining takes five minutes', 'intro' => 'No forms to post and no fees in the first year. Here is what happens after you say hello.', 'button_label' => 'Join now', 'button_url' => '/join', 'media_id' => $ph['handing'], 'layout' => 'vertical'], ['background' => 'soft']),
+        builder_make('showcase', ['eyebrow' => 'Our projects', 'heading' => 'Projects that changed our street', 'intro' => 'Ideas that started at a members’ meeting and grew into something the whole neighbourhood shares.', 'button_label' => 'All projects', 'button_url' => '/projects', 'items' => [
+            ['title' => 'The community garden', 'text' => 'Raised beds, a seed library and a quiet bench behind the hall, looked after by forty growers.', 'media_id' => $ph['picnic'], 'icon' => 'sprout', 'link_label' => 'Read the story', 'link_url' => '/news'],
+            ['title' => 'Warm spaces every winter', 'text' => 'A heated hall, hot soup and good company on the coldest evenings of the year.', 'media_id' => $ph['supper'], 'icon' => 'house-heart', 'link_label' => 'How to help', 'link_url' => '/get-involved'],
+            ['title' => 'Youth storytelling', 'text' => 'Weekly sessions in the park where children tell, write and perform their own stories.', 'media_id' => $ph['youth'], 'icon' => 'book-open', 'link_label' => 'See the programme', 'link_url' => '/projects'],
+            ['title' => 'The food bank', 'text' => 'Three hundred parcels a month, sorted and packed by volunteers every Thursday.', 'media_id' => $ph['packing'], 'icon' => 'utensils', 'link_label' => 'Donate food', 'link_url' => '/contact'],
+        ]]),
+        builder_make('testimonials', ['eyebrow' => 'In their words', 'heading' => 'What members say', 'intro' => 'Don’t take our word for it: here is what being part of Harbourside means to the people who make it happen.', 'head_layout' => 'split', 'items' => [
+            ['quote' => 'I moved here knowing nobody. Within a month I had friends, a garden plot and a reason to get up on Saturday mornings.', 'name' => 'Ama Owusu', 'role' => 'Member and trustee', 'media_id' => $ph['family'], 'rating' => '5'],
+            ['quote' => 'The food bank volunteers treated my family with such kindness when we needed it most. Now I help on Thursdays myself.', 'name' => 'Joseph Adeyemi', 'role' => 'Volunteer, then secretary', 'media_id' => $ph['elder2'], 'rating' => '5'],
+            ['quote' => 'Our pupils’ storytelling sessions in the park are the highlight of their week. Professional, warm and always ready to help.', 'name' => 'Seaview School', 'role' => 'Partner school', 'media_id' => null, 'rating' => '5'],
+            ['quote' => 'The festival is the best day of the year. Thirty stalls, a brass band and the whole street out together.', 'name' => 'Helen Carter', 'role' => 'Festival volunteer', 'media_id' => $ph['smiling'], 'rating' => '5'],
+        ]], ['background' => 'dark']),
+        builder_make('latest_posts', ['eyebrow' => 'Latest', 'heading' => 'News and stories', 'head_layout' => 'split', 'intro' => 'Updates from the committee, volunteers and projects.', 'count' => 4, 'layout' => 'magazine', 'link_label' => 'All news', 'link_url' => '/news']),
+        builder_make('gallery', ['eyebrow' => 'Moments', 'heading' => 'Life by the harbour', 'count' => 6, 'layout' => 'mosaic', 'link_label' => 'Browse every album', 'link_url' => '/gallery'], ['background' => 'soft']),
+        builder_make('radio_player', ['heading' => 'Harbourside Radio', 'size' => 'mini'], ['spacing' => 'compact']),
+        builder_make('birthdays', ['hide_when_empty' => true]),
+        builder_make('cta', ['eyebrow' => 'Membership', 'heading' => 'Your neighbourhood needs you', 'text' => 'Join free today: a digital member card, first news of every event and a real say in what we do next.', 'button1_label' => 'Join us today', 'button1_url' => '/join', 'button2_label' => 'Ways to give', 'button2_url' => '/contact', 'tone' => 'image', 'media_id' => $ph['selfie']]),
+    ];
+}
+
+/** Demo about page. */
+function demo_about_sections(array $ph): array
+{
+    return [
+        builder_make('hero', ['layout' => 'fullscreen', 'height' => 'tall', 'overlay' => 'strong', 'kenburns' => true, 'eyebrow' => 'About us', 'heading' => 'Thirty years of neighbours helping neighbours',
+            'text' => 'Independent, volunteer-run and open to everyone who calls Harbourside home.', 'button1_label' => 'Meet the committee', 'button1_url' => '/leaders', 'button2_label' => '', 'button2_url' => '',
+            'slides' => [['media_id' => $ph['meeting'], 'caption' => '']]], ['background' => 'dark', 'width' => 'full']),
+        builder_make('text_image', ['eyebrow' => 'Our story', 'heading' => 'It started with a kettle', 'image_position' => 'right', 'media_id' => $ph['porch'],
+            'body' => demo_html('In 1996 a few neighbours borrowed the church hall to welcome families who had just moved to the quay. They brought a kettle, a tin of biscuits and a noticeboard.', 'Thirty years later the kettle is still here, along with a food bank, a youth programme, a community garden and a radio station, all run by members.'),
+            'button_label' => 'Get involved', 'button_url' => '/get-involved']),
+        builder_make('stats', ['eyebrow' => 'In numbers', 'heading' => 'What members made happen last year', 'layout' => 'rules', 'items' => [
+            ['metric' => 'custom', 'value' => '3,600', 'label' => 'Food parcels', 'icon' => ''], ['metric' => 'custom', 'value' => '120', 'label' => 'Events', 'icon' => ''],
+            ['metric' => 'custom', 'value' => '7,200', 'label' => 'Volunteer hours', 'icon' => ''], ['metric' => 'branches', 'value' => '', 'label' => 'Local branches', 'icon' => ''],
+        ]], ['background' => 'soft']),
+        builder_make('points', ['eyebrow' => 'What we stand for', 'heading' => 'Four promises we keep', 'text' => 'Written by members at our first annual meeting and still on the wall of the hall.', 'button_label' => 'Read our constitution', 'button_url' => '/downloads', 'style' => 'numbers', 'list_label' => 'Our values', 'points' => [
+            ['title' => 'Everyone is welcome', 'text' => 'Whatever your age, background or how long you have lived here.'],
+            ['title' => 'Members decide', 'text' => 'Plans and budgets are agreed at open general meetings.'],
+            ['title' => 'Kindness first', 'text' => 'Support is given with dignity and in confidence.'],
+            ['title' => 'Every penny stays local', 'text' => 'Donations fund work right here in Harbourside.'],
+        ]]),
+        builder_make('process', ['eyebrow' => 'Milestones', 'heading' => 'From a borrowed hall to a thousand members', 'intro' => 'A few of the moments that shaped us.', 'button_label' => '', 'button_url' => '', 'media_id' => $ph['supper'], 'steps' => [
+            ['title' => '1996: The first welcome', 'text' => 'Coffee mornings for families new to the quay.'],
+            ['title' => '2004: The first festival', 'text' => 'Twelve stalls and a brass band on Quayside Green.'],
+            ['title' => '2015: Ground broken', 'text' => 'The community garden opens behind the hall.'],
+            ['title' => 'Today', 'text' => '1,200 members, 18 projects and a radio station.'],
+        ]], ['background' => 'dark']),
+        builder_make('leaders', ['eyebrow' => 'People', 'heading' => 'Meet the committee', 'intro' => 'Elected by members every year at the annual meeting.', 'head_layout' => 'split', 'count' => 8, 'link_label' => 'All leaders', 'link_url' => '/leaders']),
+        builder_make('logos', ['eyebrow' => 'Our partners', 'style' => 'grid', 'items' => [
+            ['name' => 'Harbour Town Council', 'media_id' => null, 'icon' => 'landmark', 'url' => ''], ['name' => 'Quayside Fund', 'media_id' => null, 'icon' => 'hand-heart', 'url' => ''],
+            ['name' => 'North Shore Library', 'media_id' => null, 'icon' => 'book-open', 'url' => ''], ['name' => 'Seaview School', 'media_id' => null, 'icon' => 'graduation-cap', 'url' => ''],
+        ]], ['background' => 'soft']),
+        builder_make('cta', ['heading' => 'Want to help?', 'text' => 'We are always looking for volunteers, trustees and new ideas.', 'button1_label' => 'Get involved', 'button1_url' => '/get-involved', 'button2_label' => 'Contact us', 'button2_url' => '/contact', 'tone' => 'dark']),
+    ];
+}
+
+/** Demo membership page. */
+function demo_membership_sections(array $ph): array
+{
+    return [
+        builder_make('hero', ['layout' => 'fullscreen', 'height' => 'tall', 'overlay' => 'medium', 'eyebrow' => 'Membership', 'heading' => 'Join our community',
+            'text' => 'A digital member card, early event news and a real voice in how we run things. Free in your first year.',
+            'button1_label' => 'Join now', 'button1_url' => '/join', 'button2_label' => 'Register a group', 'button2_url' => '/join/group',
+            'slides' => [['media_id' => $ph['selfie'], 'caption' => '']], 'proof_avatars' => [['media_id' => $ph['family']], ['media_id' => $ph['elder1']], ['media_id' => $ph['smiling']]], 'proof_text' => '86 people joined last month'], ['background' => 'dark', 'width' => 'full']),
+        builder_make('tiers', ['eyebrow' => 'Ways to join', 'heading' => 'Choose how you take part', 'intro' => 'Every level gets a digital member card with a QR code anyone can check. Pay what you can: no one is turned away.', 'items' => [
+            ['name' => 'Friend', 'icon' => 'heart', 'from_label' => 'Always', 'price' => 'Free', 'period' => '', 'description' => 'For everyone who wants to stay in touch and come along.', 'features' => "Digital member card\nNews and event updates\nCome to every open event", 'button_label' => 'Join free', 'button_url' => '/join', 'featured' => false, 'badge' => ''],
+            ['name' => 'Supporter', 'icon' => 'hand-heart', 'from_label' => 'Suggested', 'price' => '£5', 'period' => '/ month', 'description' => 'Keeps the hall warm, open and welcoming all year.', 'features' => "Everything in Friend\nPriority booking for events\nVote at the annual meeting\nSupporter pin badge", 'button_label' => 'Become a supporter', 'button_url' => '/join', 'featured' => true, 'badge' => 'Most popular'],
+            ['name' => 'Group', 'icon' => 'building', 'from_label' => 'Per year', 'price' => '£40', 'period' => '/ year', 'description' => 'For clubs, schools and associations working with us.', 'features' => "Listed in our directory\nShared events calendar\nA group member ID", 'button_label' => 'Register a group', 'button_url' => '/join/group', 'featured' => false, 'badge' => ''],
+        ]], ['background' => 'soft']),
+        builder_make('points', ['eyebrow' => 'Why join', 'heading' => 'More than a membership card', 'text' => 'Members shape what we do and are first to hear about everything that is happening.', 'button_label' => 'Join now', 'button_url' => '/join', 'style' => 'checks', 'points' => [
+            ['title' => 'A real say', 'text' => 'Vote at general meetings and stand for the committee.'],
+            ['title' => 'Events first', 'text' => 'Book places before they open to everyone else.'],
+            ['title' => 'Your card, your number', 'text' => 'A digital ID card with a QR code anyone can check.'],
+            ['title' => 'Friendly support', 'text' => 'Advice and a helping hand when life gets hard.'],
+        ]]),
+        builder_make('process', ['eyebrow' => 'How it works', 'heading' => 'Four steps to your member card', 'intro' => 'Have a photo ready for your card.', 'button_label' => 'Start now', 'button_url' => '/join', 'layout' => 'horizontal'], ['background' => 'soft']),
+        builder_make('testimonials', ['eyebrow' => 'Members', 'heading' => 'Why people join', 'layout' => 'grid', 'head_layout' => 'center', 'items' => [
+            ['quote' => 'Joining took five minutes and my card was on my phone before I had finished my tea.', 'name' => 'Emmanuel Osei', 'role' => 'Member since 2019', 'media_id' => $ph['elder1'], 'rating' => '5'],
+            ['quote' => 'The best thing I did after moving here. I know half the street now.', 'name' => 'Ama Owusu', 'role' => 'Member and trustee', 'media_id' => $ph['family'], 'rating' => '5'],
+            ['quote' => 'Our club found volunteers, a venue and a whole new audience through the association.', 'name' => 'Harbourside Youth Club', 'role' => 'Group member', 'media_id' => null, 'rating' => ''],
+        ]]),
+        builder_make('faq', ['eyebrow' => 'Questions', 'heading' => 'Membership questions', 'intro' => 'Anything else? Use the contact form and a volunteer will reply.', 'category' => 'Membership', 'link_label' => 'Contact us', 'link_url' => '/contact'], ['background' => 'soft']),
+        builder_make('cta', ['eyebrow' => 'Ready?', 'heading' => 'It takes about five minutes', 'text' => 'Have a photo ready for your member card.', 'button1_label' => 'Start now', 'button1_url' => '/join', 'button2_label' => '', 'button2_url' => '', 'tone' => 'image', 'media_id' => $ph['field']]),
+    ];
+}
+
+
 /** Exact duration of an .m4a/.mp4 file from its movie header (mvhd), or null. */
 function demo_mp4_duration(string $file): ?float
 {
@@ -428,7 +610,7 @@ function demo_mp4_duration(string $file): ?float
 }
 
 /** Store one demo radio file (demo-assets/radio) with its programme row. */
-function demo_radio_item(string $file, string $title, string $artist, string $description, string $category, int $userId, ?int $coverSeed = null): int
+function demo_radio_item(string $file, string $title, string $artist, string $description, string $category, int $userId, int|string|null $coverSeed = null): int
 {
     $src = BASE . '/demo-assets/radio/' . $file;
     $tmp = tempnam(sys_get_temp_dir(), 'gradio');
@@ -441,7 +623,7 @@ function demo_radio_item(string $file, string $title, string $artist, string $de
     // demo files' lengths are read from their headers instead.
     $duration = str_ends_with($file, '.webm') ? 15.0 : demo_mp4_duration($src);
     q('UPDATE media SET duration = ? WHERE id = ?', [$duration, $mediaId]);
-    $cover = $coverSeed !== null ? demo_media_image($coverSeed, $title . ' cover', '', $userId, 800, 800, 'radio') : null;
+    $cover = is_int($coverSeed) ? demo_media_image($coverSeed, $title . ' cover', '', $userId, 800, 800, 'radio') : (is_string($coverSeed) ? (int) q_val('SELECT id FROM media WHERE folder = ? AND original_name = ? ORDER BY id LIMIT 1', ['demo', $coverSeed]) ?: null : null);
     return db_insert('radio_media', [
         'media_id' => $mediaId, 'title' => $title, 'artist' => $artist, 'description' => $description, 'cover_media_id' => $cover,
         'category_id' => q_val('SELECT id FROM radio_categories WHERE slug = ?', [$category]), 'duration' => $duration, 'created_by' => $userId,
@@ -454,11 +636,11 @@ function demo_seed_community(int $userId): void
     if (!is_dir(BASE . '/demo-assets/radio')) {
         return;
     }
-    $morning = demo_radio_item('harbour-morning.m4a', 'Harbour Morning', 'The Quayside Ensemble', 'A bright tune to start the day, recorded for our station.', 'music', $userId, 41);
-    $market = demo_radio_item('market-day.m4a', 'Market Day', 'The Quayside Ensemble', 'Upbeat music for Saturday mornings at the market.', 'music', $userId, 42);
-    $evening = demo_radio_item('evening-calm.m4a', 'Evening Calm', 'Lantern Trio', 'Slow and gentle, for the end of a long day.', 'music', $userId, 43);
+    $morning = demo_radio_item('harbour-morning.m4a', 'Harbour Morning', 'The Quayside Ensemble', 'A bright tune to start the day, recorded for our station.', 'music', $userId, 'radio-microphone.jpg');
+    $market = demo_radio_item('market-day.m4a', 'Market Day', 'The Quayside Ensemble', 'Upbeat music for Saturday mornings at the market.', 'music', $userId, 'festival-celebration.jpg');
+    $evening = demo_radio_item('evening-calm.m4a', 'Evening Calm', 'Lantern Trio', 'Slow and gentle, for the end of a long day.', 'music', $userId, 'radio-microphone.jpg');
     $ident = demo_radio_item('station-ident.m4a', 'Station ident', 'Harbourside Radio', 'Our short station jingle.', 'music', $userId);
-    $notices = demo_radio_item('community-notices.m4a', 'Community notices', 'Harbourside Radio', 'This week\'s volunteering, clubs and meetings.', 'news', $userId, 44);
+    $notices = demo_radio_item('community-notices.m4a', 'Community notices', 'Harbourside Radio', 'This week\'s volunteering, clubs and meetings.', 'news', $userId, 'radio-presenter.jpg');
     $studio = demo_radio_item('studio-session.webm', 'Studio session (video)', 'Harbourside Radio', 'A short video from the radio studio.', 'talk', $userId);
 
     $loop = db_insert('radio_playlists', ['name' => 'All-day music', 'description' => 'Plays whenever no show is scheduled.']);

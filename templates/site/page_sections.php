@@ -1,4 +1,5 @@
 <?php /** @var array $page @var bool $is_home @var bool $has_hero @var string $sections_html @var bool $is_preview */ ?>
+<?php if ($is_preview) { page_flag('overlay_header', false); } ?>
 <?php if ($is_preview): ?><div class="container"><p class="notice warn preview-note">Preview: visitors cannot see this page (<?= e($page['status']) ?>, <?= e($page['visibility']) ?>).</p></div><?php endif ?>
 <?php if (!$has_hero): ?>
   <?php if ($is_home): ?><h1 class="sr-only"><?= e(setting('site.name')) ?></h1>

@@ -13,17 +13,8 @@
       <?php endif ?>
     </div>
     <?php if ($leaders): ?>
-      <div class="grid small">
-        <?php foreach ($leaders as $l): $photo = media_find($l['photo_media_id'] ? (int) $l['photo_media_id'] : null); ?>
-          <article class="card person">
-            <div class="card-media"><?= $photo ? img_html($photo, '(min-width: 40rem) 14rem, 50vw', '', '', true, 400) : '<span class="avatar-fallback" aria-hidden="true">' . e(mb_substr($l['name'], 0, 1)) . '</span>' ?></div>
-            <div class="card-body">
-              <h2 class="h3"><a href="/leaders/<?= e($group['slug']) ?>/<?= e($l['slug']) ?>"><?= e($l['name']) ?></a></h2>
-              <span class="person-role"><?= e($l['role_title']) ?></span>
-              <?php if ($past && $l['term_end']): ?><p class="muted">Served until <?= e((new DateTimeImmutable($l['term_end']))->format('M Y')) ?></p><?php endif ?>
-            </div>
-          </article>
-        <?php endforeach ?>
+      <div class="grid cols-4 people" data-reveal-group>
+        <?php foreach ($leaders as $l): ?><?= view('partials/person_card', ['leader' => $l, 'groupSlug' => $group['slug'], 'headingTag' => 'h2', 'past' => $past]) ?><?php endforeach ?>
       </div>
     <?php else: ?><?= view('partials/empty', ['message' => $past ? 'No past leaders recorded.' : 'No leaders listed yet.']) ?><?php endif ?>
   </div>

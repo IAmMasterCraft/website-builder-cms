@@ -13,7 +13,13 @@ final class Leaders
         if (count($groups) === 1) {
             redirect('/leaders/' . $groups[0]['slug']);
         }
-        render('site/leaders_index', ['title' => 'Leaders', 'groups' => $groups, 'canonical' => '/leaders']);
+        $today = (new \DateTimeImmutable('now', site_tz()))->format('Y-m-d');
+        $people = [];
+        foreach (q_all('SELECT l.* FROM leaders l WHERE ' . published_sql('l') . ' AND (l.term_end IS NULL OR l.term_end >= ?) ORDER BY l.sort, l.name', [$today]) as $l) {
+            $people[(int) $l['group_id']][] = $l;
+        }
+        media_preload(array_merge([], ...array_map(static fn (array $g): array => array_column($g, 'photo_media_id'), array_values($people))));
+        render('site/leaders_index', ['title' => 'Leaders', 'groups' => $groups, 'people' => $people, 'canonical' => '/leaders']);
     }
 
     public static function group(array $p): void

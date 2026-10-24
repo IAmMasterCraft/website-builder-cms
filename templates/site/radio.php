@@ -1,10 +1,10 @@
 <?php /** @var array $rows @var int $total @var int $page @var int $per @var array $categories @var string $category @var string $q @var bool $enabled */
 $query = array_filter(['category' => $category, 'q' => $q]);
 ?>
-<section class="radio-hero">
+<section class="radio-hero on-dark">
   <div class="container">
     <nav class="breadcrumbs on-dark" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Radio</span></li></ol></nav>
-    <h1 class="sr-only">Community radio</h1>
+    <div class="radio-intro"><span class="eyebrow">Live and on demand</span><h1>Community radio</h1><p>Music, notices and conversations from the neighbourhood, live and on demand.</p></div>
     <?php if ($enabled): ?>
       <?= view('partials/radio_player', ['size' => 'full', 'heading' => setting('site.name') . ' Radio', 'headingTag' => 'h2']) ?>
     <?php else: ?>
@@ -17,7 +17,7 @@ $query = array_filter(['category' => $category, 'q' => $q]);
 </section>
 <section class="section" aria-labelledby="library-title">
   <div class="container">
-    <div class="section-head"><h2 id="library-title">Listen again</h2><p>Programmes, interviews and music from our community, newest first.</p></div>
+    <div class="section-head"><div><span class="eyebrow">On demand</span><h2 id="library-title">Listen again</h2><p>Programmes, interviews and music from our community, newest first.</p></div></div>
     <div class="library-toolbar">
       <?php if ($categories): ?><?= view('partials/filters', ['label' => 'Category', 'param' => 'category', 'options' => $categories, 'current' => $category, 'path' => '/radio', 'query' => $query]) ?><?php endif ?>
       <form class="search-form compact" method="get" action="/radio" role="search">

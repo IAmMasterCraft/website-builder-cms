@@ -46,6 +46,7 @@ $terms = safe_url($settings['terms_url']) ?: '/privacy-policy';
       </form>
     </div>
     <div class="side-col join-aside">
+      <?php $side = site_feature_image(); if ($side): ?><figure class="join-photo"><?= img_html($side, '(min-width: 64rem) 21rem, 100vw', '', '', true, 800) ?><figcaption><strong>Welcome to <?= e(setting('site.name')) ?></strong><span>Join hundreds of neighbours who already take part.</span></figcaption></figure><?php endif ?>
       <div class="aside-box">
         <h2 class="h3">What happens next</h2>
         <ol class="steps-list">
