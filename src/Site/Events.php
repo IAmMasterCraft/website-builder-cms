@@ -209,6 +209,11 @@ final class Events
         }
         $ticket = $input['ticket_id'] !== '' ? q_one('SELECT name, price_label FROM event_tickets WHERE id = ?', [(int) $input['ticket_id']]) : null;
         $where = trim(implode(', ', array_filter([(string) $event['venue_name'], (string) $event['venue_address']])));
+        // Guests type any address: confirmations to one address are limited per day.
+        if ($viewer === null && !unsolicited_mail_allowed('event_guest', $input['email'])) {
+            flash(t('event.registered'));
+            redirect(event_url($event) . '#register');
+        }
         send_template_mail($input['email'], $input['name'], 'event_registration', [
             'event_title' => (string) $event['title'],
             'event_when' => fmt_datetime($event['start_at']) . ' (' . site_tz()->getName() . ')',

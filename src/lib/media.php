@@ -405,7 +405,7 @@ function media_variant_url(array $m, int $w): string
 /** Responsive, lazy <img>. Returns '' when there is no image. */
 function img_html(?array $m, string $sizes = '100vw', ?string $alt = null, string $class = '', bool $lazy = true, int $width = 800): string
 {
-    if ($m === null || $m['kind'] !== 'image') {
+    if ($m === null || $m['kind'] !== 'image' || ($m['visibility'] !== 'public' && !media_can_view($m, current_user()))) {
         return '';
     }
     $srcset = [];
@@ -429,13 +429,128 @@ function img_html(?array $m, string $sizes = '100vw', ?string $alt = null, strin
     );
 }
 
+/**
+ * Who may open a file. Member photos (private, folder member-photos) are for
+ * their owner and staff with the members permission; other private files for
+ * their uploader and staff.
+ */
 function media_can_view(array $m, ?array $user): bool
 {
     return match ($m['visibility']) {
         'public' => true,
         'members' => viewer_is_member($user),
-        default => is_staff($user) || ($user !== null && (int) $m['uploaded_by'] === (int) $user['id']),
+        default => ($user !== null && (int) $m['uploaded_by'] === (int) $user['id'] && $user['status'] === 'active')
+            || ((string) $m['folder'] === 'member-photos' ? user_can($user, 'members') : is_staff($user)),
     };
+}
+
+/** May this file be attached to content, sections or emails? Never member photos or other private files. */
+function media_attachable(?array $m): bool
+{
+    return $m !== null && $m['visibility'] !== 'private' && (string) $m['folder'] !== 'member-photos';
+}
+
+/** Media ids under "media_id" / "bg_media_id" keys anywhere in builder sections or campaign blocks JSON. */
+function media_ids_in_json(?string $json): array
+{
+    $data = json_decode((string) $json, true);
+    $ids = [];
+    $walk = static function (mixed $node) use (&$walk, &$ids): void {
+        if (!is_array($node)) {
+            return;
+        }
+        foreach ($node as $k => $v) {
+            if (in_array($k, ['media_id', 'bg_media_id'], true) && (is_int($v) || (is_string($v) && ctype_digit($v))) && (int) $v > 0) {
+                $ids[(int) $v] = true;
+            } elseif (is_array($v)) {
+                $walk($v);
+            }
+        }
+    };
+    $walk($data);
+    return array_keys($ids);
+}
+
+/**
+ * Every place a media item is used. 'needs' is the visibility that place
+ * requires: 'public' (shown to everyone, or the builder/emails need a public
+ * file), 'members' (members-only item or card artwork), or 'pin' (embedded
+ * in rich text by file URL: moving the file would break the link, so its
+ * visibility is left alone).
+ * @return list<array{label:string,title:string,url:string,needs:string}>
+ */
+function media_references(int $id): array
+{
+    $m = media_find($id);
+    $out = [];
+    $add = static function (string $label, string $title, string $url, string $needs) use (&$out): void {
+        $out[] = ['label' => $label, 'title' => $title, 'url' => $url, 'needs' => $needs];
+    };
+    $vis = static fn (array $r): string => ($r['vis'] ?? 'public') === 'public' ? 'public' : 'members';
+    // [table, column, title column, label, admin url, has a visibility column]
+    $refs = [
+        ['posts', 'cover_media_id', 'title', 'Post', '/admin/posts/%d/edit', true],
+        ['events', 'cover_media_id', 'title', 'Event', '/admin/events/%d/edit', true],
+        ['albums', 'cover_media_id', 'title', 'Album cover', '/admin/albums/%d/edit', true],
+        ['downloads', 'cover_media_id', 'title', 'Download cover', '/admin/downloads/%d/edit', true],
+        ['downloads', 'file_media_id', 'title', 'Download file', '/admin/downloads/%d/edit', true],
+        ['pages', 'cover_media_id', 'title', 'Page', '/admin/pages/%d/edit', true],
+        ['leaders', 'photo_media_id', 'name', 'Leader', '/admin/leaders/%d/edit', false],
+        ['awards', 'photo_media_id', 'recipient', 'Award', '/admin/awards/%d/edit', false],
+        ['groups_orgs', 'logo_media_id', 'name', 'Group', '/admin/groups/%d/edit', false],
+        ['members', 'photo_media_id', 'first_name', 'Member photo', '/admin', false],
+        ['radio_media', 'media_id', 'title', 'Radio programme', '/admin/radio/media/%d', false],
+        ['radio_media', 'cover_media_id', 'title', 'Radio cover', '/admin/radio/media/%d', false],
+    ];
+    foreach ($refs as [$table, $col, $titleCol, $label, $url, $hasVis]) {
+        $sql = 'SELECT id, ' . db_ident($titleCol) . ' AS t' . ($hasVis ? ', visibility AS vis' : '') . ' FROM ' . db_ident($table) . ' WHERE ' . db_ident($col) . ' = ?';
+        foreach (q_all($sql, [$id]) as $r) {
+            $add($label, (string) $r['t'], sprintf($url, $r['id']), $hasVis ? $vis($r) : 'public');
+        }
+    }
+    foreach (q_all('SELECT a.id, a.title, a.visibility AS vis FROM album_photos p JOIN albums a ON a.id = p.album_id WHERE p.media_id = ? GROUP BY a.id, a.title, a.visibility', [$id]) as $r) {
+        $add('Album photo', (string) $r['title'], '/admin/albums/' . $r['id'] . '/photos', $vis($r));
+    }
+    if ((int) setting('site.logo_media_id', 0) === $id) {
+        $add('Site logo', 'Settings', '/admin/settings', 'public');
+    }
+    foreach (['card.background_media_id' => 'Member card background', 'card.signature_media_id' => 'Member card signature'] as $key => $label) {
+        if ((int) setting($key, 0) === $id) {
+            $add($label, 'Membership settings', '/admin/settings/membership', 'members');
+        }
+    }
+    // Builder sections (live pages, revisions, saved templates) and campaign blocks: these need public images.
+    $like = '%' . $id . '%';
+    foreach (q_all("SELECT id, title, sections FROM pages WHERE sections LIKE ?", [$like]) as $r) {
+        if (in_array($id, media_ids_in_json($r['sections']), true)) {
+            $add('Page section', (string) $r['title'], '/admin/pages/' . $r['id'] . '/builder', 'public');
+        }
+    }
+    foreach (q_all("SELECT r.page_id, p.title, r.sections FROM page_revisions r JOIN pages p ON p.id = r.page_id WHERE r.sections LIKE ?", [$like]) as $r) {
+        if (in_array($id, media_ids_in_json($r['sections']), true)) {
+            $add('Page revision', (string) $r['title'], '/admin/pages/' . $r['page_id'] . '/builder', 'public');
+        }
+    }
+    foreach (q_all("SELECT id, name, sections FROM section_templates WHERE sections LIKE ?", [$like]) as $r) {
+        if (in_array($id, media_ids_in_json($r['sections']), true)) {
+            $add('Saved template', (string) $r['name'], '/admin/templates', 'public');
+        }
+    }
+    foreach (q_all("SELECT id, subject, blocks FROM campaigns WHERE blocks LIKE ?", [$like]) as $r) {
+        if (in_array($id, media_ids_in_json($r['blocks']), true)) {
+            $add('Campaign', (string) $r['subject'], '/admin/campaigns/' . $r['id'], 'public');
+        }
+    }
+    // Images embedded in rich text are referenced by their variant file name.
+    if ($m !== null && $m['variants'] !== []) {
+        $needle = '%' . pathinfo((string) $m['path'], PATHINFO_FILENAME) . '%';
+        foreach (['posts' => '/admin/posts/%d/edit', 'events' => '/admin/events/%d/edit', 'pages' => '/admin/pages/%d/edit'] as $table => $url) {
+            foreach (q_all('SELECT id, title FROM ' . db_ident($table) . ' WHERE body LIKE ?', [$needle]) as $r) {
+                $add('Embedded in', (string) $r['title'], sprintf($url, $r['id']), 'pin');
+            }
+        }
+    }
+    return $out;
 }
 
 /**
@@ -444,43 +559,83 @@ function media_can_view(array $m, ?array $user): bool
  */
 function media_usage(int $id): array
 {
+    return array_map(static fn (array $r): array => [$r['label'], $r['title'], $r['url']], media_references($id));
+}
+
+/**
+ * The visibility a media item should have for where it is used, or null to
+ * leave it as it is (unused, private, or pinned by an embedded link).
+ */
+function media_required_visibility(int $id): ?string
+{
     $m = media_find($id);
-    $refs = [
-        ['posts', 'cover_media_id', 'title', 'Post', '/admin/posts/%d/edit'],
-        ['events', 'cover_media_id', 'title', 'Event', '/admin/events/%d/edit'],
-        ['albums', 'cover_media_id', 'title', 'Album cover', '/admin/albums/%d/edit'],
-        ['downloads', 'cover_media_id', 'title', 'Download cover', '/admin/downloads/%d/edit'],
-        ['downloads', 'file_media_id', 'title', 'Download file', '/admin/downloads/%d/edit'],
-        ['pages', 'cover_media_id', 'title', 'Page', '/admin/pages/%d/edit'],
-        ['leaders', 'photo_media_id', 'name', 'Leader', '/admin/leaders/%d/edit'],
-        ['awards', 'photo_media_id', 'recipient', 'Award', '/admin/awards/%d/edit'],
-        ['groups_orgs', 'logo_media_id', 'name', 'Group', '/admin/groups/%d/edit'],
-        ['members', 'photo_media_id', 'first_name', 'Member photo', '/admin'],
-        ['radio_media', 'media_id', 'title', 'Radio programme', '/admin/radio/media/%d'],
-        ['radio_media', 'cover_media_id', 'title', 'Radio cover', '/admin/radio/media/%d'],
-    ];
-    $out = [];
-    foreach ($refs as [$table, $col, $titleCol, $label, $url]) {
-        foreach (q_all('SELECT id, ' . db_ident($titleCol) . ' AS t FROM ' . db_ident($table) . ' WHERE ' . db_ident($col) . ' = ?', [$id]) as $r) {
-            $out[] = [$label, (string) $r['t'], sprintf($url, $r['id'])];
+    if (!media_attachable($m)) {
+        return null;
+    }
+    $needs = array_column(media_references($id), 'needs');
+    if ($needs === [] || in_array('pin', $needs, true)) {
+        return null;
+    }
+    return in_array('public', $needs, true) ? 'public' : 'members';
+}
+
+/**
+ * Move a media item between public and members-only: its WebP variants move
+ * between public/uploads (served by Apache) and storage/variants (served by
+ * PHP after an access check). Originals always stay in storage/originals.
+ * Returns true when something changed.
+ */
+function media_set_visibility(int $id, string $visibility): bool
+{
+    $m = media_find($id);
+    if (!media_attachable($m) || !in_array($visibility, ['public', 'members'], true) || $m['visibility'] === $visibility) {
+        return false;
+    }
+    $variants = [];
+    foreach ($m['variants'] as $w => $p) {
+        $rel = $m['visibility'] === 'public' ? (string) preg_replace('#^uploads/#', '', $p) : $p;
+        $from = $m['visibility'] === 'public' ? BASE . '/public/' . $p : BASE . '/storage/variants/' . $p;
+        $to = ($visibility === 'public' ? BASE . '/public/uploads/' : BASE . '/storage/variants/') . $rel;
+        if (str_contains($rel, '..')) {
+            throw new RuntimeException('Bad variant path');
         }
-    }
-    foreach (q_all('SELECT a.id, a.title FROM album_photos p JOIN albums a ON a.id = p.album_id WHERE p.media_id = ? GROUP BY a.id, a.title', [$id]) as $r) {
-        $out[] = ['Album photo', (string) $r['title'], '/admin/albums/' . $r['id'] . '/photos'];
-    }
-    if ((int) setting('site.logo_media_id', 0) === $id) {
-        $out[] = ['Site logo', 'Settings', '/admin/settings'];
-    }
-    // Images embedded in rich text are referenced by their variant file name.
-    if ($m !== null && $m['variants'] !== []) {
-        $needle = '%' . pathinfo((string) $m['path'], PATHINFO_FILENAME) . '%';
-        foreach (['posts' => '/admin/posts/%d/edit', 'events' => '/admin/events/%d/edit', 'pages' => '/admin/pages/%d/edit'] as $table => $url) {
-            foreach (q_all('SELECT id, title FROM ' . db_ident($table) . ' WHERE body LIKE ?', [$needle]) as $r) {
-                $out[] = ['Embedded in', (string) $r['title'], sprintf($url, $r['id'])];
+        if (is_file($from)) {
+            $dir = dirname($to);
+            if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+                throw new RuntimeException('Cannot create variant folder');
+            }
+            if (!rename($from, $to)) {
+                throw new RuntimeException('Could not move ' . basename($from));
             }
         }
+        $variants[$w] = ($visibility === 'public' ? 'uploads/' : '') . $rel;
     }
-    return $out;
+    db_update('media', $id, [
+        'visibility' => $visibility,
+        'variants' => $variants ? json_encode($variants, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) : null,
+    ]);
+    media_forget($id);
+    return true;
+}
+
+/** Give media the visibility their uses require (members-only items keep their files members-only). */
+function media_sync_visibility(array $ids): int
+{
+    $n = 0;
+    foreach (array_unique(array_filter(array_map('intval', $ids), static fn (int $i): bool => $i > 0)) as $id) {
+        media_forget($id);
+        $want = media_required_visibility($id);
+        if ($want !== null && media_set_visibility($id, $want)) {
+            $n++;
+        }
+    }
+    return $n;
+}
+
+/** Sync every attachable media item (bin/migrate after an upgrade). */
+function media_sync_all(): int
+{
+    return media_sync_visibility(array_map('intval', array_column(q_all("SELECT id FROM media WHERE visibility IN ('public','members')"), 'id')));
 }
 
 /** Delete the files of a media row (original and variants). */

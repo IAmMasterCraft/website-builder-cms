@@ -5,6 +5,10 @@ use Core\HttpException;
 
 const ROLES = ['super_admin', 'admin', 'member', 'group'];
 const LOGIN_MAX_FAILURES = 10;
+/** Failures from one IP across all emails (password spraying) before it is locked out. */
+const LOGIN_MAX_FAILURES_IP = 50;
+/** Failures for one email across all IPs (distributed guessing) before it is locked. */
+const LOGIN_MAX_FAILURES_EMAIL = 30;
 const LOGIN_LOCK_SECONDS = 900;
 
 /** Admin permission keys (§2) => label. */
@@ -48,18 +52,36 @@ function current_user(bool $refresh = false): ?array
         return null;
     }
     if ($refresh || !array_key_exists($id, $cache)) {
-        $user = q_one('SELECT id, email, role, status, display_name, last_login_at FROM users WHERE id = ?', [$id]);
+        $user = q_one('SELECT id, email, role, status, session_version, display_name, last_login_at FROM users WHERE id = ?', [$id]);
         if ($user !== null) {
             $user['permissions'] = array_column(q_all('SELECT permission FROM admin_permissions WHERE user_id = ?', [$id]), 'permission');
         }
         $cache = [$id => $user];
     }
     $user = $cache[$id];
-    if ($user === null || $user['status'] === 'suspended') {
-        unset($_SESSION['user_id']);
+    // A session whose version is older than the account's was ended by a
+    // password reset/change, suspension, verification or email change.
+    $version = isset($_SESSION['sv']) && is_int($_SESSION['sv']) ? $_SESSION['sv'] : null;
+    if ($user === null || $user['status'] === 'suspended' || $version !== (int) $user['session_version']) {
+        unset($_SESSION['user_id'], $_SESSION['sv']);
         return null;
     }
     return $user;
+}
+
+/** End every session of an account (the next request of each is logged out). */
+function user_end_sessions(int $userId): void
+{
+    q('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$userId]);
+}
+
+/** After changing their own account, keep the current browser logged in (other sessions stay ended). */
+function session_keep_current(int $userId): void
+{
+    if (($_SESSION['user_id'] ?? null) === $userId) {
+        $_SESSION['sv'] = (int) q_val('SELECT session_version FROM users WHERE id = ?', [$userId]);
+        current_user(true);
+    }
 }
 
 function is_staff(?array $user): bool
@@ -120,14 +142,22 @@ function require_permission(string $permission): array
     return $user;
 }
 
+/**
+ * Locked when, in the last 15 minutes, there were 10 failures for this
+ * IP + email, 50 from this IP for any emails, or 30 for this email from any IPs.
+ */
 function login_locked(string $email): bool
 {
     $since = gmdate('Y-m-d H:i:s', time() - LOGIN_LOCK_SECONDS);
-    $n = (int) q_val(
-        'SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND email = ? AND attempted_at > ?',
-        [client_ip(), strtolower($email), $since]
-    );
-    return $n >= LOGIN_MAX_FAILURES;
+    $email = strtolower($email);
+    $pair = (int) q_val('SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND email = ? AND attempted_at > ?', [client_ip(), $email, $since]);
+    if ($pair >= LOGIN_MAX_FAILURES) {
+        return true;
+    }
+    if ((int) q_val('SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND attempted_at > ?', [client_ip(), $since]) >= LOGIN_MAX_FAILURES_IP) {
+        return true;
+    }
+    return (int) q_val('SELECT COUNT(*) FROM login_attempts WHERE email = ? AND attempted_at > ?', [$email, $since]) >= LOGIN_MAX_FAILURES_EMAIL;
 }
 
 /**
@@ -142,7 +172,8 @@ function attempt_login(string $email, string $password): ?int
     }
     $user = q_one('SELECT id, password_hash, status FROM users WHERE email = ?', [$email]);
     static $dummy = null;
-    $hash = $user['password_hash'] ?? ($dummy ??= password_hash(bin2hex(random_bytes(8)), PASSWORD_DEFAULT));
+    // Same algorithm and cost as real hashes, so unknown emails take as long as wrong passwords.
+    $hash = $user['password_hash'] ?? ($dummy ??= hash_password(bin2hex(random_bytes(8))));
     $ok = password_verify($password, $hash) && $user !== null && $user['status'] !== 'suspended';
     if (!$ok) {
         q('INSERT INTO login_attempts (ip, email, attempted_at) VALUES (?, ?, UTC_TIMESTAMP())', [client_ip(), mb_substr($email, 0, 190)]);
@@ -162,6 +193,7 @@ function login_user(int $userId): void
         session_regenerate_id(true);
     }
     $_SESSION['user_id'] = $userId;
+    $_SESSION['sv'] = (int) q_val('SELECT session_version FROM users WHERE id = ?', [$userId]);
     unset($_SESSION['csrf']);
     q('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [$userId]);
     current_user(true);
@@ -253,6 +285,7 @@ function complete_password_reset(string $token, string $password): bool
     }
     db_tx(static function () use ($userId, $password, $token): void {
         q('UPDATE users SET password_hash = ? WHERE id = ?', [hash_password($password), $userId]);
+        user_end_sessions($userId);
         q('UPDATE password_resets SET used_at = UTC_TIMESTAMP() WHERE token_hash = ?', [hash('sha256', $token)]);
         q('DELETE FROM login_attempts WHERE email = (SELECT email FROM users WHERE id = ?)', [$userId]);
     });

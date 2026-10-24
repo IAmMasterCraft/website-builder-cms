@@ -28,3 +28,15 @@ $applied = migrate($pdo, static function (string $m): void {
     echo $m, "\n";
 });
 echo $applied ? count($applied) . " migration(s) applied.\n" : "Nothing to migrate.\n";
+if (($problem = app_key_problem()) !== null) {
+    fwrite(STDERR, "Warning: $problem The site refuses to run until it is fixed.\n");
+    exit(0);
+}
+settings_all([]);
+if (secret_upgrade_smtp_password()) {
+    echo "Stored SMTP password re-encrypted with the new storage key.\n";
+}
+// Files of members-only items become members-only (and vice versa); safe to run every time.
+if (($moved = media_sync_all()) > 0) {
+    echo "$moved media file(s) moved to match the visibility of the items that use them.\n";
+}

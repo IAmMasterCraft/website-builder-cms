@@ -5,8 +5,8 @@ namespace Site;
 
 /**
  * The contact-form section posts here (§5, F14): the message is stored for
- * the admin inbox and emailed to the organisation, with a copy to
- * the sender. Honeypot, time check and a per-IP rate limit guard it.
+ * the admin inbox and emailed to the organisation; the sender gets a short
+ * confirmation (without their message) only when they ask for one. Honeypot, time check and a per-IP rate limit guard it.
  */
 final class Contact
 {
@@ -14,7 +14,7 @@ final class Contact
     {
         csrf_check();
         $return = safe_redirect_target(input('return'), '/');
-        $values = ['name' => input('name'), 'email' => strtolower(input('email')), 'phone' => input('phone'), 'subject' => input('subject'), 'message' => input('message')];
+        $values = ['name' => input('name'), 'email' => strtolower(input('email')), 'phone' => input('phone'), 'subject' => input('subject'), 'message' => input('message'), 'send_copy' => input('send_copy') === '1' ? '1' : ''];
         $back = static function (array $errors) use ($values, $return): never {
             $_SESSION['contact_errors'] = $errors;
             $_SESSION['contact_old'] = $values;
@@ -57,7 +57,10 @@ final class Contact
         if ($to !== '') {
             send_template_mail($to, (string) setting('site.name'), 'contact_message', ['subject' => $values['subject'] !== '' ? $values['subject'] : 'Message from the website', 'phone' => $values['phone'] !== '' ? $values['phone'] : 'not given', 'inbox_url' => base_url('/admin/inbox/' . $messageId)] + $values);
         }
-        send_template_mail($values['email'], $values['name'], 'contact_copy', $values);
+        // The confirmation is opt-in, never repeats the message and is limited per address.
+        if (input('send_copy') === '1' && unsolicited_mail_allowed('contact_copy', $values['email'])) {
+            send_template_mail($values['email'], $values['name'], 'contact_copy', ['subject' => $values['subject'] !== '' ? $values['subject'] : 'Message from the website']);
+        }
         $_SESSION['contact_sent'] = time();
         redirect($return . '#cf-name');
     }

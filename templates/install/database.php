@@ -7,6 +7,8 @@
 <?php if (isset($errors['form'])): ?><p class="flash error" role="alert"><?= e($errors['form']) ?></p><?php endif ?>
 <form class="panel panel-body fields" method="post" action="/install/database" novalidate>
   <?= csrf_field() ?>
+  <?= view('install/_field', ['name' => 'install_token', 'label' => 'Install token', 'type' => 'password', 'old' => [], 'errors' => $errors, 'auto' => 'off', 'hint' => 'The token you put in storage/install-token (or GATHER_INSTALL_TOKEN) on the server.']) ?>
+  <?= view('install/_field', ['name' => 'base_url', 'label' => 'Site address', 'type' => 'url', 'old' => $old, 'errors' => $errors, 'hint' => 'The public address of the site, used in emails and links, e.g. https://www.example.org']) ?>
   <div class="field-row">
     <?= view('install/_field', ['name' => 'db_host', 'label' => 'Host', 'old' => $old, 'errors' => $errors, 'hint' => 'Usually localhost or 127.0.0.1']) ?>
     <?= view('install/_field', ['name' => 'db_port', 'label' => 'Port', 'type' => 'number', 'old' => $old, 'errors' => $errors]) ?>

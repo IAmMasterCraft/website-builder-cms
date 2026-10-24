@@ -44,3 +44,32 @@ function base_url(string $path = ''): string
 {
     return rtrim((string) config('base_url', ''), '/') . $path;
 }
+
+/** Shortest accepted app_key (the installer writes 64 hex characters). */
+const APP_KEY_MIN_LENGTH = 32;
+
+/** Why the configured app_key cannot be used, or null when it is fine. */
+function app_key_problem(?string $key = null): ?string
+{
+    $key ??= is_string(config('app_key')) ? (string) config('app_key') : '';
+    if ($key === '' || $key === 'change-me') {
+        return 'app_key in config.php is not set. Generate one with: php -r \'echo bin2hex(random_bytes(32));\'';
+    }
+    if (strlen($key) < APP_KEY_MIN_LENGTH) {
+        return 'app_key in config.php is too short (at least ' . APP_KEY_MIN_LENGTH . ' characters; the installer writes 64).';
+    }
+    return null;
+}
+
+/**
+ * A key for one purpose, derived from app_key with HKDF, so the key that
+ * signs links is never the key that encrypts stored secrets.
+ * Throws when app_key is missing or weak: there is no fallback key.
+ */
+function app_subkey(string $purpose): string
+{
+    if (($problem = app_key_problem()) !== null) {
+        throw new RuntimeException($problem);
+    }
+    return hash_hkdf('sha256', (string) config('app_key'), 32, 'gather:' . $purpose);
+}

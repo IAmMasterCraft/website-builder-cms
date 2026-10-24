@@ -15,6 +15,7 @@ use Core\Mail\SmtpMailer;
 /** SMTP settings with defaults (password decrypted). */
 function mail_smtp_settings(): array
 {
+    secret_upgrade_smtp_password();
     $s = setting('mail.smtp', []);
     $s = is_array($s) ? $s : [];
     return [
@@ -73,7 +74,14 @@ function mailer(?Mailer $replace = null, bool $reset = false): Mailer
 
 // ---- Secrets stored in settings (SMTP password) ------------------------------------
 
+/** Encryption key for stored secrets (HKDF from app_key, separate from the signing key). */
 function secret_key(): string
+{
+    return app_subkey('secret-storage');
+}
+
+/** Key used before the keys were split ("sb1:" values); read-only, for upgrading old values. */
+function secret_key_legacy(): string
 {
     return hash('sha256', 'gather-secret|' . (string) config('app_key', '') . '|' . (string) config('db.name', ''), true);
 }
@@ -85,20 +93,43 @@ function secret_seal(string $plain): string
         return '';
     }
     $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-    return 'sb1:' . base64_encode($nonce . sodium_crypto_secretbox($plain, $nonce, secret_key()));
+    return 'sb2:' . base64_encode($nonce . sodium_crypto_secretbox($plain, $nonce, secret_key()));
 }
 
 function secret_open(string $sealed): string
 {
-    if (!str_starts_with($sealed, 'sb1:')) {
+    $version = substr($sealed, 0, 4);
+    if ($version !== 'sb1:' && $version !== 'sb2:') {
         return '';
     }
     $raw = base64_decode(substr($sealed, 4), true);
     if ($raw === false || strlen($raw) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) {
         return '';
     }
-    $plain = sodium_crypto_secretbox_open(substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), secret_key());
+    $key = $version === 'sb2:' ? secret_key() : secret_key_legacy();
+    $plain = sodium_crypto_secretbox_open(substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), $key);
     return $plain === false ? '' : $plain;
+}
+
+/**
+ * Re-encrypt a stored SMTP password sealed with the old key ("sb1:") under
+ * the new storage key. Run by bin/migrate and on reading the settings, so
+ * an upgraded site keeps sending without re-entering the password.
+ * Returns true when a value was upgraded.
+ */
+function secret_upgrade_smtp_password(): bool
+{
+    $s = setting('mail.smtp', []);
+    if (!is_array($s) || !str_starts_with((string) ($s['password'] ?? ''), 'sb1:')) {
+        return false;
+    }
+    $plain = secret_open((string) $s['password']);
+    if ($plain === '') {
+        return false;
+    }
+    $s['password'] = secret_seal($plain);
+    setting_set('mail.smtp', $s);
+    return true;
 }
 
 // ---- Sending ----------------------------------------------------------------------------

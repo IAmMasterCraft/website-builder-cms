@@ -58,7 +58,7 @@ function throws(string $class, callable $fn): Throwable
 /** Run as a given user (or logged out with null). */
 function act_as(?int $userId): void
 {
-    $_SESSION = $userId === null ? [] : ['user_id' => $userId];
+    $_SESSION = $userId === null ? [] : ['user_id' => $userId, 'sv' => (int) q_val('SELECT session_version FROM users WHERE id = ?', [$userId])];
     current_user(true);
 }
 

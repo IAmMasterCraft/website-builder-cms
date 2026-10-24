@@ -47,7 +47,7 @@ foreach (['/admin/campaigns', '/admin/inbox', '/admin/jobs', '/admin/comments', 
 $r = $admin->submit('/admin/settings/email', '/admin/settings/email', ['driver' => 'smtp', 'from_email' => 'news@example.test', 'from_name' => 'Smoke Society', 'host' => '', 'port' => '587', 'encryption' => 'tls', 'username' => '', 'per_minute' => '50', 'birthday_time' => '07:00']);
 check('SMTP without a server name is refused', $r['status'] === 422 && str_contains($r['body'], 'SMTP server name'));
 $r = $admin->submit('/admin/settings/email', '/admin/settings/email', ['driver' => 'file', 'from_email' => 'news@example.test', 'from_name' => 'Smoke Society', 'host' => 'smtp.example.test', 'port' => '587', 'encryption' => 'tls', 'username' => 'mailer', 'password' => 'smtp-secret-pass', 'per_minute' => '50', 'birthday_time' => '06:30']);
-check('email settings saved (password encrypted at rest)', $r['status'] === 303 && setting_fresh('mail.per_minute') === 50 && str_starts_with((string) setting_fresh('mail.smtp')['password'], 'sb1:')
+check('email settings saved (password encrypted at rest)', $r['status'] === 303 && setting_fresh('mail.per_minute') === 50 && str_starts_with((string) setting_fresh('mail.smtp')['password'], 'sb2:')
     && !str_contains((string) q_val("SELECT value FROM settings WHERE `key` = 'mail.smtp'"), 'smtp-secret-pass'));
 $before = count(mail_files());
 $r = $admin->submit('/admin/settings/email', '/admin/settings/email/test', ['to' => 'testbox@example.test']);
@@ -129,7 +129,7 @@ check('confirming unsubscribes and turns newsletters off', $r['status'] === 200 
     && member_pref(member_for_user($walesA), 'newsletters') === false);
 $r = (new Browser($base))->post('/unsubscribe/' . unsubscribe_token('wales-b@example.test'), ['List-Unsubscribe' => 'One-Click']);
 check('RFC 8058 one-click unsubscribe works without a session', $r['status'] === 200 && trim($r['body']) === 'Unsubscribed');
-status_is($anon, '/unsubscribe/' . substr($token, 0, -1) . '0', 404);
+status_is($anon, '/unsubscribe/' . substr($token, 0, -1) . (str_ends_with($token, '0') ? '1' : '0'), 404);
 
 // ---- Notices -------------------------------------------------------------------------------
 $noticeMember = new Browser($base);

@@ -240,6 +240,7 @@ final class Account
             redirect('/account/password');
         }
         q('UPDATE users SET password_hash = ? WHERE id = ?', [hash_password($new), $user['id']]);
+        user_end_sessions((int) $user['id']);
         login_user((int) $user['id']);
         flash('Password changed.');
         redirect('/account/password');
@@ -271,6 +272,7 @@ final class Account
         }
         rate_hit($bucket);
         $result = email_change_request($user, $new);
+        session_keep_current((int) $user['id']);
         audit('email_change_request', $user['role'], (int) $user['id'], $result === 'changed' ? 'unverified account now uses a new address' : 'confirmation sent to the new address');
         flash($result === 'changed'
             ? 'Your email is now ' . $new . '. We sent a new verification link there.'
@@ -306,6 +308,7 @@ final class Account
             render('site/confirm_email_change', ['title' => 'Confirm your new email', 'token' => null, 'pending' => null, 'noindex' => true], 'site', 404);
             return;
         }
+        session_keep_current($done['id']);
         $role = (string) q_val('SELECT role FROM users WHERE id = ?', [$done['id']]);
         q('INSERT INTO audit_log (user_id, action, item_type, item_id, summary, ip) VALUES (?, ?, ?, ?, ?, ?)', [$done['id'], 'email_change', $role, $done['id'], email_mask($done['old']) . ' -> ' . email_mask($done['new']), client_ip()]);
         flash('Your email address is now ' . $done['new'] . '. Use it the next time you log in.');

@@ -68,7 +68,7 @@ function fixture_full_member(array $m = [], array $prefs = []): array
 
 test('SMTP password is stored encrypted and round-trips', function (): void {
     $sealed = secret_seal('s3cret-pass');
-    ok(str_starts_with($sealed, 'sb1:') && !str_contains($sealed, 's3cret'));
+    ok(str_starts_with($sealed, 'sb2:') && !str_contains($sealed, 's3cret'));
     same('s3cret-pass', secret_open($sealed));
     same('', secret_open('sb1:' . base64_encode(str_repeat('x', 40))), 'tampered value');
     same('', secret_seal(''));

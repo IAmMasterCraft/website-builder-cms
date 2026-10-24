@@ -134,6 +134,8 @@ function health_checks(?int $now = null): array
         config('debug') === true ? 'debug is on in config.php: switch it off on a live site' : (ini_get('display_errors') ? 'on: errors could be shown to visitors' : 'off'));
     $php[] = health_item('Shell functions', 'ok', function_exists('exec') && !in_array('exec', array_map('trim', explode(',', (string) ini_get('disable_functions'))), true)
         ? 'exec() is available but not needed (backups are pure PHP)' : 'disabled (not needed)');
+    $keyProblem = app_key_problem();
+    $php[] = health_item('Secret key (app_key)', $keyProblem === null ? 'ok' : 'bad', $keyProblem ?? 'set (' . strlen((string) config('app_key')) . ' characters)');
     $g['PHP'] = $php;
 
     // Database

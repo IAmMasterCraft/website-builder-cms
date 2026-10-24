@@ -7,7 +7,7 @@ return [
     // false while the /install wizard is still running; true locks the wizard.
     'installed' => true,
     'debug'    => true,
-    'app_key'  => 'test-key-not-secret',
+    'app_key'  => 'test-only-app-key-not-a-secret-0123456789abcdef',
     'base_url' => 'http://127.0.0.1:8099',
     'db' => [
         'host' => '127.0.0.1',

@@ -155,7 +155,11 @@ function unsubscribe_verify(string $token): ?string
     if ($email === null || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return null;
     }
-    return hash_equals(substr(app_sign('unsubscribe|' . strtolower($email)), 0, 32), $m[2]) ? strtolower($email) : null;
+    $email = strtolower($email);
+    // Links in emails sent before the signing key was split keep working.
+    $ok = hash_equals(substr(app_sign('unsubscribe|' . $email), 0, 32), $m[2])
+        || hash_equals(substr(app_sign_legacy('unsubscribe|' . $email), 0, 32), $m[2]);
+    return $ok ? $email : null;
 }
 
 function unsubscribe_url(string $email): string

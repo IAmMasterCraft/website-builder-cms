@@ -42,6 +42,7 @@ $field = static function (string $k, string $label, string $type = 'text', bool 
           <div class="form-row"><?= $field('name', 'Your name', 'text', true, 'name') ?><?= $field('email', 'Email', 'email', true, 'email') ?></div>
           <div class="form-row"><?= $field('phone', 'Phone', 'tel', false, 'tel') ?><?= $field('subject', 'Subject', 'text', false) ?></div>
           <?= $field('message', 'Message', 'textarea') ?>
+          <div class="field"><label class="check-line"><input type="checkbox" id="cf-send_copy" name="send_copy" value="1"<?= $val('send_copy') === '1' ? ' checked' : '' ?>> <span>Email me a confirmation that you received my message</span></label></div>
           <p><button class="btn accent" type="submit"><?= icon('mail') ?> Send message</button></p>
           <p class="hint muted">We use your details only to reply to you.</p>
         </form>

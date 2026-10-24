@@ -42,7 +42,9 @@ final class Downloads
             abort(403);
         }
         $m = media_find((int) $d['file_media_id']);
-        $file = $m ? media_file_path($m) : null;
+        // The file itself must be attachable (never a member photo) and viewable by this visitor:
+        // a public download whose file is members-only is not served to visitors.
+        $file = $m !== null && media_attachable($m) && media_can_view($m, $viewer) ? media_file_path($m) : null;
         if ($m === null || $file === null) {
             abort(404);
         }
@@ -51,6 +53,6 @@ final class Downloads
             q('UPDATE downloads SET download_count = download_count + 1 WHERE id = ?', [$d['id']]);
         }
         $ext = strtolower(pathinfo((string) $m['path'], PATHINFO_EXTENSION));
-        send_file($file, (string) $m['mime'], ($d['slug'] ?: 'download') . '.' . $ext, in_array($m['kind'], ['audio', 'video'], true) || $m['mime'] === 'application/pdf', $d['visibility'] === 'public');
+        send_file($file, (string) $m['mime'], ($d['slug'] ?: 'download') . '.' . $ext, in_array($m['kind'], ['audio', 'video'], true) || $m['mime'] === 'application/pdf', $d['visibility'] === 'public' && $m['visibility'] === 'public');
     }
 }

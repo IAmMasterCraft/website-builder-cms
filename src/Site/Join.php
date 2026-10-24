@@ -35,10 +35,10 @@ final class Join
     {
         $errors = [];
         $email = strtolower(trim((string) ($in['email'] ?? '')));
+        // An address that already has an account is not reported here (that would reveal who is
+        // registered): the owner gets an email instead and the visitor sees the usual answer.
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
             $errors['email'] = 'Enter a valid email address.';
-        } elseif (q_val('SELECT id FROM users WHERE email = ?', [$email]) !== null) {
-            $errors['email'] = 'An account already uses this email. Log in, or reset your password if you have forgotten it.';
         }
         $password = is_string($in['password'] ?? null) ? $in['password'] : '';
         if (($problem = password_problem($password)) !== null) {
@@ -50,6 +50,24 @@ final class Join
             $errors['consent'] = 'Please agree to the terms and privacy policy to continue.';
         }
         return $errors;
+    }
+
+    /** The same answer for a new sign-up and for an address that already has an account. */
+    private static function done(string $email): never
+    {
+        flash('Almost done! If ' . $email . ' can be used, we have emailed it a link: open it to verify your address and finish signing up. Already have an account? Log in below.', 'info');
+        redirect('/login');
+    }
+
+    /** Someone signed up with an address that has an account: tell its owner (limited per day). */
+    private static function notifyExisting(string $email): void
+    {
+        $u = q_one('SELECT id, display_name FROM users WHERE email = ?', [$email]);
+        if ($u !== null && unsolicited_mail_allowed('signup_existing', $email)) {
+            send_template_mail($email, explode(' ', (string) $u['display_name'])[0], 'signup_existing', [
+                'login_url' => base_url('/login'), 'reset_url' => base_url('/forgot-password'),
+            ]);
+        }
     }
 
     /**
@@ -83,9 +101,13 @@ final class Join
         [$custom, $cErrors] = custom_fields_validate(custom_fields('member', true), $_POST);
         $errors += $pErrors + $cErrors;
         $photo = null;
+        $email = strtolower(trim((string) ($_POST['email'] ?? '')));
         $file = $_FILES['photo'] ?? null;
         if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
             $errors['photo'] = 'Add a photo of yourself for your member card.';
+        } elseif (!$errors && q_val('SELECT id FROM users WHERE email = ?', [$email]) !== null) {
+            self::notifyExisting($email);
+            self::done($email);
         } elseif (!$errors) {
             try {
                 $photo = media_upload_from_files($file);
@@ -98,17 +120,24 @@ final class Join
             return;
         }
         try {
-            $r = member_signup(strtolower((string) $_POST['email']), (string) $_POST['password'], $profile, $custom, ($_POST['newsletters'] ?? '') === '1', $photo);
+            $r = member_signup($email, (string) $_POST['password'], $profile, $custom, ($_POST['newsletters'] ?? '') === '1', $photo);
         } catch (UploadException $e) {
             self::render($values, ['photo' => $e->getMessage()], 422);
             return;
+        } catch (\PDOException $e) {
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+            // The address was registered a moment ago by someone else: same answer as above.
+            self::notifyExisting($email);
+            self::done($email);
         }
-        send_template_mail(strtolower((string) $_POST['email']), $profile['first_name'], 'verify_email', [
+        send_template_mail($email, $profile['first_name'], 'verify_email', [
             'verify_url' => base_url('/join/verify/' . $r['token']), 'days' => VERIFY_DAYS, 'account_label' => 'your membership',
         ]);
-        login_user($r['user_id']);
-        flash('Almost done! We have emailed you a link: open it to verify your address and get your member number.', 'info');
-        redirect('/account');
+        // Not logged in here: the session starts when the link from the email is confirmed,
+        // so nobody can hold a session on an address they do not own (pre-hijack).
+        self::done($email);
     }
 
     public static function groupForm(array $p): void
@@ -149,6 +178,11 @@ final class Join
         }
         [$custom, $cErrors] = custom_fields_validate(custom_fields('group', true), $_POST);
         $errors += $cErrors;
+        $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+        if (!$errors && q_val('SELECT id FROM users WHERE email = ?', [$email]) !== null) {
+            self::notifyExisting($email);
+            self::done($email);
+        }
         $logoId = null;
         $file = $_FILES['logo'] ?? null;
         if (!$errors && is_array($file) && ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
@@ -163,16 +197,22 @@ final class Join
             self::renderGroup($values, $errors, 422);
             return;
         }
-        $r = group_signup(strtolower((string) $_POST['email']), (string) $_POST['password'], $g, $custom, $logoId);
+        try {
+            $r = group_signup($email, (string) $_POST['password'], $g, $custom, $logoId);
+        } catch (\PDOException $e) {
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+            self::notifyExisting($email);
+            self::done($email);
+        }
         if ($logoId !== null) {
             q('UPDATE media SET uploaded_by = ? WHERE id = ?', [$r['user_id'], $logoId]);
         }
-        send_template_mail(strtolower((string) $_POST['email']), $g['contact_person'], 'verify_email', [
+        send_template_mail($email, $g['contact_person'], 'verify_email', [
             'verify_url' => base_url('/join/verify/' . $r['token']), 'days' => VERIFY_DAYS, 'account_label' => 'the account for ' . $g['name'],
         ]);
-        login_user($r['user_id']);
-        flash('Almost done! We have emailed a link to verify the address. Once verified, your group gets its ID and appears in the directory.', 'info');
-        redirect('/account');
+        self::done($email);
     }
 
     /** GET: confirm button (mail scanners that open links do not verify anyone). */

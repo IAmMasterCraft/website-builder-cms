@@ -34,9 +34,40 @@ function install_db_input(array $input): array
     return [$db, $errors];
 }
 
+/** File the operator creates on the server to allow the web installer to run. */
+const INSTALL_TOKEN_FILE = '/storage/install-token';
+
+/**
+ * The one-time install token the operator set up (GATHER_INSTALL_TOKEN
+ * environment variable, or the storage/install-token file), or null when
+ * none is set (the installer then only shows how to create one).
+ */
+function install_token_expected(): ?string
+{
+    $env = getenv('GATHER_INSTALL_TOKEN');
+    $token = is_string($env) && trim($env) !== '' ? trim($env) : null;
+    if ($token === null && is_file(BASE . INSTALL_TOKEN_FILE) && is_readable(BASE . INSTALL_TOKEN_FILE)) {
+        $token = trim((string) file_get_contents(BASE . INSTALL_TOKEN_FILE));
+    }
+    return $token !== null && strlen($token) >= 16 ? $token : null;
+}
+
+function install_token_ok(string $given): bool
+{
+    $expected = install_token_expected();
+    return $expected !== null && $given !== '' && hash_equals($expected, trim($given));
+}
+
+/** Site address typed in the installer: http(s)://host[:port][/path], no trailing slash. Null when invalid. */
+function install_base_url_input(string $url): ?string
+{
+    $url = rtrim(trim($url), '/');
+    return preg_match('#^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[A-Za-z0-9._~\-/]*)?$#', $url) ? $url : null;
+}
+
 function install_detect_base_url(): string
 {
-    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $https = request_is_https();
     $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
     if (!preg_match('/^[A-Za-z0-9.\-]+(:\d{1,5})?$/', $host)) {
         $host = 'localhost';
@@ -85,6 +116,10 @@ function install_lock(): void
     unset($config['install_token']);
     $config['installed'] = true;
     install_write_config(config_path(), $config);
+    // The operator's one-time token has done its job.
+    if (is_file(BASE . INSTALL_TOKEN_FILE)) {
+        unlink(BASE . INSTALL_TOKEN_FILE);
+    }
 }
 
 /** The session that started the install is the only one that may continue it. */

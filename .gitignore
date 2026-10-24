@@ -6,6 +6,7 @@
 /storage/*/*
 !/storage/*/.gitkeep
 /storage/install.lock
+/storage/install-token
 /public/uploads/*
 !/public/uploads/.gitkeep
 !/public/uploads/.htaccess

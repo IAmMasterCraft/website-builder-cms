@@ -1,4 +1,4 @@
-<?php /** @var array $counts @var array $birthdays @var array $activity @var array $user */
+<?php /** @var array $counts @var ?array $birthdays (null without the members permission) @var array $activity @var bool $activity_all @var array $user */
 $cards = [
     ['Active members', $counts['members_active'], 'users', null, false],
     ['Awaiting email verification', $counts['members_unverified'], 'mail', null, false],
@@ -42,7 +42,7 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good
       </div>
     </section>
     <section class="panel" aria-labelledby="act-title">
-      <div class="panel-head"><h2 id="act-title">Recent activity</h2></div>
+      <div class="panel-head"><h2 id="act-title"><?= $activity_all ? 'Recent activity' : 'Your recent activity' ?></h2></div>
       <?php if ($activity): ?>
         <ul class="activity">
           <?php foreach ($activity as $a): ?>
@@ -61,6 +61,7 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good
         <?php endforeach ?>
       </div>
     </section>
+    <?php if ($birthdays !== null): ?>
     <section class="panel" aria-labelledby="bday-title">
       <div class="panel-head"><h2 id="bday-title">Birthdays</h2><span class="muted small-text">Emails at <?= e(birthday_time()) ?></span></div>
       <div class="panel-body">
@@ -75,6 +76,7 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good
         <?php else: ?><p class="muted">None in the coming week.</p><?php endif ?>
       </div>
     </section>
+    <?php endif ?>
     <section class="panel" aria-labelledby="sys-title">
       <div class="panel-head"><h2 id="sys-title">System</h2></div>
       <div class="panel-body">

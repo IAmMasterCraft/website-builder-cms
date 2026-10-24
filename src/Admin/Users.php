@@ -92,6 +92,7 @@ final class Users
             flash($e->getMessage(), 'error');
             redirect('/admin/users/' . $u['id']);
         }
+        session_keep_current((int) $u['id']);
         $summary = staff_change_summary($u, $changes);
         audit('update', 'user', (int) $u['id'], $u['email'] . ($summary !== '' ? ': ' . $summary : ''));
         flash('Saved.');

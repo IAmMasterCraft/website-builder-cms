@@ -178,6 +178,9 @@ final class Members
             ] + ($photoId !== null ? ['photo_media_id' => $photoId] : []));
             custom_values_save('member_field_values', 'member_id', (int) $m['id'], $custom);
             q('UPDATE users SET email = ?, display_name = ? WHERE id = ?', [$email, mb_substr($profile['first_name'] . ' ' . $profile['last_name'], 0, 120), $m['user_id']]);
+            if ($email !== (string) $m['email']) {
+                user_end_sessions((int) $m['user_id']);
+            }
         });
         if ($photoId !== null && $m['photo_media_id']) {
             $old = media_find((int) $m['photo_media_id']);
@@ -199,6 +202,7 @@ final class Members
         $action = input('action');
         if ($action === 'suspend' && $m['status'] !== 'suspended') {
             q("UPDATE users SET status = 'suspended' WHERE id = ?", [$m['user_id']]);
+            user_end_sessions((int) $m['user_id']);
             flash('Member suspended: they cannot log in and their card shows as not valid.');
         } elseif ($action === 'activate' && $m['status'] === 'suspended') {
             q("UPDATE users SET status = ? WHERE id = ?", [$m['verified_at'] ? 'active' : 'unverified', $m['user_id']]);

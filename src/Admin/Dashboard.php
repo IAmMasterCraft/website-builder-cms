@@ -43,18 +43,30 @@ final class Dashboard
     public static function overview(array $p): void
     {
         $user = require_staff();
+        render('admin/overview', self::overviewData($user), 'admin');
+    }
+
+    /**
+     * Overview panels for one staff user: everyone's recent activity is for super
+     * admins (others see their own actions); birthdays need the members permission.
+     */
+    public static function overviewData(array $user): array
+    {
+        $all = user_can($user, 'super_admin');
         $activity = q_all(
-            'SELECT a.*, u.display_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 12'
+            'SELECT a.*, u.display_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id' . ($all ? '' : ' WHERE a.user_id = ?') . ' ORDER BY a.id DESC LIMIT 12',
+            $all ? [] : [$user['id']]
         );
         $cron = setting('cron.last_run');
-        render('admin/overview', [
+        return [
             'title' => 'Overview',
             'counts' => self::counts(),
-            'birthdays' => birthday_members(birthday_dates_ahead((new \DateTimeImmutable('now', site_tz()))->setTime(0, 0), 7)),
+            'birthdays' => user_can($user, 'members') ? birthday_members(birthday_dates_ahead((new \DateTimeImmutable('now', site_tz()))->setTime(0, 0), 7)) : null,
             'activity' => $activity,
+            'activity_all' => $all,
             'user' => $user,
             'cron_last' => is_string($cron) ? $cron : null,
-        ], 'admin');
+        ];
     }
 
     public static function search(array $p): void

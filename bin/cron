@@ -12,9 +12,13 @@ require __DIR__ . '/../src/load.php';
 if (!app_installed()) {
     exit(0);
 }
+if (($problem = app_key_problem()) !== null) {
+    fwrite(STDERR, "Refusing to run: $problem\n");
+    exit(1);
+}
 if (in_array('--list', $argv, true)) {
     foreach (cron_jobs() as $name => $job) {
-        echo str_pad($name, 20) . 'every ' . $job['every'] . " min\n";
+        echo str_pad($name, 20) . (isset($job['daily_at']) ? 'daily at ' . $job['daily_at'] : 'every ' . $job['every'] . ' min') . "\n";
     }
     exit(0);
 }

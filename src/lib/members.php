@@ -468,6 +468,8 @@ function account_verify(string $token, ?DateTimeImmutable $now = null): ?int
             return;
         }
         q("UPDATE users SET status = 'active' WHERE id = ?", [$userId]);
+        // Sessions opened before verification (e.g. by whoever signed up with this address) end here.
+        user_end_sessions($userId);
         if ($user['role'] === 'group') {
             $g = q_one('SELECT * FROM groups_orgs WHERE user_id = ?', [$userId]);
             if ($g !== null) {
@@ -849,6 +851,7 @@ function email_change_request(array $user, string $newEmail): string
         : (string) (member_for_user((int) $user['id'])['first_name'] ?? $user['display_name']);
     if ($user['status'] === 'unverified') {
         q('UPDATE users SET email = ?, pending_email = NULL WHERE id = ?', [$newEmail, $user['id']]);
+        user_end_sessions((int) $user['id']);
         send_template_mail($newEmail, $name, 'verify_email', ['verify_url' => base_url('/join/verify/' . user_token_create((int) $user['id'], 'verify')), 'days' => VERIFY_DAYS, 'account_label' => $user['role'] === 'group' ? 'your group account' : 'your membership']);
         return 'changed';
     }
@@ -885,6 +888,7 @@ function email_change_confirm(string $token): ?array
             return null;
         }
         q('UPDATE users SET email = ?, pending_email = NULL WHERE id = ?', [$new, $id]);
+        user_end_sessions($id);
         q('UPDATE user_tokens SET used_at = UTC_TIMESTAMP() WHERE token_hash = ?', [hash('sha256', $token)]);
         q('DELETE FROM password_resets WHERE user_id = ?', [$id]);
         return ['id' => $id, 'old' => (string) $u['email'], 'new' => $new];

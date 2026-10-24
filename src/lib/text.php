@@ -54,11 +54,13 @@ function safe_url(?string $url): string
     if ($url === '') {
         return '';
     }
-    if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
-        return $url;
+    // Same-site paths: browsers treat "/\host", "//host" and "/<tab>/host" as other sites,
+    // so backslashes, whitespace/control characters and a second slash are refused.
+    if (str_starts_with($url, '/')) {
+        return !preg_match('/[\x00-\x20\\\\"<>]/', $url) && !in_array($url[1] ?? '', ['/', '\\'], true) ? $url : '';
     }
     if (str_starts_with($url, '#')) {
-        return $url;
+        return !preg_match('/[\x00-\x20"<>]/', $url) ? $url : '';
     }
     if (preg_match('#^(https?://|mailto:|tel:)#i', $url) && !preg_match('/[\x00-\x20"<>]/', $url)) {
         return $url;

@@ -103,10 +103,10 @@ function email_template_defs(): array
         ],
         'contact_copy' => [
             'label' => 'Contact form copy', 'group' => 'Contact',
-            'description' => 'Copy of the message sent to the person who used the contact form.',
-            'placeholders' => ['first_name' => 'Name given in the form', 'subject' => 'Subject', 'message' => 'Their message'],
+            'description' => 'Confirmation sent to the person who used the contact form, only when they tick “Email me a confirmation”. It never repeats their message, so the form cannot be used to send text to someone else.',
+            'placeholders' => ['first_name' => 'Name given in the form', 'subject' => 'Subject'],
             'subject' => 'We received your message',
-            'body' => "Hello {first_name},\n\nThank you for getting in touch with {site_name}. This is a copy of your message; a volunteer will reply by email.\n\n{message}",
+            'body' => "Hello {first_name},\n\nThank you for getting in touch with {site_name}. We have received your message and a volunteer will reply by email.\n\nIf you did not use our contact form, you can ignore this email.",
         ],
         'contact_reply' => [
             'label' => 'Reply from the inbox', 'group' => 'Contact',
@@ -132,6 +132,14 @@ function email_template_defs(): array
             'subject' => 'Confirm your new email address',
             'body' => "Hello {first_name},\n\nYou asked to use {new_email} for your {site_name} account. Please confirm this address; until you do, we keep using your old one.\n\nThe link works for {days} days. If you did not ask for this, you can ignore this email.",
             'button' => ['label' => 'Confirm my new email', 'url' => 'confirm_url'],
+        ],
+        'signup_existing' => [
+            'label' => 'Sign-up with an existing address', 'group' => 'Membership',
+            'description' => 'Sent instead of a verification link when someone signs up with an address that already has an account, so the join form does not reveal who is registered.',
+            'placeholders' => ['first_name' => 'First name', 'login_url' => 'Log-in page', 'reset_url' => 'Forgot password page'],
+            'subject' => 'You already have an account',
+            'body' => "Hello {first_name},\n\nSomeone (hopefully you) tried to sign up to {site_name} with this email address, but it already has an account.\n\nIf it was you, log in instead. If you have forgotten your password, use “Forgot password”: {reset_url}\n\nIf it was not you, you can ignore this email; nothing has changed.",
+            'button' => ['label' => 'Log in', 'url' => 'login_url'],
         ],
         'email_change_notice' => [
             'label' => 'Email change notice (old address)', 'group' => 'Membership',

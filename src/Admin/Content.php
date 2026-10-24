@@ -154,7 +154,9 @@ final class Content
             if (is_array($file) && ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
                 try {
                     $u = media_upload_from_files($file);
-                    $visibility = ($input['visibility'] ?? 'public') === 'members' && $f['type'] === 'file' ? 'members' : 'public';
+                    // Files of members-only (or hidden) items are written members-only from the start,
+                    // so no public WebP variant of them ever exists.
+                    $visibility = in_array($input['visibility'] ?? 'public', ['members', 'hidden'], true) ? 'members' : 'public';
                     $input[$name] = (string) media_store($u['tmp'], $u['name'], $u['size'], $userId, true, [
                         'kind' => $f['type'] === 'media' ? 'image' : null,
                         'visibility' => $visibility,

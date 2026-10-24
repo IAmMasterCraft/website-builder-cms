@@ -165,7 +165,7 @@ function staff_create(array $data, bool $sendInvite): int
 function staff_apply_change(int $userId, array $changes): void
 {
     db_tx(static function () use ($userId, $changes): void {
-        $u = q_one("SELECT id, role, status FROM users WHERE id = ? AND role IN ('super_admin','admin') FOR UPDATE", [$userId]);
+        $u = q_one("SELECT id, email, role, status FROM users WHERE id = ? AND role IN ('super_admin','admin') FOR UPDATE", [$userId]);
         if ($u === null) {
             throw new InvalidArgumentException('Not a staff account');
         }
@@ -184,6 +184,9 @@ function staff_apply_change(int $userId, array $changes): void
             }
         }
         db_update('users', $userId, $row);
+        if (($status === 'suspended' && $u['status'] !== 'suspended') || (isset($row['email']) && $row['email'] !== $u['email'])) {
+            user_end_sessions($userId);
+        }
         if (array_key_exists('permissions', $changes) || $role === 'super_admin') {
             set_user_permissions($userId, $role === 'admin' ? ($changes['permissions'] ?? []) : []);
         }

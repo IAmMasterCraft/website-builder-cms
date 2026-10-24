@@ -25,7 +25,8 @@ require BASE . '/src/load.php';
 drop_all_tables(db());
 
 // Start the server with its own (not yet existing) config file.
-$env = array_merge(getenv(), ['GATHER_CONFIG' => $configPath]);
+$installToken = bin2hex(random_bytes(16));
+$env = array_merge(getenv(), ['GATHER_CONFIG' => $configPath, 'GATHER_INSTALL_TOKEN' => $installToken]);
 $proc = proc_open(
     [PHP_BINARY, '-S', "127.0.0.1:$port", '-t', BASE . '/public', BASE . '/public/index.php'],
     [0 => ['file', '/dev/null', 'r'], 1 => ['file', $serverLog, 'a'], 2 => ['file', $serverLog, 'a']],
@@ -155,11 +156,19 @@ $db = $testConfig['db'];
 $r = $admin->get('/');
 check('fresh site redirects to /install', $r['status'] === 303 && $r['location'] === '/install');
 status_is($admin, '/install', 200, 'Connect your database');
-$r = $admin->post('/install/database', ['db_host' => $db['host'], 'db_port' => (string) $db['port'], 'db_name' => $db['name'], 'db_user' => $db['user'], 'db_pass' => $db['pass']]);
+$dbFields = ['db_host' => $db['host'], 'db_port' => (string) $db['port'], 'db_name' => $db['name'], 'db_user' => $db['user'], 'db_pass' => $db['pass'], 'base_url' => $base, 'install_token' => $installToken];
+$r = $admin->post('/install/database', $dbFields);
 check('installer POST without CSRF token is rejected (419)', $r['status'] === 419);
-$r = $admin->submit('/install', '/install/database', ['db_host' => $db['host'], 'db_port' => (string) $db['port'], 'db_name' => $db['name'], 'db_user' => $db['user'], 'db_pass' => 'wrong-password']);
-check('installer reports a bad database password', $r['status'] === 422 && str_contains($r['body'], 'Could not connect'));
-$r = $admin->submit('/install', '/install/database', ['db_host' => $db['host'], 'db_port' => (string) $db['port'], 'db_name' => $db['name'], 'db_user' => $db['user'], 'db_pass' => $db['pass']]);
+check('installer asks for the install token and the site address', str_contains($admin->get('/install')['body'], 'name="install_token"') && str_contains($admin->last['body'], 'name="base_url"'));
+$r = $admin->submit('/install', '/install/database', ['install_token' => 'wrong-token-wrong-token'] + $dbFields);
+check('installer refuses a wrong install token (S9)', $r['status'] === 403 && !is_file($configPath));
+$r = $admin->submit('/install', '/install/database', ['install_token' => ''] + $dbFields);
+check('installer refuses a missing install token (S9)', $r['status'] === 403 && !is_file($configPath));
+$r = $admin->submit('/install', '/install/database', ['base_url' => 'javascript:alert(1)'] + $dbFields);
+check('installer validates the site address (S9)', $r['status'] === 422 && str_contains($r['body'], 'site address') && !is_file($configPath));
+$r = $admin->submit('/install', '/install/database', ['db_pass' => 'wrong-password'] + $dbFields);
+check('installer reports a bad database password without the driver message (S9)', $r['status'] === 422 && str_contains($r['body'], 'Could not connect') && !str_contains($r['body'], 'Access denied') && !str_contains($r['body'], 'SQLSTATE'));
+$r = $admin->submit('/install', '/install/database', $dbFields);
 check('installer writes config.php and runs migrations', $r['status'] === 303 && $r['location'] === '/install/admin' && is_file($configPath));
 $other = new Browser($base);
 check('another session cannot continue the install', $other->get('/install/admin')['status'] === 403);
@@ -174,6 +183,7 @@ $r = $admin->submit('/install/content', '/install/content', ['demo' => '1']);
 check(sprintf('installer loads demo content and locks itself (%.1fs)', microtime(true) - $t), $r['status'] === 303 && $r['location'] === '/admin');
 $cfg = require $configPath;
 check('config is marked installed and the token removed', $cfg['installed'] === true && !isset($cfg['install_token']));
+check('installer stores the typed site address, not the Host header', $cfg['base_url'] === $base);
 status_is($admin, '/install', 404);
 status_is($admin, '/install/admin', 404);
 
@@ -361,11 +371,21 @@ $ts = preg_match('/name="form_ts" value="([^"]+)"/', $visitor->last['body'], $m)
 sleep(3);
 $mailBefore = count(glob(BASE . '/storage/mail/*.eml') ?: []);
 $r = $visitor->post('/contact', $fields + ['_csrf' => $token, 'form_ts' => $ts, 'website_url' => '']);
-check('contact message stored and emailed (org + copy)', $r['status'] === 303 && (int) q_val("SELECT COUNT(*) FROM contact_messages WHERE email = 'cora@example.test'") === 1
-    && count(glob(BASE . '/storage/mail/*.eml') ?: []) === $mailBefore + 2);
+check('contact message stored and emailed to the organisation only (no copy unless asked)', $r['status'] === 303 && (int) q_val("SELECT COUNT(*) FROM contact_messages WHERE email = 'cora@example.test'") === 1
+    && count(glob(BASE . '/storage/mail/*.eml') ?: []) === $mailBefore + 1);
 check('thank-you message shown after the redirect', str_contains($visitor->get('/contact')['body'], 'your message has been sent'));
+check('contact form offers an opt-in confirmation', str_contains($visitor->last['body'], 'name="send_copy"'));
+$copies = [];
+foreach ([1, 2, 3] as $i) {
+    $before = glob(BASE . '/storage/mail/*.eml') ?: [];
+    $visitor->post('/contact', $fields + ['_csrf' => $token, 'form_ts' => $ts, 'website_url' => '', 'send_copy' => '1']);
+    $copies[] = array_values(array_diff(glob(BASE . '/storage/mail/*.eml') ?: [], $before));
+}
+$copyMail = array_values(array_filter(array_map(static fn (string $f): string => quoted_printable_decode((string) file_get_contents($f)), $copies[0]), static fn (string $t): bool => str_contains($t, 'We received your message')));
+check('opt-in confirmation is sent without repeating the message', count($copies[0]) === 2 && count($copyMail) === 1 && !str_contains($copyMail[0], 'Hello from the smoke test'));
+check('confirmations to one address stop after 2 a day (S5)', count($copies[1]) === 2 && count($copies[2]) === 1, json_encode(array_map('count', $copies)));
 $r = $visitor->post('/contact', $fields + ['_csrf' => $token, 'form_ts' => $ts, 'website_url' => 'http://spam.example']);
-check('honeypot submission is refused', (int) q_val("SELECT COUNT(*) FROM contact_messages WHERE email = 'cora@example.test'") === 1);
+check('honeypot submission is refused', (int) q_val("SELECT COUNT(*) FROM contact_messages WHERE email = 'cora@example.test'") === 4);
 foreach (['civic', 'heritage', 'harvest', 'monochrome'] as $t) {
     $css = $visitor->get('/theme.css?t=' . $t . '&plain=1')['body'];
     check("theme $t is served with its tokens and font faces", str_contains($css, "/* theme: $t */") && str_contains($css, '@font-face'));
@@ -416,10 +436,24 @@ $r = $joiner->post('/join', array_merge($joinFields, ['password_confirm' => 'nop
 check('join validation errors are shown (422)', $r['status'] === 422 && str_contains($r['body'], 'do not match') && str_contains($r['body'], 'agree to the terms'));
 $mailBefore = count(glob(BASE . '/storage/mail/*.eml') ?: []);
 $r = $joiner->post('/join', $joinFields + $tokens + ['photo' => new CURLFile($photoFile, 'image/jpeg', 'me.jpg')]);
-check('sign-up creates an unverified account and logs in', $r['status'] === 303 && $r['location'] === '/account' && q_val('SELECT status FROM users WHERE email = ?', [$joinEmail]) === 'unverified');
+check('sign-up creates an unverified account without logging in (pre-hijack)', $r['status'] === 303 && $r['location'] === '/login' && q_val('SELECT status FROM users WHERE email = ?', [$joinEmail]) === 'unverified');
+$signupAnswer = $joiner->get('/login')['body'];
 check('verification email sent', count(glob(BASE . '/storage/mail/*.eml') ?: []) === $mailBefore + 1);
 $verifyLink = last_mail_link('#' . preg_quote($base, '#') . '/join/verify/[a-f0-9]{64}#');
 check('verification email contains the link', $verifyLink !== '');
+check('the new account is not logged in after sign-up', $joiner->get('/account')['status'] === 303);
+// S7: signing up again with the same address gives the same answer and emails the owner instead.
+$again = new Browser($base);
+$againTokens = guard_tokens($again, '/join');
+sleep(3);
+$mailBefore = count(glob(BASE . '/storage/mail/*.eml') ?: []);
+$r = $again->post('/join', array_merge($joinFields, ['first_name' => 'Imposter']) + $againTokens + ['photo' => new CURLFile($photoFile, 'image/jpeg', 'me.jpg')]);
+$againAnswer = $again->get('/login')['body'];
+$strip = static fn (string $html): string => preg_match('#<div class="flash[^"]*"[^>]*>(.*?)</div>#s', $html, $m) ? trim(strip_tags($m[1])) : '';
+check('sign-up with an existing address answers exactly like a new sign-up (S7)', $r['status'] === 303 && $r['location'] === '/login' && $strip($againAnswer) !== '' && $strip($againAnswer) === $strip($signupAnswer), $strip($againAnswer) . ' | ' . $strip($signupAnswer));
+check('the owner of the address gets an "already have an account" email, no second account', count(glob(BASE . '/storage/mail/*.eml') ?: []) === $mailBefore + 1
+    && last_mail_link('#already has an account#') !== '' && (int) q_val('SELECT COUNT(*) FROM users WHERE email = ?', [$joinEmail]) === 1);
+$r = $joiner->submit('/login', '/login', ['email' => $joinEmail, 'password' => 'joiner-password-1']);
 status_is($joiner, '/account', 200, 'Check your email');
 $r = $joiner->get('/account/card');
 check('unverified members cannot open the card', $r['status'] === 303 && $r['location'] === '/account');

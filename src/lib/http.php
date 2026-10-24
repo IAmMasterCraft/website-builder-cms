@@ -49,9 +49,44 @@ function input_list(string $key): array
     return array_values(array_map(static fn ($x): string => is_string($x) ? trim($x) : '', $v));
 }
 
+/** Is the direct peer one of config 'trusted_proxies' (exact IPs; empty = trust nobody)? */
+function request_from_trusted_proxy(): bool
+{
+    $proxies = config('trusted_proxies', []);
+    return is_array($proxies) && $proxies !== [] && in_array((string) ($_SERVER['REMOTE_ADDR'] ?? ''), array_map('strval', $proxies), true);
+}
+
+/**
+ * The visitor's IP. X-Forwarded-For is only believed when the request comes
+ * from a configured trusted proxy (off by default); then the right-most
+ * address that is not itself a trusted proxy is used.
+ */
 function client_ip(): string
 {
-    return (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+    $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+    if (!request_from_trusted_proxy() || !is_string($_SERVER['HTTP_X_FORWARDED_FOR'] ?? null)) {
+        return $remote;
+    }
+    $proxies = array_map('strval', (array) config('trusted_proxies', []));
+    $hops = array_reverse(array_map('trim', explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])));
+    foreach ($hops as $ip) {
+        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            return $remote;
+        }
+        if (!in_array($ip, $proxies, true)) {
+            return $ip;
+        }
+    }
+    return $remote;
+}
+
+/** HTTPS directly, or X-Forwarded-Proto: https from a trusted proxy. */
+function request_is_https(): bool
+{
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        return true;
+    }
+    return request_from_trusted_proxy() && strtolower(trim((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))) === 'https';
 }
 
 function abort(int $status, string $message = ''): never

@@ -38,8 +38,12 @@ final class Wizard
             self::page('database', 'blocked', [], 403);
             return;
         }
+        if (install_token_expected() === null) {
+            self::page('database', 'token_needed', ['token_file' => BASE . INSTALL_TOKEN_FILE], 403);
+            return;
+        }
         self::page('database', 'database', [
-            'old' => ['db_host' => '127.0.0.1', 'db_port' => '3306', 'db_name' => '', 'db_user' => ''],
+            'old' => ['db_host' => '127.0.0.1', 'db_port' => '3306', 'db_name' => '', 'db_user' => '', 'base_url' => install_detect_base_url()],
             'checks' => self::checks(),
         ]);
     }
@@ -65,17 +69,33 @@ final class Wizard
         if (is_file(config_path())) {
             abort(403);
         }
+        if (install_token_expected() === null) {
+            self::page('database', 'token_needed', ['token_file' => BASE . INSTALL_TOKEN_FILE], 403);
+            return;
+        }
         $input = [];
-        foreach (['db_host', 'db_port', 'db_name', 'db_user', 'db_pass'] as $k) {
+        foreach (['db_host', 'db_port', 'db_name', 'db_user', 'db_pass', 'base_url'] as $k) {
             $input[$k] = is_string($_POST[$k] ?? null) ? ($k === 'db_pass' ? $_POST[$k] : trim($_POST[$k])) : '';
         }
+        if (!install_token_ok(is_string($_POST['install_token'] ?? null) ? $_POST['install_token'] : '')) {
+            error_log('Installer: wrong install token from ' . client_ip());
+            unset($input['db_pass']);
+            self::page('database', 'database', ['errors' => ['install_token' => 'This is not the install token set up on the server.'], 'old' => $input, 'checks' => self::checks()], 403);
+            return;
+        }
         [$db, $errors] = install_db_input($input);
+        $baseUrl = install_base_url_input($input['base_url']);
+        if ($baseUrl === null) {
+            $errors['base_url'] = 'Enter the site address, such as https://www.example.org (no trailing slash).';
+        }
         $pdo = null;
         if (!$errors) {
             try {
                 $pdo = db_connect($db);
             } catch (\PDOException $e) {
-                $errors['form'] = 'Could not connect to the database. Check the details and that the database exists. (' . preg_replace('/\s+/', ' ', mb_substr($e->getMessage(), 0, 160)) . ')';
+                // The driver message can name hosts and users: it goes to the log, not the page.
+                error_log('Installer: database connection failed: ' . $e->getMessage());
+                $errors['form'] = 'Could not connect to the database. Check the host, port, database name, user and password, and that the database exists.';
             }
         }
         if (!$errors && $pdo !== null && (int) $pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'users'")->fetchColumn() > 0) {
@@ -86,7 +106,7 @@ final class Wizard
             self::page('database', 'database', ['errors' => $errors, 'old' => $input, 'checks' => self::checks()], 422);
             return;
         }
-        $config = install_new_config($db, install_detect_base_url());
+        $config = install_new_config($db, (string) $baseUrl);
         try {
             install_write_config(config_path(), $config);
         } catch (\RuntimeException $e) {

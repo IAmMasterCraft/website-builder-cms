@@ -597,7 +597,10 @@ function content_validate(array $type, array $input, ?array $existing = null): a
                 if ($id > 0) {
                     $m = media_find($id);
                     $kinds = $f['type'] === 'media' ? ['image'] : ($f['kinds'] ?? ['document']);
-                    if ($m === null || !in_array($m['kind'], $kinds, true)) {
+                    // Member photos and other private files can never be attached (they would be
+                    // served through the item), and the editor must be able to open the file.
+                    $editor = current_user();
+                    if ($m === null || !in_array($m['kind'], $kinds, true) || !media_attachable($m) || ($editor !== null && !media_can_view($m, $editor))) {
                         $errors[$name] = "Choose a valid file for $label.";
                         break;
                     }
@@ -712,8 +715,41 @@ function content_find(array $type, int $id): ?array
     return $row;
 }
 
-/** Insert or update; runs the type's after_save hook in the same transaction. */
+/** Media columns of a content type (cover, file, photo, logo). */
+function content_media_columns(array $type): array
+{
+    return array_values(array_map(static fn (array $f): string => $f['name'], array_filter($type['fields'], static fn (array $f): bool => in_array($f['type'], ['media', 'file'], true))));
+}
+
+/** Media ids an item uses (its media columns, plus the photos of an album). */
+function content_media_ids(array $type, int $id): array
+{
+    $cols = content_media_columns($type);
+    $ids = [];
+    if ($cols !== []) {
+        $row = q_one('SELECT ' . implode(', ', array_map('db_ident', $cols)) . ' FROM ' . db_ident($type['table']) . ' WHERE id = ?', [$id]) ?? [];
+        $ids = array_values(array_filter(array_map('intval', $row)));
+    }
+    if ($type['table'] === 'albums') {
+        $ids = array_merge($ids, array_map('intval', array_column(q_all('SELECT media_id FROM album_photos WHERE album_id = ?', [$id]), 'media_id')));
+    }
+    return $ids;
+}
+
+/**
+ * Insert or update; runs the type's after_save hook in the same transaction.
+ * Afterwards the item's media (before and after the change) get the
+ * visibility their uses need, so a members-only item never has public files.
+ */
 function content_save(array $type, array $data, array $input, ?int $id = null, ?int $userId = null): int
+{
+    $before = $id !== null ? content_media_ids($type, $id) : [];
+    $id = content_save_row($type, $data, $input, $id, $userId);
+    media_sync_visibility(array_merge($before, content_media_ids($type, $id)));
+    return $id;
+}
+
+function content_save_row(array $type, array $data, array $input, ?int $id, ?int $userId): int
 {
     return db_tx(static function () use ($type, $data, $input, $id, $userId): int {
         if ($id === null) {
@@ -1098,6 +1134,7 @@ function group_after_save(int $id, array $input): void
     }
     if ($g['status'] === 'suspended') {
         q("UPDATE users SET status = 'suspended' WHERE id = ? AND role = 'group'", [$g['user_id']]);
+        user_end_sessions((int) $g['user_id']);
     } else {
         q("UPDATE users SET status = ? WHERE id = ? AND role = 'group' AND status = 'suspended'", [$g['verified_at'] ? 'active' : 'unverified', $g['user_id']]);
     }
