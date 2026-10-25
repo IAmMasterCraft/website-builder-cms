@@ -20,12 +20,24 @@ final class EmailWebhooks
             self::out(429, 'Too many failed requests');
         }
         $body = (string) file_get_contents('php://input', false, null, 0, WEBHOOK_MAX_BODY + 1);
-        $r = webhook_handle((string) $p['provider'], $body, $_SERVER);
-        if ($r['status'] === 401 || $r['status'] === 403 || $r['status'] === 400) {
+        $r = self::handle((string) $p['provider'], $body);
+        // Every answer that is not a success counts towards the limit (bad signatures, bad JSON, wrong field types, unknown provider, errors).
+        if ($r['status'] < 200 || $r['status'] > 299) {
             rate_hit('webhook-fail:' . client_ip());
             error_log('Email webhook (' . $p['provider'] . ') refused: ' . $r['status']);
         }
         self::out($r['status'], $r['message']);
+    }
+
+    /** @return array{status:int, message:string, recorded:int} */
+    public static function handle(string $provider, string $body): array
+    {
+        try {
+            return webhook_handle($provider, $body, $_SERVER);
+        } catch (\Throwable $e) {
+            error_log('Email webhook (' . $provider . ') failed: ' . $e->getMessage());
+            return ['status' => 500, 'message' => 'Error', 'recorded' => 0]; // counted like a refusal; the provider retries later
+        }
     }
 
     private static function out(int $status, string $message): never

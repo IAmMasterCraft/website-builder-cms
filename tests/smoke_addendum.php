@@ -69,6 +69,14 @@ check('A5: a signed Mailgun webhook is accepted without a CSRF token and records
     && (email_suppression('mg-smoke@recipient.example.test')['reason'] ?? null) === 'hard_bounce' && q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$mgRow]) === 'hard');
 $r = $hook->post('/webhooks/email/mailgun', str_replace(hash_hmac('sha256', $ts . $tok, 'smoke-mailgun-key'), str_repeat('a', 64), $payload), ['Content-Type: application/json']);
 check('A5: a forged Mailgun signature is refused (401)', $r['status'] === 401);
+$failsBefore = (int) q_val("SELECT COUNT(*) FROM rate_hits WHERE bucket LIKE 'webhook-fail:%'");
+$ts2 = (string) time();
+$tok2 = bin2hex(random_bytes(20));
+$typed = json_encode(['signature' => ['timestamp' => $ts2, 'token' => $tok2, 'signature' => hash_hmac('sha256', $ts2 . $tok2, 'smoke-mailgun-key')],
+    'event-data' => ['event' => 'failed', 'severity' => 'permanent', 'recipient' => ['mg-smoke@recipient.example.test']]]);
+$r = $hook->post('/webhooks/email/mailgun', $typed, ['Content-Type: application/json']);
+check('A5 M5: an array where text is expected answers 400 (not 500) and counts towards the failure limit', $r['status'] === 400
+    && (int) q_val("SELECT COUNT(*) FROM rate_hits WHERE bucket LIKE 'webhook-fail:%'") === $failsBefore + 1);
 check('A5: an unconfigured provider answers 404', $hook->post('/webhooks/email/brevo', '{}', ['Content-Type: application/json'])['status'] === 404);
 check('A5: unknown providers do not match a route (404)', $hook->post('/webhooks/email/other', '{}')['status'] === 404);
 

@@ -863,6 +863,86 @@ test('A5 Brevo webhook: bearer token required', function (): void {
     same(404, webhook_handle('nosuch', '{}', [])['status']);
 });
 
+test('A5 M3: SNS certificate URLs with a query or odd path are refused unfetched; topic checked first; cache normalised and capped', function (): void {
+    reset_bounces();
+    q("DELETE FROM rate_hits WHERE bucket = 'sns-cert-fetch'");
+    foreach (glob(webhook_sns_cache_dir() . '/sns-*.pem') ?: [] as $f) {
+        unlink($f);
+    }
+    setting_set('mail.bounce', ['webhooks' => ['ses' => true, 'ses_topics' => 'arn:aws:sns:eu-west-2:123456789012:ses-bounces']]);
+    $signer = sns_signer();
+    $fetched = [];
+    $fetch = static function (string $url) use (&$fetched, $signer): ?string {
+        $fetched[] = $url;
+        return $signer['pem'];
+    };
+    $path = (string) parse_url($signer['url'], PHP_URL_PATH);
+    foreach ([$signer['url'] . '?x=1', $signer['url'] . '?', $signer['url'] . '#frag', 'https://sns.eu-west-2.amazonaws.com/SimpleNotificationService-zz.pem',
+        'https://sns.eu-west-2.amazonaws.com/other/SimpleNotificationService-0123456789abcdef.pem', 'https://sns.eu-west-2.amazonaws.com/cert.pem'] as $url) {
+        same(403, webhook_handle('ses', json_encode(sns_message('Notification', ['Message' => '{}', 'SigningCertURL' => $url])), [], $fetch)['status'], $url);
+    }
+    same([], $fetched, 'nothing fetched for refused URLs');
+    $other = sns_message('Notification', ['Message' => '{}', 'TopicArn' => 'arn:aws:sns:eu-west-2:999999999999:other', 'SigningCertURL' => 'https://sns.eu-west-2.amazonaws.com/SimpleNotificationService-' . str_repeat('ab', 16) . '.pem']);
+    same(403, webhook_handle('ses', json_encode($other), [], $fetch)['status']);
+    same([], $fetched, 'a topic that is not allowed never causes a fetch');
+    // The same certificate under an upper-case host is one cache entry: fetched once.
+    $ok = sns_message('Notification', ['Message' => '{}']);
+    same(200, webhook_handle('ses', json_encode($ok), [], $fetch)['status']);
+    $upper = sns_message('Notification', ['Message' => '{}', 'SigningCertURL' => 'https://SNS.EU-WEST-2.AMAZONAWS.COM' . $path]);
+    same(200, webhook_handle('ses', json_encode($upper), [], $fetch)['status']);
+    same(['https://sns.eu-west-2.amazonaws.com' . $path], $fetched, 'fetched once, by its normalised URL');
+    // Different (allowed-looking) certificate URLs: at most 10 fetches an hour, at most 20 cached files.
+    for ($i = 0; $i < 15; $i++) {
+        $m = sns_message('Notification', ['Message' => '{}', 'SigningCertURL' => 'https://sns.eu-west-2.amazonaws.com/SimpleNotificationService-' . sprintf('%032x', $i) . '.pem']);
+        webhook_handle('ses', json_encode($m), [], $fetch);
+    }
+    same(WEBHOOK_SNS_FETCH_PER_HOUR, count($fetched), 'fetches are rate limited');
+    ok(count(glob(webhook_sns_cache_dir() . '/sns-*.pem') ?: []) <= WEBHOOK_SNS_CACHE_MAX);
+    q("DELETE FROM rate_hits WHERE bucket = 'sns-cert-fetch'");
+    for ($i = 100; $i < 130; $i++) {
+        webhook_sns_cert('https://sns.eu-west-2.amazonaws.com/SimpleNotificationService-' . sprintf('%032x', $i) . '.pem', $fetch, time());
+        q("DELETE FROM rate_hits WHERE bucket = 'sns-cert-fetch'");
+    }
+    same(WEBHOOK_SNS_CACHE_MAX, count(glob(webhook_sns_cache_dir() . '/sns-*.pem') ?: []), 'the cache never grows past its cap');
+});
+
+test('A5 M5: array-typed webhook fields answer 400 (never a 500) for every provider', function (): void {
+    reset_bounces();
+    q("DELETE FROM rate_hits WHERE bucket = 'sns-cert-fetch'");
+    $c = sent_campaign(['typed@recipient.example.test']);
+    // Mailgun (signed), fields as arrays.
+    setting_set('mail.bounce', ['webhooks' => ['mailgun_key' => secret_seal('key-mg'), 'postmark_token' => secret_seal('pm-token'), 'brevo_token' => secret_seal('bv-token'),
+        'ses' => true, 'ses_topics' => 'arn:aws:sns:eu-west-2:123456789012:ses-bounces']]);
+    $sign = static function (array $eventData): string {
+        $ts = (string) time();
+        $tok = bin2hex(random_bytes(16));
+        return json_encode(['signature' => ['timestamp' => $ts, 'token' => $tok, 'signature' => hash_hmac('sha256', $ts . $tok, 'key-mg')], 'event-data' => $eventData]);
+    };
+    foreach ([['event' => ['failed']], ['event' => 'failed', 'severity' => 'permanent', 'recipient' => ['a@b.test']], ['event' => 'complained', 'recipient' => 'typed@recipient.example.test', 'id' => ['x']],
+        ['event' => 'failed', 'severity' => 'permanent', 'recipient' => 'typed@recipient.example.test', 'delivery-status' => ['code' => [550]]]] as $ed) {
+        same(400, webhook_handle('mailgun', $sign($ed), [])['status'], json_encode($ed));
+    }
+    same(400, webhook_handle('postmark', json_encode(['RecordType' => ['Bounce'], 'Type' => 'HardBounce', 'Email' => 'typed@recipient.example.test']), ['HTTP_X_GATHER_WEBHOOK_TOKEN' => 'pm-token'])['status']);
+    same(400, webhook_handle('postmark', json_encode(['RecordType' => 'Bounce', 'Type' => 'HardBounce', 'Email' => ['typed@recipient.example.test']]), ['HTTP_X_GATHER_WEBHOOK_TOKEN' => 'pm-token'])['status']);
+    same(400, webhook_handle('brevo', json_encode(['event' => 'hard_bounce', 'email' => ['x' => 1]]), ['HTTP_AUTHORIZATION' => 'Bearer bv-token'])['status']);
+    same(400, webhook_handle('brevo', json_encode(['event' => ['hard_bounce']]), ['HTTP_AUTHORIZATION' => 'Bearer bv-token'])['status']);
+    same(400, webhook_handle('ses', json_encode(['Type' => 'Notification', 'TopicArn' => ['arn'], 'Message' => '{}']), [], static fn (): ?string => null)['status'], 'topic as an array');
+    same(400, webhook_handle('ses', json_encode(['Type' => 'Notification', 'TopicArn' => 'arn:aws:sns:eu-west-2:123456789012:ses-bounces', 'SigningCertURL' => ['x']]), [], static fn (): ?string => null)['status']);
+    ok(!email_suppressed('typed@recipient.example.test'), 'nothing recorded');
+});
+
+test('A5 LOW: a Mailgun token is accepted once (replay with a valid signature refused)', function (): void {
+    reset_bounces();
+    setting_set('mail.bounce', ['webhooks' => ['mailgun_key' => secret_seal('key-mailgun-signing-123')]]);
+    $c = sent_campaign(['mg-replay@recipient.example.test']);
+    $ts = (string) time();
+    $token = bin2hex(random_bytes(25));
+    $vars = ['TS' => $ts, 'TOKEN' => $token, 'SIGNATURE' => hash_hmac('sha256', $ts . $token, 'key-mailgun-signing-123'), 'EMAIL' => 'mg-replay@recipient.example.test',
+        'TAG' => verp_tag('c', $c['rows']['mg-replay@recipient.example.test'], 'mg-replay@recipient.example.test')];
+    same(200, webhook_handle('mailgun', webhook_fixture('mailgun_failed_permanent.json', $vars), [])['status']);
+    same(401, webhook_handle('mailgun', webhook_fixture('mailgun_failed_permanent.json', $vars), [])['status'], 'same signed token again');
+});
+
 // ---- DNS hygiene ----------------------------------------------------------------------------
 
 test('A5 MX checks: injected resolver, cache, reserved names, time budget; typo suggestions', function (): void {
