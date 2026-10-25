@@ -454,8 +454,9 @@ uses Bold).
     registration, contact copy/reply).
   - Parsing: `Core\Mail\MimeMessage` + `BounceParser` (RFC 3464 DSNs,
     RFC 5965 ARF, legacy plain-text Exim bounces, auto-replies and delay
-    notices ignored); tag from the envelope address or returned headers,
-    otherwise the latest message sent to the Final-Recipient (30 days).
+    notices ignored); tag from the envelope address or returned headers
+    (since the second review untagged mailbox reports only go to review;
+    the 30-day address match is kept for SMTP-time and webhook reports).
   - Bounce mailbox: pure-PHP `ImapClient` / `Pop3Client` over
     `MailboxSocket` (implicit TLS or STARTTLS/STLS, certificate always
     verified, optional CA file; no ext-imap). `bounce_mailbox_poll()` (cron
@@ -664,8 +665,11 @@ uses Bold).
 
 ## Tests
 
-`bin/check`: lint of every PHP file, `tests/run.php` (271 unit/DB tests after
-Addendum A6) and `tests/smoke.php` (482 checks through `php -S`).
+`bin/check`: lint of every PHP file, `tests/run.php` (299 unit/DB tests after
+the second security review) and `tests/smoke.php` (492 checks through
+`php -S`). The second review added 21 unit/DB tests (most in
+`tests/bounces_test.php`, plus `tests/admin_profile_test.php`, comment and
+essential-notice tests) and 10 smoke checks.
 Addendum A6 added `tests/design_test.php` (6 tests) and
 `tests/smoke_design.php` (45 checks); builder/smoke counts updated for 29
 section types and 5 themes.
@@ -939,12 +943,14 @@ playwright-core; tools in `dev-tools/`, never deployed):
 - Cookie banner: shown only when the chosen provider sets cookies (GA4);
   cookieless providers (Plausible, Fathom) load without a banner. The
   allow-list is fixed in code (`src/lib/analytics.php`).
-- Email change: members and groups only (staff email is changed by a super
-  admin in Users & roles).
+- Email change: members and groups on /account/password; staff on their own
+  /admin/profile (added after the docs were written), or by a super admin in
+  Users & roles.
 
 - Addendum A1: comments waiting for approval at upgrade time are published
   (the new rule); the 3-report auto-hide counts open reports from distinct
-  member accounts and applies to staff comments too.
+  active member/group accounts at least 7 days old and never hides staff
+  comments (second security review; they wait in the Reports queue).
 - Addendum A2: "unsubscribed-from-all" = clicked the unsubscribe link (an
   `unsubscribe` suppression row); switching news emails off in the
   preferences does not stop essential notices. Essential is a flag on the
@@ -957,10 +963,13 @@ playwright-core; tools in `dev-tools/`, never deployed):
   retries are exhausted; asynchronous DSNs with `Action: failed` and a 4.x.x
   status count at once; `Action: delayed` never. A block pauses the whole
   campaign (spec), the blocked recipient can be retried after resuming
-  ("Retry failed"); bounced recipients never. Admins may clear bounce
-  suppressions only; unsubscribes and complaints are lifted only by the
-  person opting in again. SES requires a topic ARN allow-list before the
-  endpoint is enabled.
+  ("Retry failed"); bounced recipients never. Since the second security
+  review a block reported through the bounce mailbox pauses only when 3
+  recipient domains report blocks for the campaign. Admins may clear bounce
+  suppressions and complaints that came by email (arf/dsn/review);
+  unsubscribes and provider-webhook complaints are lifted only by the person
+  opting in again. SES requires a topic ARN allow-list before the endpoint
+  is enabled.
 
 ## Code review fixes (2026-10-24)
 
@@ -1079,14 +1088,89 @@ Data integrity
   test); the real issue was the stale `published_at` on re-approval, fixed
   above.
 
+## Second security review fixes (2026-10-25)
+
+A fresh-context review of the A1/A2/A5 code. Every finding was checked in
+the code first; all were confirmed (M4 partly: the per-IP sign-up limit
+already ran before any DNS lookup). Migration `017_review_fixes`
+(`email_events.review`). Regression tests in `tests/bounces_test.php`
+(H1/M1/M2/M3/M4/M5/LOW), `tests/comms_test.php`, `tests/optin_test.php`,
+`tests/admin_test.php`, `tests/admin_profile_test.php`, smoke checks in
+`tests/smoke_addendum.php` and `tests/smoke_admin.php`.
+
+- H1 forged bounces/complaints: tags are now
+  `HMAC('verp2|<kind><id>|<address>')`, verified against the row (so a tag
+  cannot be moved to another row or address; tags issued before this change
+  no longer verify and their reports go to review). Mailbox reports (DSN,
+  ARF, legacy text) act only with a valid tag for a row that was actually
+  sent, record one event for that row, and use the row's address, never the
+  report's. Untagged/forged reports, and authenticated SMTP/webhook reports
+  for an address with no message sent in 30 days, are stored with
+  `review = 'pending'`: no suppression, no row change, not counted in the
+  rates. Suppression list "Reports to review" (apply/dismiss, CSRF,
+  communications permission, audited `review_apply`/`review_dismiss`),
+  health item "Bounce reports to review". At most 5 events per report
+  (`BOUNCE_REPORT_MAX_RECIPIENTS`); the parser keeps at most 20 recipients
+  (text bounces were uncapped). Admins may clear complaints whose source is
+  arf/dsn/review; provider-webhook complaints stay non-clearable.
+- M1 campaign pause: SMTP-time and provider-webhook blocks pause at once;
+  mailbox blocks are recorded on the row and pause only when blocks for the
+  campaign come from 3 different recipient domains.
+- M2 poison messages: `BounceMailbox::list()` returns sizes (IMAP
+  `UID FETCH … (RFC822.SIZE)`, POP3 `LIST`); messages over 2 MB are moved
+  aside (IMAP) or deleted (POP3) without download; `fetch($id, $maxBytes)`
+  uses an IMAP partial fetch `BODY.PEEK[]<0.n+1>` and capped POP3 reading
+  (bytes and 100,000 lines; a lying server is drained up to 16 MB or cut
+  off); IMAP literals other than bodies capped at 64 KB and responses at
+  8 MB; `MessageUnreadableException`/`MessageTooLargeException` move the
+  message aside so it can never stay at the head; MIME parsing capped at 100
+  parts across all levels and splits boundaries without exploding the body.
+  Counters `oversized` in `mail.bounce_state` and on health.
+- M3 SNS: topic allow-list checked before anything else; the signing
+  certificate URL must be `https://sns.<region>.amazonaws.com(.cn)/SimpleNotificationService-<hex>.pem`
+  with no query or fragment; cache keyed on the normalised URL, 7-day TTL,
+  20 files at most; at most 10 certificate fetches an hour (`rate_hits`).
+- M4 DNS at sign-up: MX only (no A/AAAA fallback, empty MX = unknown), 2 s
+  budget; A/AAAA skipped after a slow (>1 s) MX lookup everywhere; uncached
+  lookups capped at 60 per 10 minutes across all requests; the daily cleanup
+  prunes expired `email_domains` rows and keeps at most 20,000.
+- M5 webhook types: all provider fields go through `webhook_field()`;
+  arrays/objects where text is expected answer 400; the controller counts
+  every non-2xx towards the failure limit and turns unexpected errors into a
+  counted 500.
+- LOW: Mailgun tokens are accepted once within the replay window
+  (`rate_hits`, pruned daily). New permission key `essential_notices`
+  (with Communications: mark/unmark essential, send/schedule an essential
+  campaign; super admins always; **existing admins are not granted it**).
+  Comment reports: 10 per member per day; auto-hide counts only active
+  member/group accounts at least 7 days old; staff comments never
+  auto-hide. Bounce mailbox host must resolve to a public address
+  (loopback/private/link-local/reserved refused on save and before
+  connecting; the client connects to the checked IP while TLS still checks
+  the name) unless `config.php` `mail.allow_internal_mailbox_host` is true.
+- Feature: `/admin/profile` (top-bar profile menu → My profile) for every
+  staff user: name, login email (current password, confirmation link to the
+  new address, notice to the old one, session version bumped on confirm,
+  staff return to /admin/profile), password (current password with the
+  existing 10-an-hour re-check limit, `password_problem()`, reset links
+  dropped, other sessions ended). Audited (`profile_name`,
+  `email_change_request`, `email_change_cancel`, `password_change`). Docs:
+  first-login, users-roles, how-do-i; screenshot `docs/images/admin-profile.webp`.
+
 ## Known gaps / next steps
 
 - Not run here: PHP 8.2 and MySQL 8 (local runs use PHP 8.5 and MariaDB);
   the code was scanned for post-8.2 syntax/functions and none are used.
   Do one install on the server's PHP version (DEPLOY.md step 8 lints with it).
 - `plain-php-reviewer` and `security-reviewer` were run by the lead after
-  phase 7; their findings were fixed (see "Code review fixes"). A second
-  review of the fixes from a fresh context is advisable before go-live.
+  phase 7 and again on Addendum A; their findings were fixed (see "Code
+  review fixes" and "Second security review fixes").
+- Second review leftovers: reports carrying a tag issued before 2026-10-25
+  (old signature) go to review instead of acting; the review list has no
+  bulk apply/dismiss; the 3-domain block threshold is a fixed constant; the
+  SNS fetch limit is global (an attacker with an allow-listed topic ARN but
+  no valid signature can use up the 10 fetches an hour, delaying genuine
+  notifications whose certificate is not cached yet).
 - Deployment itself is not done (by instruction); DEPLOY.md and
   `bin/package` are ready.
 - Addendum A gaps: the docs/ folder (A3/A4, incl. SPF/DKIM/DMARC and
@@ -1154,4 +1238,4 @@ Data integrity
 | 11 | Admin without "members" gets 403; member cannot open /admin | Met | full permission matrix over every admin route (smoke) + unit matrix |
 | 12 | CSRF rejection, PHP upload rejected, XSS neutralised, lockout | Met | CSRF enumeration of every POST route; upload/sanitiser/lockout tests |
 | 13 | Lighthouse >= 90 and axe no serious issues on home, news, event, join, dashboard | Met | axe 0 violations (78 runs); Lighthouse mobile 95-97 perf, 100 a11y/best practices (local php -S) |
-| 14 | Lint, tests green, plain-php-reviewer + security-reviewer no high findings | Met (pending re-review) | both reviews run by the lead; every HIGH/MEDIUM/LOW finding fixed with a regression test (see "Code review fixes"); lint + 231 tests + 403 smoke checks green. A fresh-context review of the fixes is still advisable |
+| 14 | Lint, tests green, plain-php-reviewer + security-reviewer no high findings | Met | two review rounds; every HIGH/MEDIUM/LOW finding fixed with a regression test (see "Code review fixes" and "Second security review fixes"); lint + 299 tests + 492 smoke checks green |
