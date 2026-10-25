@@ -60,7 +60,9 @@ Click **Edit** next to an admin:
   audit log filtered to them).
 
 You cannot change your own role or status: ask another super admin. That is
-why it is wise to have **at least two super admins**.
+why it is wise to have **at least two super admins**. Your own name, login
+email and password are changed on **My profile** (your name at the top
+right → **My profile**); see [First login](first-login.md#logging-in).
 
 Two-step login (2FA) is not available in this version. Make sure every admin
 uses a strong, unique password.

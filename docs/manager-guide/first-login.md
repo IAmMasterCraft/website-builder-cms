@@ -17,10 +17,22 @@ with a link to choose their password. The link works for 72 hours.
 email with a link that works for one hour. After 10 wrong passwords in a
 row, the login is locked for 15 minutes.
 
-**Changing your own password**: the admin area has no profile page for
-this. Log out and use **Forgotten your password?** on the login page, or ask
-a super admin to send you a password link (**Users and roles** → your name →
-**Send password link**).
+**Your own name, email and password**: click your name at the top right,
+then **My profile** (`/admin/profile`). Every admin can use it, whatever
+their permissions:
+
+- **Name**: how you appear in the admin area and the audit log.
+- **Login email**: type the new address and your current password. Gather
+  emails a confirmation link to the new address (and tells the old one).
+  Until you open the link you keep logging in with the old address; once
+  confirmed, you are logged out everywhere else.
+- **Password**: your current password, then the new one twice (at least 10
+  characters). Any other browser or device where you were logged in is
+  logged out. After 10 wrong current passwords in an hour, wait an hour.
+
+All three changes are recorded in the [audit log](audit-log.md).
+
+![My profile](../images/admin-profile.webp)
 
 ## Finding your way around
 
@@ -38,7 +50,8 @@ strip of icons, and your browser remembers your choice.
 - **The bell**: the number of things waiting for you (unread contact
   messages, reported comments, jobs awaiting approval).
 - **The moon/sun**: switches the admin area between light and dark.
-- **Your name**: shows your email and role, and the **Log out** button.
+- **Your name**: shows your email and role, **My profile** (change your
+  name, email or password) and the **Log out** button.
 
 On a phone, the menu opens from the button at the top left.
 

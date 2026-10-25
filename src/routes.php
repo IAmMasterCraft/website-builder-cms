@@ -120,6 +120,11 @@ function app_routes(): Router
     // Admin
     $r->get('/admin', [Admin\Dashboard::class, 'overview']);
     $r->get('/admin/search', [Admin\Dashboard::class, 'search']);
+    $r->get('/admin/profile', [Admin\Profile::class, 'edit']);
+    $r->post('/admin/profile', [Admin\Profile::class, 'update']);
+    $r->post('/admin/profile/email', [Admin\Profile::class, 'email']);
+    $r->post('/admin/profile/email/cancel', [Admin\Profile::class, 'emailCancel']);
+    $r->post('/admin/profile/password', [Admin\Profile::class, 'password']);
     $r->get('/admin/settings', [Admin\Settings::class, 'edit']);
     $r->post('/admin/settings', [Admin\Settings::class, 'update']);
 

@@ -46,6 +46,8 @@ function expected_permission(string $path): ?string
     $rules = [
         // Overview, search and the media picker (used by forms in every area) are open to all staff.
         '#^/admin(/search|/media/picker)?$#' => null,
+        // Every staff user manages their own profile.
+        '#^/admin/profile(/|$)#' => null,
         '#^/admin/(settings|design|custom-fields|users|audit|backups|health)(\b|/|\.)#' => 'super_admin',
         '#^/admin/(media|albums)(/|$)#' => 'gallery_media',
         '#^/admin/(menus|pages|templates|layout)(/|$)#' => 'pages_menus',
@@ -301,6 +303,23 @@ check('confirming switches the login email', $r['status'] === 303 && (int) q_val
 $r = login_as($base, 'moved@example.test', 'mover-password-1')->get('/account');
 check('member logs in with the new address', $r['status'] === 200);
 status_is(new Browser($base), '/account/email/confirm/' . $cm[1], 404);
+
+// ---- Admin profile: own name, email and password ----------------------------------
+create_user('profile-staff@example.test', 'profile-password-1', 'admin', 'Pro File', 'active', []);
+$proA = login_as($base, 'profile-staff@example.test', 'profile-password-1');
+$proB = login_as($base, 'profile-staff@example.test', 'profile-password-1');
+check('the admin profile menu links to My profile', str_contains($proA->get('/admin')['body'], 'href="/admin/profile"'));
+status_is($proA, '/admin/profile', 200, 'Login email');
+check('profile POSTs refuse a missing CSRF token', $proA->post('/admin/profile/password', ['current' => 'x'])['status'] === 419);
+$r = $proA->submit('/admin/profile', '/admin/profile', ['display_name' => 'Pro Renamed']);
+check('staff rename themselves', $r['status'] === 303 && q_val("SELECT display_name FROM users WHERE email = 'profile-staff@example.test'") === 'Pro Renamed');
+$r = $proA->submit('/admin/profile', '/admin/profile/password', ['current' => 'wrong-password', 'password' => 'profile-password-2', 'password_confirm' => 'profile-password-2']);
+check('a wrong current password is refused', $r['status'] === 303 && $proB->get('/admin/profile')['status'] === 200);
+$r = $proA->submit('/admin/profile', '/admin/profile/password', ['current' => 'profile-password-1', 'password' => 'profile-password-2', 'password_confirm' => 'profile-password-2']);
+check('password changed: this browser stays in, the other session is logged out', $r['status'] === 303 && $proA->get('/admin/profile')['status'] === 200
+    && $proB->get('/admin/profile')['status'] === 303);
+check('the new password works', login_as($base, 'profile-staff@example.test', 'profile-password-2')->get('/admin')['status'] === 200);
+check('profile changes are in the audit log', (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action IN ('profile_name', 'password_change') AND summary LIKE 'own %'") >= 2);
 
 // ---- Analytics allow-list and cookie banner (§7, §11) ------------------------------
 $visitorB = new Browser($base);

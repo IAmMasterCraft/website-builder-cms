@@ -60,7 +60,8 @@ foreach ($c['nav'] as $links) {
           <summary aria-label="Account menu: <?= e($u['display_name']) ?>"><span class="avatar" aria-hidden="true"><?= e(mb_strtoupper(mb_substr((string) $u['display_name'], 0, 1))) ?></span><span class="hide-sm"><?= e($u['display_name']) ?></span></summary>
           <div class="menu">
             <p><strong><?= e($u['display_name']) ?></strong><br><span class="muted"><?= e($u['email']) ?></span><br><span class="badge"><?= e(str_replace('_', ' ', $u['role'])) ?></span></p>
-            <form method="post" action="/logout"><?= csrf_field() ?><button type="submit" class="btn ghost small"><?= icon('logout') ?> Log out</button></form>
+            <div class="btn-row"><a class="btn ghost small" href="/admin/profile"><?= icon('user') ?> My profile</a>
+            <form method="post" action="/logout"><?= csrf_field() ?><button type="submit" class="btn ghost small"><?= icon('logout') ?> Log out</button></form></div>
           </div>
         </details>
       </div>

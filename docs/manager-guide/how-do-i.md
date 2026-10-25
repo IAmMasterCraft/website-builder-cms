@@ -80,6 +80,7 @@ click **X** in the menu on the left.
 
 | How do I… | Where |
 |---|---|
+| …change my own password, email or name? | Your name at the top right → **My profile**. See [First login](first-login.md#logging-in) |
 | …add another admin? | Admin → **Users and roles** → **New admin**. See [Users and roles](users-roles.md) |
 | …see who changed something? | Admin → **Audit log**. See [Audit log](audit-log.md) |
 | …make a backup? | Admin → **Backups**. See [Backups and restore](backups.md) |

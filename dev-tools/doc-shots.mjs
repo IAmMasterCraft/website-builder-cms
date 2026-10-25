@@ -109,6 +109,7 @@ const shots = [
   ['admin-design', '/admin/design', { vp: D, who: 'admin', h: 1400, wait: 1500 }],
   ['admin-settings', '/admin/settings', { vp: D, who: 'admin', h: 1500 }],
   ['admin-users', '/admin/users', { vp: D, who: 'admin' }],
+  ['admin-profile', '/admin/profile', { vp: D, who: 'admin' }],
   ['admin-user-new', '/admin/users/new', { vp: D, who: 'admin', h: 1100 }],
   ['admin-audit', '/admin/audit', { vp: D, who: 'admin' }],
   ['admin-backups', '/admin/backups', { vp: D, who: 'admin', h: 1300 }],

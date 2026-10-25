@@ -317,7 +317,7 @@ final class Account
         q('INSERT INTO audit_log (user_id, action, item_type, item_id, summary, ip) VALUES (?, ?, ?, ?, ?, ?)', [$done['id'], 'email_change', $role, $done['id'], email_mask($done['old']) . ' -> ' . email_mask($done['new']), client_ip()]);
         flash('Your email address is now ' . $done['new'] . '. Use it the next time you log in.');
         $me = current_user();
-        redirect($me !== null && (int) $me['id'] === $done['id'] ? '/account/password' : '/login');
+        redirect($me !== null && (int) $me['id'] === $done['id'] ? (is_staff($me) ? '/admin/profile' : '/account/password') : '/login');
     }
 
     private static function memberWithCard(): array
