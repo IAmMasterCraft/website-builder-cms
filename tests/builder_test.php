@@ -14,7 +14,7 @@ function builder_fixture_page(?int $userId = null, array $extra = []): int
 test('every section type renders with its default settings', function (): void {
     act_as(null);
     $sections = array_map('builder_new_section', array_keys(builder_section_types()));
-    same(21, count($sections), 'section types from the spec');
+    same(29, count($sections), 'section types from the spec (21) plus the eight A6 design sections');
     foreach ($sections as $s) {
         [$clean, $errors] = builder_validate_settings($s['type'], $s['settings']);
         same([], $errors, 'defaults of ' . $s['type'] . ' validate');
@@ -24,7 +24,7 @@ test('every section type renders with its default settings', function (): void {
         contains('blk-' . str_replace('_', '-', $type), $html, "rendered $type");
     }
     contains('data-section-id=', $html, 'preview marks sections');
-    contains('<h1 class="hero-title">', $html, 'first hero supplies the h1');
+    contains('<h1 class="hero-title"', $html, 'first hero supplies the h1');
     $public = builder_render($sections, ['viewer' => null, 'page' => null, 'preview' => false]);
     not_contains('data-section-id', $public, 'public render has no editor markers');
     contains('Off air', $public, 'radio placeholder until phase 6');
@@ -52,7 +52,7 @@ test('section schema validation rejects bad values', function (): void {
     ok(isset($e['button1_url']), 'javascript: url rejected');
     same('', $s['button1_url']);
     ok(isset($e['layout']), 'unknown select option');
-    same('split', $s['layout'], 'falls back to the default');
+    same('fullscreen', $s['layout'], 'falls back to the default');
     ok(isset($e['slides']), 'repeater max 6');
     same(6, count($s['slides']));
     ok(isset($e['slides.0.media_id']), 'missing media reported with its path');
@@ -251,7 +251,7 @@ test('WCAG contrast maths', function (): void {
 });
 
 test('design tokens come from the theme and the admin overrides', function (): void {
-    same(['civic', 'harvest', 'heritage', 'monochrome'], array_keys(theme_list()));
+    same(['civic', 'bold', 'harvest', 'heritage', 'monochrome'], array_keys(theme_list()));
     foreach (array_keys(theme_list()) as $key) {
         $d = theme_design_defaults($key);
         $report = design_contrast_report($d);

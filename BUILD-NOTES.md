@@ -8,6 +8,15 @@ and open `/install`, or copy `config.example.php` to `config.php`, then
 lint + tests + smoke test (needs `tests/config.test.php` pointing at an empty
 database).
 
+Local development database (`gather_dev`, http://localhost:8080): the super
+admin is **admin@example.org** with the password **Harbourside-admin-2026**
+(local demo only; set with `GATHER_ADMIN_PASSWORD=… php bin/make-admin
+admin@example.org`). The demo member amara.okafor@example.org has the
+password member-demo-2026 (used by `dev-tools/audit.mjs`). Re-seeding: drop
+the tables, `php bin/migrate`, `bin/make-admin`, `php bin/demo
+admin@example.org`, then pick a theme on the Design screen (the dev site
+uses Bold).
+
 ## Phases done
 
 **Phase 1: skeleton**
@@ -486,6 +495,120 @@ database).
     and 0.1 %, blocks/paused campaigns, mailbox status, set-aside count,
     bounce address), member banner on every account page when their
     address bounced.
+
+**Addendum A6: design system overhaul, 2026-10-25**
+- Assets (all self-hosted, no runtime third-party requests; see CREDITS.md):
+  26 Unsplash photos in `demo-assets/photos/`; Lucide 1.61.0 (ISC) compiled
+  into `public/assets/img/icons.svg` by `dev-tools/build-icons.php` (the map
+  keeps the old short names: pin, help, trash, close…; brand glyphs stay our
+  own drawings because Lucide has no X/WhatsApp marks); three more OFL
+  fonts from Fontsource 5.3.0: Bricolage Grotesque (display grotesk),
+  Instrument Sans (text and admin UI), Newsreader (editorial serif, upright
+  + italic). `design_fonts()` entries carry their weight range; the active
+  heading and body fonts are preloaded (`design_preload_fonts()`).
+- Tokens: `themes/base.css` (loaded into /theme.css before each theme)
+  holds the shared scales: fluid type `--step--2 … --step-6` (display up to
+  5.25rem, tight tracking tokens), eyebrow style tokens, spacing and section
+  rhythm (`--section-y*`), container widths, a layered shadow scale
+  (`--shadow-1…4`, ambient + key, tinted by `--shadow-rgb`), neumorphic
+  (`--shadow-neu*`) and glass materials (with solid fallbacks), overlay
+  gradients, motion durations/easings, dark-band colours (`--c-dark*`,
+  `--c-dark-accent-text` for accent text on dark). Themes: **Bold** (new:
+  near-black, white, crimson; Bricolage + Instrument; square uppercase
+  buttons), **Civic** (navy/teal/gold; Manrope + Instrument; pills, dot
+  markers), **Heritage** (earth tones on cream; Fraunces + Newsreader;
+  italic eyebrows with a rule, round tiles, paper grain), **Harvest**
+  (green/gold; Nunito + Instrument; pill eyebrows, blobs), **Monochrome**
+  (black/white/burnt orange; Newsreader + Instrument; hairline and heavy
+  rules, offset hard shadows). All pass the AA defaults test; preview.png
+  regenerated from the demo. `site.css` lives in `@layer site` so each
+  theme's (unlayered) overrides.css wins although it loads first.
+- Public CSS rewritten (`site.css`): eyebrows with markers, buttons (accent,
+  highlight, ghost, on-dark, light, glass), animated underline links, icon
+  tiles, cards with hover lift and image zoom, post cards with category
+  chips, event cards with date badges, person cards (portrait, name on a
+  gradient, social links on hover), album tiles, page heroes with a fine
+  grid and glow, event heroes over the cover photo, article layout, auth
+  split screen, account header, form cards, FAQ with animated plus/minus.
+- Header and footer: transparent header over a full-height hero (only with
+  JS: `page_flag('overlay_header')` set by the hero, `.is-overlay`), glass
+  bar once scrolled (`.is-scrolled`, solid fallback without
+  backdrop-filter), dropdowns open on hover/click (more than 5 children =
+  two-column "mega" panel), full-screen mobile menu with staggered links,
+  focus kept inside, Escape closes; without JS the menu is a plain list and
+  the header is not sticky on phones. Rich footer: call-to-action strip
+  (heading/text and an outlined wordmark editable under Header and footer:
+  `footer.cta`, `footer.cta_heading`, `footer.cta_text`, `footer.wordmark`),
+  widget columns, bottom bar with back-to-top.
+- Motion (`motion.js`, `hero.js`, `carousel.js`, `accordion.js`,
+  `header.js`): scroll reveal (`data-reveal`, stagger via
+  `data-reveal-group`; nothing is hidden until JS adds `.reveal-ready`),
+  count-up of any number in `[data-count]` text (prefix/suffix and grouping
+  kept), parallax-lite on the hero photo, timeline progress, hero
+  crossfade with Ken Burns, smooth FAQ height animation (WAAPI), showcase
+  index highlight. Everything is skipped under `prefers-reduced-motion`
+  (CSS also neutralises transitions/animations; the marquee becomes a
+  wrapped row).
+- Focal points (migration `016_focal_point`): `media.focal_x/focal_y`
+  (percent). Media edit screen: click the photo or type values (no JS
+  needed), live square/banner/phone previews (`focal.js`). `img_html()`
+  adds `fx-NN fy-NN` classes (5 % steps; CSP allows no style attributes) and
+  every img uses `object-position: var(--fx) var(--fy)`, so crops follow
+  the focal point at every breakpoint (mobile art direction = same photo
+  cropped differently around its focal point; heroes go portrait on
+  phones).
+- Builder: 29 section types. New (group "Story and highlights"):
+  `split_metrics` (photo + heading/text/button + 2-4 numbers with accent
+  rules, optional floating glass chip), `about_band` (dark: heading and
+  story side by side, wide rounded photo with overlaid counters),
+  `process` (steps on a vertical timeline that fills on scroll, optional
+  sticky photo; or cards in a row), `points` (heading/text beside soft rows;
+  dots, ticks or numbers), `showcase` (sticky heading + index beside large
+  numbered photo cards that stack while scrolling), `testimonials` (quote,
+  name, role, photo, 3-5 stars; slider with neumorphic arrows and dots, or
+  grid), `tiers` (2-4 price cards, benefits one per line, featured dark
+  gradient card with a badge), `logos` (partners: logo or icon + name,
+  looping marquee that pauses on hover/focus, or still grid). Upgraded:
+  `hero` (layout `fullscreen` with height full/tall/auto, overlay
+  strength, crossfade slider with dots/arrows/pause/swipe, Ken Burns,
+  optional muted background video from the media library - played only
+  without reduced motion, avatar stack + social-proof line, floating glass
+  card), `stats` (cards / band with icon tiles / big numbers with rules, an
+  icon per number), `features` (cards / tall photo-reveal cards / minimal,
+  photo per card), `cta` (adds dark and photo-with-glass-panel tones and an
+  eyebrow), `upcoming_events` (photo cards with date badges), `latest_posts`
+  (magazine), `gallery` (mosaic), `faq` (heading beside the questions).
+  New section background "Dark". Schema additions: `head_layout`, media
+  fields with `'kind' => 'video'` (validated server-side as a public video),
+  `icon_options_none`. All values are validated by the existing
+  schema-driven `builder_clean_field()`; `_wrap.php` adds `hero-full h-* ov-*`
+  classes; preview labels are a `.sec-label` span. Starter templates Home,
+  About and Membership use the new sections.
+- Demo (`src/lib/demo.php`): photos imported with `media_store()` (WebP
+  400/800/1600, focal points from `DEMO_PHOTOS`; GD artwork only if a file
+  is missing). Home: full-screen hero slider → stats band → partners
+  marquee → image with numbers → photo-reveal programme cards → dark story
+  band → event cards → joining timeline → numbered project showcase → dark
+  testimonials slider → magazine news → mosaic gallery → radio → photo CTA.
+  About, Contact and Membership (tiers, highlights, steps, testimonials
+  grid, FAQ, CTA) are builder pages too; leaders have portraits and social
+  links.
+- Public pages restyled: news list (first post featured), news detail
+  (article header, 21:9 cover, related posts), events (cards), event detail
+  (photo hero with register/calendar buttons), gallery (album tiles, first
+  one large; masonry albums), leaders (each group with person cards),
+  leader profile, radio (dark hero, glass player), join (photo aside),
+  login (split screen with the home hero photo, `site_feature_image()`),
+  FAQ, account shell (dark header, new icons).
+- Admin polish: Instrument Sans, layered shadows, larger radii, graphite
+  sidebar with distinct Lucide icons per screen, stat-card icon tiles,
+  section picker thumbnails redrawn for the upgraded sections and added for
+  the eight new ones (`sections.svg`), focal point UI.
+- Performance: hero photo preloaded with `imagesrcset`; later hero photos
+  ship in `<template>`s and are added after `load`, so they never compete
+  with the first; fonts preloaded; the dev server (`php -S`) now gzips text
+  assets and HTML and caches versioned assets like `.htaccess` does on
+  Apache (only for the built-in server).
 
 ## Tests
 

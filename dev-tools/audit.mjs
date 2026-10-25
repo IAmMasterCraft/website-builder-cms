@@ -35,6 +35,15 @@ async function audit(context, url, label) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
   const res = await page.goto(base + url, { waitUntil: 'networkidle' });
+  // Scroll through the page so scroll-reveal content is shown before axe looks at it.
+  await page.evaluate(async () => {
+    for (let y = 0; y < document.documentElement.scrollHeight; y += Math.round(window.innerHeight * 0.7)) {
+      window.scrollTo(0, y);
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    window.scrollTo(0, 0);
+    await new Promise((r) => setTimeout(r, 1200));
+  });
   await page.addScriptTag({ content: axeSource });
   const result = await page.evaluate(async () => {
     // eslint-disable-next-line no-undef

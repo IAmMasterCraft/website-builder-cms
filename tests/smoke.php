@@ -319,10 +319,10 @@ check('demo home page is a builder page', $homeId > 0 && q_val('SELECT sections 
 $r = $visitor->get('/');
 check('home renders builder sections (hero h1, stats, events)', str_contains($r['body'], 'class="hero-title"') && str_contains($r['body'], 'blk-stats') && str_contains($r['body'], 'blk-upcoming-events'));
 $r = $admin->get("/admin/pages/$homeId/builder");
-check('builder editor loads with its config and picker', $r['status'] === 200 && str_contains($r['body'], 'id="builder-config"') && substr_count($r['body'], 'data-add-type=') === 21);
+check('builder editor loads with its config and picker', $r['status'] === 200 && str_contains($r['body'], 'id="builder-config"') && substr_count($r['body'], 'data-add-type=') === 29);
 $token = preg_match('/name="_csrf" value="([a-f0-9]{64})"/', $r['body'], $m) ? $m[1] : '';
 $cfg = preg_match('#<script type="application/json" id="builder-config">(.*?)</script>#s', $r['body'], $m) ? json_decode($m[1], true) : null;
-check('builder config lists 21 section types with schemas', is_array($cfg) && count($cfg['types']) === 21 && isset($cfg['types']['hero']['schema']));
+check('builder config lists 29 section types with schemas', is_array($cfg) && count($cfg['types']) === 29 && isset($cfg['types']['hero']['schema']));
 $sections = $cfg['sections'];
 $sections[0]['settings']['heading'] = 'Smoke draft heading';
 $json = ['Content-Type: application/json', 'Accept: application/json', 'X-CSRF-Token: ' . $token];
@@ -387,7 +387,7 @@ check('opt-in confirmation is sent without repeating the message', count($copies
 check('confirmations to one address stop after 2 a day (S5)', count($copies[1]) === 2 && count($copies[2]) === 1, json_encode(array_map('count', $copies)));
 $r = $visitor->post('/contact', $fields + ['_csrf' => $token, 'form_ts' => $ts, 'website_url' => 'http://spam.example']);
 check('honeypot submission is refused', (int) q_val("SELECT COUNT(*) FROM contact_messages WHERE email = 'cora@example.test'") === 4);
-foreach (['civic', 'heritage', 'harvest', 'monochrome'] as $t) {
+foreach (['civic', 'bold', 'heritage', 'harvest', 'monochrome'] as $t) {
     $css = $visitor->get('/theme.css?t=' . $t . '&plain=1')['body'];
     check("theme $t is served with its tokens and font faces", str_contains($css, "/* theme: $t */") && str_contains($css, '@font-face'));
 }
@@ -600,6 +600,9 @@ require __DIR__ . '/smoke_admin.php';
 
 // ---- Addendum A: newsletter opt-in, essential notices, bounce handling ------
 require __DIR__ . '/smoke_addendum.php';
+
+// Addendum A6 design system.
+require __DIR__ . '/smoke_design.php';
 
 // ---- Login safety ----------------------------------------------------------
 $r = $visitor->post('/login', ['email' => 'sam@example.test', 'password' => 'x']);
