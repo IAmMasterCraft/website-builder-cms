@@ -35,6 +35,8 @@ rsync -a --exclude '/dev-tools' --exclude '/demo-assets' --exclude '/.git' --exc
 upload=$(cd "$ROOT/public" && find uploads -name '*.webp' -type f | head -1 || true)
 if [ -n "$upload" ]; then mkdir -p "$SITE/public/$(dirname "$upload")" && cp "$ROOT/public/$upload" "$SITE/public/$upload"; fi
 cp "$ROOT/public/uploads/.htaccess" "$SITE/public/uploads/"
+# Probe (copy only): does PHP see the Authorization header through the rewrites?
+awk 'NR == 2 { print; print "if ((string) ($_SERVER[\"REQUEST_URI\"] ?? \"\") === \"/__authprobe\") { echo (string) ($_SERVER[\"HTTP_AUTHORIZATION\"] ?? $_SERVER[\"REDIRECT_HTTP_AUTHORIZATION\"] ?? \"none\"); exit; }"; next } { print }' "$ROOT/public/index.php" > "$SITE/public/index.php"
 mkdir -p "$SITE/.git" && echo 'ref: refs/heads/main' > "$SITE/.git/HEAD"
 echo 'not-a-real-token-0000' > "$SITE/storage/install-token"
 for d in "$SITE" "$SITE/public"; do mkdir -p "$d/.well-known/acme-challenge" && echo ok > "$d/.well-known/acme-challenge/check-token_1"; done
@@ -161,6 +163,8 @@ for mode in public project norewrite; do
     continue
   fi
   run_checks
+  got=$(curl -s -H 'Authorization: Bearer probe-123' "http://127.0.0.1:$APORT/__authprobe")
+  if [ "$got" = 'Bearer probe-123' ]; then echo "  ok    Authorization header reaches PHP (webhooks)"; else echo "  FAIL  Authorization header reaches PHP: got '$got'"; fail=1; fi
   [ "$mode" = project ] && expect 'cPanel DCV file (pki-validation)' /.well-known/pki-validation/ABC123.txt 200
   hdr=$(curl -sI "http://127.0.0.1:$APORT/assets/css/site.css" | tr -d '\r')
   if grep -qi '^cache-control: public, max-age=31536000, immutable' <<<"$hdr"; then echo "  ok    static files cached (immutable)"; else echo "  FAIL  static cache header"; fail=1; fi
