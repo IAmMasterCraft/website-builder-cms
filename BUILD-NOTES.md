@@ -391,7 +391,7 @@ uses Bold).
   bash scripts. Reviewed against the php-plain-security checklist (raw
   input, SQL with variables, unescaped output, innerHTML greps: every hit is
   code-derived or read-only).
-- Deployment kit: `DEPLOY.md` (aaPanel, Apache, PHP-FPM, MySQL; see the
+- Deployment kit (superseded by `docs/`, see Addendum A3/A4): `DEPLOY.md` (aaPanel, Apache, PHP-FPM, MySQL; see the
   file) and `bin/package` (archive of a commit for upload, private files
   excluded and verified). Not deployed anywhere.
 
@@ -609,6 +609,58 @@ uses Bold).
   with the first; fonts preloaded; the dev server (`php -S`) now gzips text
   assets and HTML and caches versioned assets like `.htaccess` does on
   Apache (only for the built-in server).
+
+**Addendum A3/A4: hosting-neutral deployment and documentation, 2026-10-25**
+- No control-panel assumptions in code or messages (a unit test greps
+  `src/`, `templates/`, `bin/`, `public/`, `themes/`, `migrations/` for
+  `/www/server`, `/www/wwwroot`, `aapanel`, `www:www`). Backups screen and
+  `backup.php` wording made generic.
+- System health group **Server and paths** (`health_path_items()`): web
+  server and SAPI, install folder, document root mode
+  (`health_docroot_mode()`: public / project = root `.htaccess` fallback /
+  other / unknown), config file, php.ini (+ per-folder ini name), open_basedir,
+  the user PHP runs as, the PHP CLI for cron (`health_php_cli_candidates()`:
+  PHP_BINARY when CLI, PHP_BINDIR/phpX.Y, PHP_BINDIR/php, sbin/../bin/php,
+  sibling php; first executable wins, otherwise unconfirmed) and the exact
+  cron line (`health_cron_line()`, appends to `storage/logs/cron.log`, quotes
+  paths with spaces). Overview, Email settings and the Cron health item show
+  that line (computed in the controllers). Paths and the line render as
+  copyable code.
+- Root `.htaccess` (fallback when the document root is the project folder):
+  `.well-known/` is served as is (AutoSSL / Let's Encrypt HTTP checks), dot
+  paths such as `.git/` are refused by a rewrite rule and by `RedirectMatch`
+  (no `<If>`, for wider server support), top-level notes/config files denied
+  even without mod_rewrite. `public/.htaccess` copies the `Authorization`
+  header into the environment: under PHP-FPM/CGI Apache dropped it, so the
+  Postmark (basic auth) and Brevo (bearer) webhooks always got 401.
+- `dev-tools/htaccess-check.sh`: throwaway Apache (macOS `/usr/sbin/httpd`,
+  mod_rewrite, mod_proxy_fcgi, mod_alias) + Homebrew php-fpm against a temp
+  copy of the checkout (httpd cannot read ~/Desktop); checks public pages,
+  PHP-made `.css/.png/.xml` routes, uploads, ACME/DCV files, 20+ private
+  paths and the Authorization header in three layouts (document root
+  `public/`, project folder, project folder without mod_rewrite). All pass.
+- `nginx.conf.example` (root `public/`, only `index.php` runs, uploads WebP
+  only, static caching with fallback to PHP for `/theme.css` etc., 330 MB
+  body, ACME location). Not run through `nginx -t` (no nginx here).
+- `bin/package --zip` (matching zip) and `--zip --flat` (no top folder, for
+  extracting into `public_html`); `docs/` no longer shipped. Test builds all
+  three and compares their file lists.
+- Install token page explains the file-manager route (no terminal).
+- UI fixes found while documenting: admin `.fields`/`.field`/`.media-field`
+  grids use `minmax(0, 1fr)` (side-panel controls overflowed at 1280 px);
+  "New FAQ" instead of "New faq" (`content_label_lower()`); stale texts (radio
+  "arrives in a later update", group ID "(phase 4)", profile "contact us to
+  change your email").
+- `docs/`: index, getting the code, requirements, cPanel / VPS / aaPanel /
+  Plesk / local guides, email deliverability, website manager guide (29 pages
+  + How do I…?), member guide; 84 WebP screenshots (4.3 MB) from
+  `dev-tools/doc-shots.mjs` (light theme, 1280 px, some 375 px; the health and
+  email-settings shots from a neutral copy at `/Users/Shared/gather` so no home
+  path shows; the OS user name is replaced in shots). DEPLOY.md is now a
+  pointer to `docs/`.
+- Known gap: admins have no profile page to change their own password; the
+  docs point to "Forgotten your password?" or a super admin's "Send password
+  link".
 
 ## Tests
 
