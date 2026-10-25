@@ -4,11 +4,11 @@ $query = array_filter($filters, static fn ($v) => $v !== '');
 $pages = (int) ceil($total / $per);
 ?>
 <div class="page-head">
-  <div><h1><?= e($type['plural']) ?></h1><p class="tabular"><?= e(pluralise($total, strtolower($type['label']))) ?></p></div>
+  <div><h1><?= e($type['plural']) ?></h1><p class="tabular"><?= e(pluralise($total, content_label_lower($type))) ?></p></div>
   <div class="actions">
     <?php if ($key === 'leaders'): ?><a class="btn ghost" href="/admin/leader-groups"><?= icon('layers') ?> Groups</a><?php endif ?>
     <?php if ($key === 'posts'): ?><a class="btn ghost" href="/admin/categories"><?= icon('tag') ?> Categories</a><?php endif ?>
-    <a class="btn accent" href="/admin/<?= e($key) ?>/new"><?= icon('plus') ?> New <?= e(strtolower($type['label'])) ?></a>
+    <a class="btn accent" href="/admin/<?= e($key) ?>/new"><?= icon('plus') ?> New <?= e(content_label_lower($type)) ?></a>
   </div>
 </div>
 <div class="panel">

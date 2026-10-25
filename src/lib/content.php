@@ -273,6 +273,13 @@ function content_types(): array
     return $types;
 }
 
+/** A type's label inside a sentence: "post", "leader group", but acronyms stay ("FAQ"). */
+function content_label_lower(array $type): string
+{
+    $label = (string) $type['label'];
+    return preg_match('/^[A-Z0-9]{2,}$/', $label) ? $label : strtolower($label);
+}
+
 function content_type(string $key): array
 {
     $types = content_types();

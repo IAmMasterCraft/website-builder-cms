@@ -112,7 +112,7 @@ final class Content
         render('admin/content_form', [
             'options' => $options,
             'datalists' => $datalists,
-            'title' => ($row ? 'Edit ' : 'New ') . strtolower($type['label']),
+            'title' => ($row ? 'Edit ' : 'New ') . content_label_lower($type),
             'type' => $type,
             'values' => $values,
             'errors' => $errors,
@@ -238,7 +238,7 @@ final class Content
             if ($e->getCode() !== '23000') {
                 throw $e;
             }
-            flash('This ' . strtolower($type['label']) . ' is still used elsewhere (for example leaders in a group), so it cannot be deleted yet.', 'error');
+            flash('This ' . content_label_lower($type) . ' is still used elsewhere (for example leaders in a group), so it cannot be deleted yet.', 'error');
             redirect('/admin/' . $type['key'] . '/' . $row['id'] . '/edit');
         }
         audit('delete', $type['item'], (int) $row['id'], (string) ($row[$type['title']] ?? ''));

@@ -9,7 +9,7 @@ $fieldData = ['values' => $values, 'errors' => $errors, 'options' => $options, '
 <div class="page-head">
   <div>
     <p class="crumbs"><a href="/admin/<?= e($key) ?>"><?= e($type['plural']) ?></a> /</p>
-    <h1><?= $row ? e((string) $row[$type['title']]) : 'New ' . e(strtolower($type['label'])) ?></h1>
+    <h1><?= $row ? e((string) $row[$type['title']]) : 'New ' . e(content_label_lower($type)) ?></h1>
   </div>
   <div class="actions">
     <?php if ($row && $key === 'events'): ?><a class="btn ghost" href="/admin/events/<?= (int) $row['id'] ?>/registrations"><?= icon('ticket') ?> Registrations</a><?php endif ?>
@@ -42,7 +42,7 @@ $fieldData = ['values' => $values, 'errors' => $errors, 'options' => $options, '
       <div class="panel"><div class="panel-body fields">
         <?php foreach ($side as $f): ?><?= view('admin/_field', ['f' => $f] + $fieldData) ?><?php endforeach ?>
         <div class="form-actions">
-          <button class="btn accent" type="submit"><?= icon('check') ?> <?= $row ? 'Save changes' : 'Create ' . e(strtolower($type['label'])) ?></button>
+          <button class="btn accent" type="submit"><?= icon('check') ?> <?= $row ? 'Save changes' : 'Create ' . e(content_label_lower($type)) ?></button>
           <a class="btn ghost" href="/admin/<?= e($key) ?>">Cancel</a>
         </div>
         <?php if ($row): ?><p class="hint muted">Last saved <?= e(fmt_datetime($row['updated_at'])) ?></p><?php endif ?>
@@ -51,11 +51,11 @@ $fieldData = ['values' => $values, 'errors' => $errors, 'options' => $options, '
   </div>
 </form>
 <?php if ($row): ?>
-  <form method="post" action="/admin/<?= e($key) ?>/<?= (int) $row['id'] ?>/delete" class="panel panel-body" data-confirm="Delete this <?= e(strtolower($type['label'])) ?>? This cannot be undone.">
+  <form method="post" action="/admin/<?= e($key) ?>/<?= (int) $row['id'] ?>/delete" class="panel panel-body" data-confirm="Delete this <?= e(content_label_lower($type)) ?>? This cannot be undone.">
     <?= csrf_field() ?>
     <h2>Delete</h2>
-    <p class="muted">Removes this <?= e(strtolower($type['label'])) ?> permanently.</p>
-    <button class="btn danger-ghost" type="submit"><?= icon('trash') ?> Delete <?= e(strtolower($type['label'])) ?></button>
+    <p class="muted">Removes this <?= e(content_label_lower($type)) ?> permanently.</p>
+    <button class="btn danger-ghost" type="submit"><?= icon('trash') ?> Delete <?= e(content_label_lower($type)) ?></button>
   </form>
 <?php endif ?>
 <?= view('admin/_picker_template') ?>

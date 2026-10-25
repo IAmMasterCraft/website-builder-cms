@@ -185,3 +185,9 @@ test('admin list cells format status, dates and counts', function (): void {
     same('2 Jan 2027, 10:00', $cells[0]['start_at'][0]);
     same('/admin/events/' . $id . '/registrations', $cells[0]['registrations'][2]);
 });
+
+test('type labels in sentences keep acronyms (New FAQ, New leader group)', function (): void {
+    same('FAQ', content_label_lower(content_type('faqs')));
+    same('leader group', content_label_lower(content_type('leader-groups')));
+    same('post', content_label_lower(content_type('posts')));
+});
