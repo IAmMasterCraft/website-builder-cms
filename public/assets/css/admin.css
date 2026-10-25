@@ -1,15 +1,19 @@
 /* Gather admin. Its own token set (independent of the public theme), light by
    default with a dark mode (system preference or the toggle). */
+@font-face { font-family: "Instrument Sans Variable"; font-style: normal; font-display: swap; font-weight: 400 700; src: url(/assets/fonts/instrument-sans-latin-wght-normal.woff2) format("woff2-variations"), url(/assets/fonts/instrument-sans-latin-wght-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Instrument Sans Variable"; font-style: normal; font-display: swap; font-weight: 400 700; src: url(/assets/fonts/instrument-sans-latin-ext-wght-normal.woff2) format("woff2-variations"), url(/assets/fonts/instrument-sans-latin-ext-wght-normal.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 :root {
   --bg: #f4f6f9; --panel: #ffffff; --panel-2: #f8fafc; --line: #dde3ea; --line-strong: #c3ccd7;
   --ink: #111a24; --ink-soft: #34404f; --muted: #5a6779;
   --brand: #12355b; --brand-ink: #fff; --accent: #0b7577; --accent-soft: #dff2f1; --accent-ink: #075456; --accent-on: #fff;
-  --side: #0d2742; --side-ink: #c9d5e3; --side-ink-strong: #ffffff; --side-hover: rgb(255 255 255 / 0.08); --side-active: rgb(94 234 212 / 0.14); --side-accent: #5eead4;
+  --side: #0f1419; --side-ink: #c9d2dc; --side-ink-strong: #ffffff; --side-hover: rgb(255 255 255 / 0.08); --side-active: rgb(94 234 212 / 0.14); --side-accent: #5eead4;
   --ok: #17663a; --ok-soft: #e3f4ea; --warn: #8a5a00; --warn-soft: #fdf1d8; --bad: #b42318; --bad-soft: #fdecea;
   --focus: #f2b246;
-  --r-s: 6px; --r-m: 10px; --r-l: 14px;
-  --sh-1: 0 1px 2px rgb(16 24 40 / 0.06); --sh-2: 0 4px 16px -4px rgb(16 24 40 / 0.14); --sh-3: 0 16px 40px -12px rgb(16 24 40 / 0.3);
-  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --r-s: 8px; --r-m: 12px; --r-l: 16px;
+  --sh-1: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 1px rgb(16 24 40 / 0.03);
+  --sh-2: 0 1px 2px rgb(16 24 40 / 0.05), 0 6px 14px -4px rgb(16 24 40 / 0.1), 0 16px 32px -16px rgb(16 24 40 / 0.16);
+  --sh-3: 0 4px 8px rgb(16 24 40 / 0.05), 0 24px 48px -16px rgb(16 24 40 / 0.3);
+  --font: "Instrument Sans Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -40,7 +44,7 @@ h2 { font-size: 1.15rem; }
 h3 { font-size: 1rem; }
 p { margin: 0 0 0.75rem; text-wrap: pretty; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
-.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .skip-link { position: absolute; left: 1rem; top: -4rem; z-index: 100; background: var(--focus); color: #111; padding: 0.5rem 1rem; border-radius: var(--r-s); font-weight: 600; }
 .skip-link:focus { top: 0.5rem; }
@@ -618,3 +622,47 @@ code { overflow-wrap: anywhere; }
 .health-list p { overflow-wrap: anywhere; }
 .date-range { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .date-range input { width: auto; min-height: 36px; }
+
+/* ---- A6 polish: depth, spacing and the media focal point ----------------------- */
+body { font-size: 15px; letter-spacing: -0.003em; }
+h1 { font-size: 1.75rem; letter-spacing: -0.025em; font-weight: 650; }
+.page-head { margin-bottom: 1.75rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--line); }
+.panel { border-color: color-mix(in srgb, var(--line) 80%, transparent); box-shadow: var(--sh-2); }
+.panel-head { padding: 1.05rem 1.35rem; }
+.panel-body { padding: 1.35rem; }
+.stat-card { box-shadow: var(--sh-2); border-color: color-mix(in srgb, var(--line) 80%, transparent); padding: 1.15rem 1.25rem; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--sh-3); }
+.stat-card .label .icon { display: inline-grid; width: 30px; height: 30px; padding: 6px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-ink); }
+.btn { border-radius: 10px; }
+.btn.accent { box-shadow: 0 1px 2px rgb(16 24 40 / 0.08), 0 6px 14px -6px color-mix(in srgb, var(--accent) 70%, transparent); }
+.logo-mark { background: linear-gradient(135deg, #5eead4, #0b7577 55%, #12355b); }
+.sidebar nav a { border-radius: 10px; }
+.sidebar nav a[aria-current="page"] { box-shadow: inset 0 0 0 1px rgb(94 234 212 / 0.18); }
+.topbar { box-shadow: 0 1px 0 var(--line), 0 6px 20px -16px rgb(16 24 40 / 0.4); border-bottom-color: transparent; }
+.section-tiles { grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr)); gap: 0.75rem; }
+.section-tiles button { padding: 0.55rem 0.55rem 0.8rem; border-radius: var(--r-l); }
+.section-tiles button:hover, .section-tiles button:focus-visible { transform: translateY(-2px); }
+.tile-art { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); }
+.picker-body > h3 { margin: 1.5rem 0 0.75rem; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.picker-body > h3:first-child { margin-top: 0.25rem; }
+.picker-file { display: grid; place-items: center; aspect-ratio: 1; background: var(--panel); color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+/* Focal point: click the photo to set it; previews show three crops. */
+.focal-stage { position: relative; display: block; overflow: hidden; border-radius: var(--r-m); }
+.focal-stage.is-active { cursor: crosshair; }
+.focal-stage img { width: 100%; }
+.focal-marker { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 0 2px rgb(0 0 0 / 0.45), 0 6px 18px rgb(0 0 0 / 0.35); pointer-events: none; }
+.focal-marker::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff; }
+.focal-fields { margin: 0; padding: 1rem 1.1rem 1.1rem; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--panel-2); display: grid; gap: 0.75rem; }
+.focal-fields legend { padding: 0 0.35rem; font-weight: 650; }
+.focal-fields .hint { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.focal-inputs { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.focal-previews { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; }
+.focal-previews figure { margin: 0; display: grid; gap: 0.3rem; font-size: 0.75rem; color: var(--muted); }
+.fp-frame { overflow: hidden; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); background: var(--panel); }
+.fp-frame img { width: 100%; height: 100%; object-fit: cover; }
+.fp-square { width: 6.5rem; aspect-ratio: 1; }
+.fp-wide { width: 10rem; aspect-ratio: 21 / 9; }
+.fp-tall { width: 4.5rem; aspect-ratio: 9 / 16; }
+img { object-position: var(--fx, 50%) var(--fy, 50%); }
+.fx-0 { --fx: 0%; } .fx-5 { --fx: 5%; } .fx-10 { --fx: 10%; } .fx-15 { --fx: 15%; } .fx-20 { --fx: 20%; } .fx-25 { --fx: 25%; } .fx-30 { --fx: 30%; } .fx-35 { --fx: 35%; } .fx-40 { --fx: 40%; } .fx-45 { --fx: 45%; } .fx-55 { --fx: 55%; } .fx-60 { --fx: 60%; } .fx-65 { --fx: 65%; } .fx-70 { --fx: 70%; } .fx-75 { --fx: 75%; } .fx-80 { --fx: 80%; } .fx-85 { --fx: 85%; } .fx-90 { --fx: 90%; } .fx-95 { --fx: 95%; } .fx-100 { --fx: 100%; }
+.fy-0 { --fy: 0%; } .fy-5 { --fy: 5%; } .fy-10 { --fy: 10%; } .fy-15 { --fy: 15%; } .fy-20 { --fy: 20%; } .fy-25 { --fy: 25%; } .fy-30 { --fy: 30%; } .fy-35 { --fy: 35%; } .fy-40 { --fy: 40%; } .fy-45 { --fy: 45%; } .fy-55 { --fy: 55%; } .fy-60 { --fy: 60%; } .fy-65 { --fy: 65%; } .fy-70 { --fy: 70%; } .fy-75 { --fy: 75%; } .fy-80 { --fy: 80%; } .fy-85 { --fy: 85%; } .fy-90 { --fy: 90%; } .fy-95 { --fy: 95%; } .fy-100 { --fy: 100%; }
