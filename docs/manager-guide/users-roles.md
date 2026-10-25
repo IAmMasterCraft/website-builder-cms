@@ -25,6 +25,7 @@ and last login. Search and filter by status (**Active** / **Suspended**).
 | **Events** | Events and registrations |
 | **Jobs** | The job board queue and settings |
 | **Gallery and media** | Albums and the media library |
+| **Essential membership notices** | Nothing on its own. Together with Communications: mark a campaign as an essential notice (sent even to members who switched news emails off) and send or schedule it |
 
 Only super admins can reach Design, Site settings, Membership settings,
 Custom fields, Email settings, Users and roles, the Audit log, Backups and

@@ -78,6 +78,8 @@ final class EmailSettings
         if ($v['mb_protocol'] !== 'off') {
             if (!preg_match('/^[A-Za-z0-9.-]{1,190}$/', $v['mb_host'])) {
                 $e['mb_host'] = 'Enter the mail server name, e.g. imap.example.org.';
+            } elseif (($problem = mailbox_host_problem($v['mb_host'])) !== null) {
+                $e['mb_host'] = $problem;
             }
             if (!ctype_digit($v['mb_port']) || (int) $v['mb_port'] < 1 || (int) $v['mb_port'] > 65535) {
                 $e['mb_port'] = 'Enter a port (IMAP 993, POP3 995).';

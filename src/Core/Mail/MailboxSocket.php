@@ -17,7 +17,7 @@ abstract class MailboxSocket implements BounceMailbox
     protected const MAX_LINE = 1_000_000;
 
     /**
-     * @param array{host:string, port:int, encryption:string, username:string, password:string, timeout?:int, cafile?:string} $cfg
+     * @param array{host:string, port:int, encryption:string, username:string, password:string, timeout?:int, cafile?:string, connect_ip?:?string} $cfg
      */
     public function __construct(protected readonly array $cfg)
     {
@@ -40,7 +40,9 @@ abstract class MailboxSocket implements BounceMailbox
         $errstr = '';
         set_error_handler(static fn (): bool => true);
         try {
-            $s = stream_socket_client($scheme . '://' . $host . ':' . (int) $this->cfg['port'], $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $ctx);
+            // connect_ip: the address the caller checked (TLS still verifies the certificate against $host).
+            $target = (string) ($this->cfg['connect_ip'] ?? '') !== '' ? (str_contains((string) $this->cfg['connect_ip'], ':') ? '[' . $this->cfg['connect_ip'] . ']' : (string) $this->cfg['connect_ip']) : $host;
+            $s = stream_socket_client($scheme . '://' . $target . ':' . (int) $this->cfg['port'], $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $ctx);
         } finally {
             restore_error_handler();
         }

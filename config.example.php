@@ -28,5 +28,8 @@ return [
         'driver'     => 'file',
         'from_email' => 'no-reply@example.org',
         'from_name'  => 'Gather',
+        // Only if the bounce mailbox server is on this machine or your private network:
+        // allows a loopback/private address as the mailbox host (refused otherwise).
+        // 'allow_internal_mailbox_host' => true,
     ],
 ];

@@ -92,7 +92,7 @@ final class Engagement
         csrf_check();
         $user = self::member();
         $ok = comment_report((int) $p['id'], (int) $user['id'], input('reason'));
-        flash($ok ? 'Thank you. A moderator will look at this comment.' : 'You have already reported this comment.', 'info');
+        flash($ok ? 'Thank you. A moderator will look at this comment.' : 'You have already reported this comment, or reached today’s limit of ' . COMMENT_REPORTS_PER_DAY . ' reports.', 'info');
         self::back('#comment-' . (int) $p['id']);
     }
 }

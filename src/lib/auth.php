@@ -11,7 +11,7 @@ const LOGIN_MAX_FAILURES_IP = 50;
 const LOGIN_MAX_FAILURES_EMAIL = 30;
 const LOGIN_LOCK_SECONDS = 900;
 
-/** Admin permission keys (§2) => label. */
+/** Admin permission keys (§2, plus essential_notices from the second security review) => label. */
 function admin_permissions(): array
 {
     return [
@@ -23,6 +23,8 @@ function admin_permissions(): array
         'events'         => 'Events',
         'jobs'           => 'Jobs',
         'gallery_media'  => 'Gallery and media',
+        // Review 2: a flag on top of Communications, no area of its own.
+        'essential_notices' => 'Essential membership notices (with Communications: mark campaigns as essential and send them)',
     ];
 }
 

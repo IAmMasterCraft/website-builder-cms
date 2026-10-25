@@ -584,12 +584,20 @@ test('comments (A1): published straight away, one reply level, 15-minute edit wi
     mailer(null, true);
 });
 
+/** A member whose account is old enough for their reports to count towards auto-hide. */
+function established_member(int $days = 30): array
+{
+    $m = fixture_full_member();
+    q('UPDATE users SET created_at = UTC_TIMESTAMP() - INTERVAL ' . $days . ' DAY WHERE id = ?', [$m['user_id']]);
+    return $m;
+}
+
 test('comments (A1): reports from 3 different members hide a comment until an admin keeps it', function (): void {
     reset_comms();
     $post = fixture_post_id();
     $writer = current_user_row(fixture_full_member()['user_id']);
     [$c] = comment_add($writer, 'post', $post, 'Contentious');
-    $reporters = [fixture_full_member(), fixture_full_member(), fixture_full_member()];
+    $reporters = [established_member(), established_member(), established_member()];
     ok(comment_report($c, $reporters[0]['user_id'], 'spam'));
     ok(comment_report($c, $reporters[1]['user_id'], 'spam'));
     same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c]), 'two reports: still visible');
@@ -609,4 +617,50 @@ test('comments (A1): reports from 3 different members hide a comment until an ad
     comment_moderate($d, 'hide', $admin);
     ok(comment_moderate($d, 'keep', $admin));
     same('hidden', q_val('SELECT status FROM comments WHERE id = ?', [$d]));
+});
+
+test('comments (review 2): only established members count, staff comments never auto-hide, 10 reports a day', function (): void {
+    reset_comms();
+    q("DELETE FROM rate_hits WHERE bucket LIKE 'comment-report:%'");
+    $post = fixture_post_id();
+    $writer = current_user_row(fixture_full_member()['user_id']);
+    // Three brand-new accounts: reported, but not hidden.
+    [$c] = comment_add($writer, 'post', $post, 'Reported by new accounts');
+    foreach ([fixture_full_member(), fixture_full_member(), fixture_full_member()] as $m) {
+        ok(comment_report($c, $m['user_id'], 'spam'));
+    }
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c]), 'accounts younger than 7 days do not hide');
+    // Unverified or suspended old accounts do not count either.
+    $unverified = established_member();
+    q("UPDATE users SET status = 'unverified' WHERE id = ?", [$unverified['user_id']]);
+    $six = established_member(6);
+    ok(comment_report($c, $unverified['user_id'], 'spam'));
+    ok(comment_report($c, $six['user_id'], 'spam'));
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c]));
+    $old = [established_member(), established_member(), established_member()];
+    ok(comment_report($c, $old[0]['user_id'], 'spam'));
+    ok(comment_report($c, $old[1]['user_id'], 'spam'));
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$c]), 'two established reporters');
+    ok(comment_report($c, $old[2]['user_id'], 'spam'));
+    same('hidden', q_val('SELECT status FROM comments WHERE id = ?', [$c]), 'three established reporters hide it');
+    // A staff comment is never hidden automatically; it waits in the queue.
+    $staff = current_user_row(fixture_admin('admin', ['content']));
+    [$sc] = comment_add($staff, 'post', $post, 'Official answer');
+    foreach ([established_member(), established_member(), established_member(), established_member()] as $m) {
+        ok(comment_report($sc, $m['user_id'], 'disagree'));
+    }
+    same('approved', q_val('SELECT status FROM comments WHERE id = ?', [$sc]), 'staff comment stays visible');
+    ok(comments_reported_count() >= 1, 'but is in the Reports queue');
+    // Daily limit per reporter.
+    $busy = established_member();
+    $ids = [];
+    for ($i = 0; $i < COMMENT_REPORTS_PER_DAY + 1; $i++) {
+        q("DELETE FROM rate_hits WHERE bucket LIKE 'comment:%'"); // the writer's own posting limit is not under test
+        [$ids[]] = comment_add($writer, 'post', $post, 'Comment ' . $i);
+    }
+    for ($i = 0; $i < COMMENT_REPORTS_PER_DAY; $i++) {
+        ok(comment_report($ids[$i], $busy['user_id'], 'x'), 'report ' . ($i + 1));
+    }
+    ok(!comment_report($ids[COMMENT_REPORTS_PER_DAY], $busy['user_id'], 'x'), 'the 11th report today is refused');
+    same(0, (int) q_val('SELECT COUNT(*) FROM comment_reports WHERE comment_id = ?', [$ids[COMMENT_REPORTS_PER_DAY]]));
 });

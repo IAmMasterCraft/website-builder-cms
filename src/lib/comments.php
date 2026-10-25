@@ -7,8 +7,10 @@ declare(strict_types=1);
  * level of replies and are published straight away (no approval); they can
  * be edited for 15 minutes and reported. Reported comments wait in the
  * admin "Reports" queue, where an admin keeps or hides them; a comment
- * reported by COMMENT_AUTO_HIDE_REPORTS different members is hidden
- * automatically until an admin reviews it. Items: posts (likes + comments,
+ * reported by COMMENT_AUTO_HIDE_REPORTS different established members
+ * (active, account at least COMMENT_REPORTER_MIN_DAYS old) is hidden
+ * automatically until an admin reviews it. Staff comments are never hidden
+ * automatically, and a member can report COMMENT_REPORTS_PER_DAY comments a day. Items: posts (likes + comments,
  * each switched on per post) and downloads (likes).
  */
 
@@ -16,6 +18,9 @@ const COMMENT_EDIT_MINUTES = 15;
 const COMMENT_MAX = 2000;
 /** Open reports from this many different members hide a comment until an admin reviews it. */
 const COMMENT_AUTO_HIDE_REPORTS = 3;
+/** Only reports from active members whose account is at least this old count towards auto-hide (new accounts are cheap). */
+const COMMENT_REPORTER_MIN_DAYS = 7;
+const COMMENT_REPORTS_PER_DAY = 10;
 
 /** item type => [table, supports comments] */
 function engagement_items(): array
@@ -215,27 +220,45 @@ function comment_remove(int $id, ?int $ownerId = null): bool
 }
 
 /**
- * Report a published comment (once per member). When open reports from
- * COMMENT_AUTO_HIDE_REPORTS different members add up, the comment is hidden
- * until an admin keeps or removes it. Returns false when already reported
- * or not available.
+ * Report a published comment (once per member, COMMENT_REPORTS_PER_DAY a
+ * day). When open reports from COMMENT_AUTO_HIDE_REPORTS different
+ * established members add up (active member accounts at least
+ * COMMENT_REPORTER_MIN_DAYS old), the comment is hidden until an admin keeps
+ * or removes it; staff comments only go to the queue. Returns false when
+ * already reported, over the daily limit, or not available.
  */
 function comment_report(int $id, int $userId, string $reason): bool
 {
-    return db_tx(static function () use ($id, $userId, $reason): bool {
-        $c = q_one("SELECT id, user_id FROM comments WHERE id = ? AND status = 'approved' AND deleted_at IS NULL FOR UPDATE", [$id]);
+    $bucket = 'comment-report:' . $userId;
+    if (rate_limited($bucket, COMMENT_REPORTS_PER_DAY, 86400)) {
+        return false;
+    }
+    $ok = db_tx(static function () use ($id, $userId, $reason): bool {
+        $c = q_one("SELECT c.id, c.user_id, u.role AS author_role FROM comments c LEFT JOIN users u ON u.id = c.user_id
+                     WHERE c.id = ? AND c.status = 'approved' AND c.deleted_at IS NULL FOR UPDATE", [$id]);
         if ($c === null || (int) ($c['user_id'] ?? 0) === $userId) {
             return false;
         }
         if (q('INSERT IGNORE INTO comment_reports (comment_id, user_id, reason) VALUES (?, ?, ?)', [$id, $userId, mb_substr($reason, 0, 500)])->rowCount() !== 1) {
             return false;
         }
-        $reporters = (int) q_val('SELECT COUNT(DISTINCT user_id) FROM comment_reports WHERE comment_id = ? AND resolved_at IS NULL AND user_id IS NOT NULL', [$id]);
+        if (in_array($c['author_role'], ['super_admin', 'admin'], true)) {
+            return true; // staff comments wait for a person to decide
+        }
+        $reporters = (int) q_val(
+            "SELECT COUNT(DISTINCT r.user_id) FROM comment_reports r JOIN users u ON u.id = r.user_id
+              WHERE r.comment_id = ? AND r.resolved_at IS NULL AND u.status = 'active' AND u.role IN ('member', 'group') AND u.created_at <= ?",
+            [$id, gmdate('Y-m-d H:i:s', time() - COMMENT_REPORTER_MIN_DAYS * 86400)]
+        );
         if ($reporters >= COMMENT_AUTO_HIDE_REPORTS) {
             q("UPDATE comments SET status = 'hidden', hidden_reason = 'reports' WHERE id = ?", [$id]);
         }
         return true;
     });
+    if ($ok) {
+        rate_hit($bucket);
+    }
+    return $ok;
 }
 
 /**

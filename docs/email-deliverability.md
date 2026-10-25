@@ -153,6 +153,13 @@ Bounces reach Gather in up to three ways:
 
    Microsoft 365 / Outlook.com no longer accept plain passwords for IMAP, so
    they cannot be used as a bounce mailbox.
+
+   The mail server must be a public name: `localhost`, private addresses
+   (such as `192.168.…` or `10.…`) and link-local addresses are refused. If
+   the mailbox really runs on the same server or private network, the
+   person who installed the site can allow it by adding
+   `'allow_internal_mailbox_host' => true` to the `mail` section of
+   `config.php`.
 4. **Save bounce settings**, then **Check the bounce mailbox now**. The boxes
    underneath show the last check, how many messages were processed, and how
    many were set aside.

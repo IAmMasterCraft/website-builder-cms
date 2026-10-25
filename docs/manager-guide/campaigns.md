@@ -115,7 +115,10 @@ Normally, campaigns only go to members who opted in to **News and event
 updates**. Some messages must reach every member, though: the notice of the
 annual general meeting, a change to the constitution, membership renewal.
 
-Tick **Essential membership notice** in the campaign. Then:
+Tick **Essential membership notice** in the campaign. Only super admins, and
+admins who also have the **Essential membership notices** permission (see
+[Users and roles](users-roles.md)), can tick or untick it and send or
+schedule an essential notice; for other admins the box is greyed out. Then:
 
 - it goes to **every active member in the audience**, even those who switched
   news emails off;

@@ -75,7 +75,7 @@ final class Campaigns
     public static function save(array $p): void
     {
         csrf_check();
-        require_permission('communications');
+        $user = require_permission('communications');
         $c = self::find((int) $p['id']);
         $json = str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
         if (!self::editable($c)) {
@@ -121,7 +121,8 @@ final class Campaigns
         }
         $pre = mb_substr(input('preheader'), 0, 200);
         // A2: "Essential membership notice" ignores newsletter preferences, so every change is audited.
-        $essential = input('essential') === '1';
+        // Only admins with the essential_notices permission (and super admins) may change the flag; for others it stays as it was.
+        $essential = user_can($user, 'essential_notices') ? input('essential') === '1' : (bool) $c['essential'];
         $saved = campaign_save_draft((int) $c['id'], [
             'subject' => $subject, 'preheader' => $pre, 'essential' => $essential ? 1 : 0,
             'blocks' => json_encode($blocks, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
@@ -190,6 +191,10 @@ final class Campaigns
         $c = self::find((int) $p['id']);
         if (!self::editable($c)) {
             flash('This campaign has already been sent.', 'error');
+            redirect('/admin/campaigns/' . $c['id']);
+        }
+        if ($c['essential'] && !user_can($user, 'essential_notices')) {
+            flash('This campaign is marked as an essential membership notice. Only a super admin or an admin with the “Essential membership notices” permission can send or schedule it.', 'error');
             redirect('/admin/campaigns/' . $c['id']);
         }
         [, $errors] = campaign_blocks_validate(json_decode((string) $c['blocks'], true));

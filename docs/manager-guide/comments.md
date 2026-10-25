@@ -38,7 +38,11 @@ what it replies to, and the reports with their reasons. Actions:
   as "[deleted]" so their replies still make sense.
 
 **Automatic hiding**: a comment reported by **three different members** is
-hidden at once, until you look at it. Keep it to show it again.
+hidden at once, until you look at it. Keep it to show it again. Only reports
+from verified members whose account is at least 7 days old count towards
+this, so a handful of new accounts cannot silence someone. Comments by
+admins are never hidden automatically: they wait in **Reports** for you to
+decide. Each member can report up to 10 comments a day.
 
 Reported comments are counted on the dashboard's **Needs attention** and in
 the bell at the top.

@@ -1087,3 +1087,43 @@ test('A5 suppression list: admins clear bounces, never unsubscribes', function (
     same(1, (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'clear' AND item_type = 'suppression' AND summary LIKE 'fixed@%'"));
     act_as(null);
 });
+
+test('A5 LOW: the bounce mailbox host must not be internal unless config allows it', function (): void {
+    reset_bounces();
+    $public = static fn (string $h): array => ['93.184.216.34'];
+    $internal = static fn (string $h): array => ['10.1.2.3'];
+    foreach (['127.0.0.1', '10.0.0.5', '192.168.1.10', '172.16.0.1', '169.254.169.254', '0.0.0.0'] as $ip) {
+        contains('internal address', (string) mailbox_host_problem($ip), $ip);
+    }
+    contains('internal address', (string) mailbox_host_problem('localhost'), 'localhost resolves to loopback');
+    contains('internal address', (string) mailbox_host_problem('imap.example.net', $internal), 'a public-looking name pointing inside');
+    same(null, mailbox_host_problem('imap.example.net', $public));
+    contains('could not be found', (string) mailbox_host_problem('imap.example.net', static fn (string $h): array => []));
+    // Polling refuses before connecting; the reason is shown on the health page.
+    setting_set('mail.bounce', ['mailbox' => ['protocol' => 'imap', 'host' => '127.0.0.1', 'port' => 993, 'encryption' => 'ssl', 'username' => 'u']]);
+    $s = bounce_mailbox_poll();
+    contains('internal address', $s['error']);
+    contains('internal address', bounce_mailbox_state()['last_error']);
+    // The settings form refuses it too.
+    act_as(fixture_admin());
+    request('POST', '/admin/settings/email/bounces', ['_csrf' => csrf_token(), 'bounce_address' => '', 'per_domain_minute' => '30', 'mb_protocol' => 'imap', 'mb_host' => '169.254.169.254',
+        'mb_port' => '993', 'mb_encryption' => 'ssl', 'mb_username' => 'u', 'mb_max_messages' => '500', 'mb_max_age_days' => '30']);
+    ob_start();
+    try {
+        \Admin\EmailSettings::updateBounces([]);
+    } catch (\Core\Redirect) {
+        // a redirect means it was saved
+    }
+    $html = (string) ob_get_clean();
+    contains('internal address', $html);
+    same('127.0.0.1', bounce_settings()['mailbox']['host'], 'not saved');
+    // With the explicit config switch an internal host is accepted.
+    $cfg = config_all();
+    config_all(array_replace_recursive($cfg, ['mail' => ['allow_internal_mailbox_host' => true]]));
+    try {
+        same(null, mailbox_host_problem('127.0.0.1'));
+    } finally {
+        config_all($cfg);
+    }
+    act_as(null);
+});

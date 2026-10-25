@@ -103,3 +103,39 @@ test('A2 sign-up newsletter box starts unticked unless the super admin changes t
     contains('name="newsletters" value="1" checked', $html);
     setting_set('members', []);
 });
+
+test('A2 (review 2): the essential flag needs the essential_notices permission to change or to send', function (): void {
+    reset_comms();
+    $blocks = json_encode([['type' => 'heading', 'text' => 'AGM', 'size' => 'large']]);
+    $aud = json_encode(audience_default());
+    $id = db_insert('campaigns', ['subject' => 'Notice', 'blocks' => $blocks, 'audience' => $aud]);
+    $form = static fn (string $essential): array => ['_csrf' => csrf_token(), 'op' => 'save', 'subject' => 'Notice', 'preheader' => '', 'essential' => $essential,
+        'blocks' => [['type' => 'heading', 'text' => 'AGM', 'size' => 'large']]] + array_map('strval', audience_default());
+    // Communications only: the box is ignored, the flag stays off; and on stays on.
+    act_as(fixture_admin('admin', ['communications']));
+    request('POST', '/admin/campaigns/' . $id, $form('1'));
+    throws(\Core\Redirect::class, fn () => \Admin\Campaigns::save(['id' => (string) $id]));
+    same(0, (int) q_val('SELECT essential FROM campaigns WHERE id = ?', [$id]), 'cannot mark as essential');
+    same(0, (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'essential_on' AND item_id = ?", [$id]));
+    q('UPDATE campaigns SET essential = 1 WHERE id = ?', [$id]);
+    request('POST', '/admin/campaigns/' . $id, $form(''));
+    throws(\Core\Redirect::class, fn () => \Admin\Campaigns::save(['id' => (string) $id]));
+    same(1, (int) q_val('SELECT essential FROM campaigns WHERE id = ?', [$id]), 'cannot unmark either');
+    request('POST', '/admin/campaigns/' . $id . '/send', ['_csrf' => csrf_token(), 'mode' => 'now']);
+    throws(\Core\Redirect::class, fn () => \Admin\Campaigns::send(['id' => (string) $id]));
+    same('draft', q_val('SELECT status FROM campaigns WHERE id = ?', [$id]), 'cannot send an essential notice');
+    contains('Essential membership notices', (string) ($_SESSION['flash']['message'] ?? ''));
+    // With the permission: may unmark and mark.
+    act_as(fixture_admin('admin', ['communications', 'essential_notices']));
+    request('POST', '/admin/campaigns/' . $id, $form(''));
+    throws(\Core\Redirect::class, fn () => \Admin\Campaigns::save(['id' => (string) $id]));
+    same(0, (int) q_val('SELECT essential FROM campaigns WHERE id = ?', [$id]));
+    request('POST', '/admin/campaigns/' . $id, $form('1'));
+    throws(\Core\Redirect::class, fn () => \Admin\Campaigns::save(['id' => (string) $id]));
+    same(1, (int) q_val('SELECT essential FROM campaigns WHERE id = ?', [$id]));
+    same(1, (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'essential_on' AND item_id = ?", [$id]));
+    // essential_notices alone opens no admin area.
+    act_as(fixture_admin('admin', ['essential_notices']));
+    same(403, throws(\Core\HttpException::class, fn () => \Admin\Campaigns::edit(['id' => (string) $id]))->status);
+    act_as(null);
+});

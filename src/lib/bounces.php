@@ -563,14 +563,56 @@ function bounce_local_aside_dir(): string
     return BASE . '/storage/bounces';
 }
 
-/** The configured mailbox client, or null when polling is off. */
+/** Is $ip a loopback, private, link-local or otherwise reserved address? */
+function ip_is_internal(string $ip): bool
+{
+    return filter_var($ip, FILTER_VALIDATE_IP) === false
+        || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+}
+
+/**
+ * The address to connect to for a mailbox host, or a problem: the host must
+ * resolve, and to a public address unless config.php sets
+ * 'mail' => ['allow_internal_mailbox_host' => true] (a mail server on the
+ * same machine or network). Stops the mailbox settings from being used to
+ * probe internal services.
+ * @return array{0:?string,1:?string} [ip, problem]
+ */
+function mailbox_host_resolve(string $host, ?callable $resolve = null): array
+{
+    $host = strtolower($host);
+    $ips = filter_var($host, FILTER_VALIDATE_IP) !== false ? [$host] : (($resolve ?? 'gethostbynamel')($host) ?: []);
+    if ($ips === []) {
+        return [null, 'The mail server name “' . $host . '” could not be found.'];
+    }
+    if (config('mail.allow_internal_mailbox_host', false) !== true) {
+        foreach ($ips as $ip) {
+            if (ip_is_internal($ip)) {
+                return [null, 'The mail server must be on the internet: “' . $host . '” points to an internal address (' . $ip . '). If your mailbox really is on this server or network, set mail.allow_internal_mailbox_host in config.php.'];
+            }
+        }
+    }
+    return [$ips[0], null];
+}
+
+function mailbox_host_problem(string $host, ?callable $resolve = null): ?string
+{
+    return mailbox_host_resolve($host, $resolve)[1];
+}
+
+/** The configured mailbox client, or null when polling is off. Throws when the host is not allowed. */
 function bounce_mailbox_client(): ?Core\Mail\BounceMailbox
 {
     $mb = bounce_settings()['mailbox'];
     if (!in_array($mb['protocol'], ['imap', 'pop3'], true) || $mb['host'] === '') {
         return null;
     }
-    $cfg = ['host' => $mb['host'], 'port' => (int) $mb['port'], 'encryption' => $mb['encryption'], 'username' => $mb['username'],
+    // Resolved once and connected to by address (TLS still checks the name), so a DNS change between check and connect cannot redirect it.
+    [$ip, $problem] = mailbox_host_resolve($mb['host']);
+    if ($problem !== null) {
+        throw new Core\Mail\MailboxException($problem);
+    }
+    $cfg = ['host' => $mb['host'], 'connect_ip' => $ip, 'port' => (int) $mb['port'], 'encryption' => $mb['encryption'], 'username' => $mb['username'],
         'password' => secret_open($mb['password']), 'folder' => $mb['folder'] !== '' ? $mb['folder'] : 'INBOX',
         'aside_folder' => $mb['aside_folder'] !== '' ? $mb['aside_folder'] : 'Gather-Unprocessed', 'cafile' => $mb['cafile'], 'timeout' => 20];
     return $mb['protocol'] === 'imap' ? new Core\Mail\ImapClient($cfg) : new Core\Mail\Pop3Client($cfg);
@@ -592,7 +634,14 @@ function bounce_mailbox_poll(?Core\Mail\BounceMailbox $mb = null, int $limit = B
 {
     $now ??= time();
     $stats = ['read' => 0, 'recorded' => 0, 'review' => 0, 'ignored' => 0, 'unparsed' => 0, 'oversized' => 0, 'pruned' => 0, 'error' => ''];
-    $mb ??= bounce_mailbox_client();
+    try {
+        $mb ??= bounce_mailbox_client();
+    } catch (Core\Mail\MailboxException $e) {
+        $stats['error'] = $e->getMessage();
+        $state = bounce_mailbox_state();
+        setting_set('mail.bounce_state', ['last_poll' => $now, 'last_error' => $stats['error']] + $state);
+        return $stats;
+    }
     if ($mb === null) {
         $stats['error'] = 'off';
         return $stats;
