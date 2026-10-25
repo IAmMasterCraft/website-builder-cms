@@ -81,7 +81,7 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good
       <div class="panel-head"><h2 id="sys-title">System</h2></div>
       <div class="panel-body">
         <p>Cron last ran: <strong><?= $cron_last ? e(fmt_datetime($cron_last)) : 'never' ?></strong></p>
-        <?php if (!$cron_last || strtotime($cron_last . ' UTC') < time() - 600): ?><p class="notice-box">Cron does not seem to be running. Add <code>* * * * * php <?= e(BASE) ?>/bin/cron</code> to the server’s crontab. Scheduled items still publish when someone visits the site.</p><?php endif ?>
+        <?php if (!$cron_last || strtotime($cron_last . ' UTC') < time() - 600): ?><p class="notice-box">Cron does not seem to be running. Add <code><?= e($cron_line) ?></code> to the crontab of the user PHP runs as (System health shows the details). Scheduled items still publish when someone visits the site.</p><?php endif ?>
         <p class="muted">PHP <?= e(PHP_VERSION) ?></p>
       </div>
     </section>

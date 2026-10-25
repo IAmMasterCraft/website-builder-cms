@@ -24,6 +24,7 @@ final class EmailSettings
             'per_minute' => (string) mail_per_minute(), 'birthday_time' => birthday_time(),
         ];
         render('admin/email_settings', [
+            'cron_line' => health_detected_cron_line(),
             'title' => 'Email settings', 'values' => $values + $current, 'errors' => $errors, 'has_password' => $smtp['has_password'],
             'counts' => mail_queue_counts(), 'user' => current_user(),
         ] + self::bounceData($bounceValues, $bounceErrors), 'admin', $status);

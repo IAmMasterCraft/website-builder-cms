@@ -1,0 +1,113 @@
+# Gather: example Nginx server block (Nginx + PHP-FPM).
+#
+# Copy to /etc/nginx/sites-available/gather (Debian/Ubuntu) and replace:
+#   community.example.org        your domain
+#   /var/www/gather              the folder Gather is installed in
+#   /run/php/php8.3-fpm.sock     your PHP-FPM socket (ls /run/php/)
+# then:  ln -s /etc/nginx/sites-available/gather /etc/nginx/sites-enabled/
+#        nginx -t && systemctl reload nginx
+#        certbot --nginx -d community.example.org     (adds the certificate lines)
+#
+# Only public/ is the web root. Everything else (src/, storage/, config.php)
+# is outside it and can never be served. PHP runs only through index.php.
+# Gather sends its own security headers (CSP, HSTS on HTTPS, nosniff...) from
+# PHP; the static-file headers below match what public/.htaccess does on Apache.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name community.example.org;
+
+    root /var/www/gather/public;
+    index index.php;
+    charset utf-8;
+    server_tokens off;
+
+    # Radio video can be up to 300 MB, audio up to 100 MB: allow a little more.
+    # Keep in step with upload_max_filesize / post_max_size in php.ini.
+    client_max_body_size 330m;
+    client_body_timeout 300s;
+
+    gzip on;
+    gzip_vary on;
+    gzip_types text/plain text/css text/javascript application/javascript application/json
+               image/svg+xml application/xml application/rss+xml text/calendar;
+
+    # Let's Encrypt HTTP challenges must stay reachable.
+    location ^~ /.well-known/acme-challenge/ {
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    # Never serve dotfiles, dumps, archives, logs or notes from the web root.
+    location ~ /\. {
+        deny all;
+    }
+    location ~* \.(sql|gz|zip|tar|log|bak|ini|sh|md|dist|lock)$ {
+        deny all;
+    }
+    location ~ ~$ {
+        deny all;
+    }
+
+    # Uploaded image variants: WebP only, never executed, never listed.
+    location ^~ /uploads/ {
+        location ~* \.webp$ {
+            add_header Cache-Control "public, max-age=31536000, immutable";
+            add_header X-Content-Type-Options "nosniff" always;
+            try_files $uri =404;
+        }
+        return 403;
+    }
+
+    # Versioned static assets. A few URLs with these endings are made by PHP
+    # (/theme.css, /theme-preview/*.png, /media/...): they fall back to index.php.
+    location ~* \.(css|js|svg|webp|png|jpg|woff2)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        try_files $uri /index.php$is_args$args;
+    }
+
+    # Everything else: a real file, or the front controller.
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    # The only PHP file that runs.
+    location = /index.php {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        fastcgi_param HTTPS $https if_not_empty;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_read_timeout 300s;
+        # Backups and radio media are streamed by PHP: do not spool them to disk.
+        fastcgi_buffering off;
+    }
+
+    # Any other .php request is refused.
+    location ~ \.php$ {
+        return 404;
+    }
+}
+
+# After "certbot --nginx", Certbot adds "listen 443 ssl", the certificate
+# paths and a port-80 redirect to this block. Done by hand, the HTTPS part
+# looks like:
+#
+# server {
+#     listen 443 ssl;
+#     listen [::]:443 ssl;
+#     http2 on;                       # Nginx 1.25.1+; older: "listen 443 ssl http2;"
+#     server_name community.example.org;
+#     ssl_certificate     /etc/letsencrypt/live/community.example.org/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/community.example.org/privkey.pem;
+#     ... everything from the block above, from "root" down ...
+# }
+# server {
+#     listen 80;
+#     listen [::]:80;
+#     server_name community.example.org;
+#     return 301 https://$host$request_uri;
+# }

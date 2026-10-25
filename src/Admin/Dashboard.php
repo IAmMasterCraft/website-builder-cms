@@ -66,6 +66,7 @@ final class Dashboard
             'activity_all' => $all,
             'user' => $user,
             'cron_last' => is_string($cron) ? $cron : null,
+            'cron_line' => health_detected_cron_line(),
         ];
     }
 

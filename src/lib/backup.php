@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /*
  * Backups (§7, super admin; §10 cron). Pure PHP, no shell commands, so they
- * work on hosts where exec() is disabled (aaPanel's default).
+ * work on hosts where exec() is disabled (common on shared hosting and control panels).
  *
  * - Database: backup_dump_db() streams SQL (DROP/CREATE + batched INSERTs)
  *   from a consistent InnoDB snapshot on its own unbuffered connection, so

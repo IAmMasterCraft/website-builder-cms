@@ -96,6 +96,157 @@ function health_cron_running(?int $now = null): bool
     return is_string($last) && strtotime($last . ' UTC') >= ($now ?? time()) - 600;
 }
 
+/**
+ * Likely PHP command-line binaries for the cron line, most specific first.
+ * The web request often runs under PHP-FPM, LSAPI or CGI, so PHP_BINARY is
+ * not the CLI; the CLI usually sits in PHP_BINDIR (php8.3 on Debian/Ubuntu,
+ * php elsewhere) or next to the FPM binary (sbin/ -> bin/). Pure function:
+ * no file checks, so it can be tested with any host's values.
+ * @return list<string>
+ */
+function health_php_cli_candidates(string $binary, string $bindir, string $sapi, string $version = PHP_VERSION): array
+{
+    $mm = (string) preg_replace('/^(\d+\.\d+).*/', '$1', $version);
+    $out = [];
+    if ($sapi === 'cli' && $binary !== '') {
+        $out[] = $binary;
+    }
+    if ($bindir !== '') {
+        $out[] = rtrim($bindir, '/') . '/php' . $mm;
+        $out[] = rtrim($bindir, '/') . '/php';
+    }
+    if ($binary !== '') {
+        $dir = dirname($binary);
+        if (basename($dir) === 'sbin') {
+            $out[] = dirname($dir) . '/bin/php';
+        }
+        $out[] = $dir . '/php';
+    }
+    return array_values(array_unique($out));
+}
+
+/**
+ * The PHP CLI path to show in the cron line: the first candidate that exists
+ * and is executable. open_basedir can hide paths outside the site, so when
+ * nothing can be confirmed the first candidate is returned unconfirmed.
+ * @return array{path:string, confirmed:bool}
+ */
+function health_php_cli(): array
+{
+    $candidates = health_php_cli_candidates(PHP_BINARY, PHP_BINDIR, PHP_SAPI);
+    foreach ($candidates as $c) {
+        // open_basedir makes these checks warn (and return false) outside the site folder.
+        if (health_quiet(static fn (): bool => is_file($c) && is_executable($c))) {
+            return ['path' => $c, 'confirmed' => true];
+        }
+    }
+    return ['path' => $candidates[0] ?? 'php', 'confirmed' => false];
+}
+
+/** Run a file-system probe with warnings silenced (open_basedir); restores the handler. */
+function health_quiet(callable $fn): mixed
+{
+    set_error_handler(static fn (): bool => true);
+    try {
+        return $fn();
+    } finally {
+        restore_error_handler();
+    }
+}
+
+/** Quote a path for a shell line only when it needs it. */
+function health_shell_path(string $p): string
+{
+    return preg_match('#^[A-Za-z0-9_./~+-]+$#', $p) ? $p : escapeshellarg($p);
+}
+
+/** The one crontab line for this install (generic: no user or panel assumptions). */
+function health_cron_line(string $php, string $base): string
+{
+    $base = rtrim($base, '/');
+    return '* * * * * ' . health_shell_path($php) . ' ' . health_shell_path($base . '/bin/cron')
+        . ' >> ' . health_shell_path($base . '/storage/logs/cron.log') . ' 2>&1';
+}
+
+/** Cron line for this server, built from the detected PHP CLI and install folder. */
+function health_detected_cron_line(): string
+{
+    return health_cron_line(health_php_cli()['path'], BASE);
+}
+
+/**
+ * Where the web server's document root points: 'public' (recommended),
+ * 'project' (the install folder; the root .htaccess routes into public/),
+ * 'other' or 'unknown' (built-in server, CLI).
+ */
+function health_docroot_mode(string $docroot, string $base): string
+{
+    if ($docroot === '') {
+        return 'unknown';
+    }
+    $norm = static function (string $p): string {
+        $r = health_quiet(static fn (): string|false => realpath($p));
+        return rtrim($r !== false ? $r : $p, '/');
+    };
+    $d = $norm($docroot);
+    return match ($d) {
+        $norm($base . '/public') => 'public',
+        $norm($base) => 'project',
+        default => 'other',
+    };
+}
+
+/** Name of the operating-system user PHP runs as (for permissions), or '' when unknown. */
+function health_process_user(): string
+{
+    if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+        $pw = health_quiet(static fn (): array|false => posix_getpwuid(posix_geteuid()));
+        if (is_array($pw) && isset($pw['name'])) {
+            return (string) $pw['name'];
+        }
+    }
+    $u = function_exists('get_current_user') ? get_current_user() : '';
+    return is_string($u) ? $u : '';
+}
+
+/**
+ * "Server and paths" group: the detected install folder, document root, PHP
+ * binary and the cron line to copy. Nothing here assumes a control panel.
+ * @return list<array{label:string,status:string,detail:string}>
+ */
+function health_path_items(): array
+{
+    $out = [];
+    $software = (string) ($_SERVER['SERVER_SOFTWARE'] ?? '');
+    $out[] = health_item('Web server', 'ok', ($software !== '' ? $software : 'unknown') . ' · PHP ' . PHP_SAPI);
+    $out[] = health_item('Install folder', 'ok', BASE);
+    $docroot = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
+    $mode = health_docroot_mode($docroot, BASE);
+    $out[] = health_item('Document root', $mode === 'other' ? 'warn' : 'ok', match ($mode) {
+        'public' => $docroot . ' (the public folder: recommended)',
+        'project' => $docroot . ' (the install folder: the .htaccess there sends every request into public/. This works on Apache and LiteSpeed; pointing the document root at ' . BASE . '/public is safer if your host allows it)',
+        'unknown' => 'not reported (built-in development server or command line)',
+        default => $docroot . ': expected ' . BASE . '/public',
+    });
+    $out[] = health_item('Configuration file', 'ok', config_path());
+    $ini = php_ini_loaded_file();
+    $scanned = php_ini_scanned_files();
+    $userIni = (string) ini_get('user_ini.filename');
+    $out[] = health_item('php.ini', 'ok', ($ini !== false ? $ini : 'none loaded')
+        . ($scanned !== false && trim($scanned) !== '' ? ' (+ ' . count(array_filter(array_map('trim', explode(',', $scanned)))) . ' extra .ini files)' : '')
+        . ($userIni !== '' && (str_contains(PHP_SAPI, 'cgi') || str_contains(PHP_SAPI, 'fpm')) ? '; per-folder settings file: ' . $userIni : ''));
+    $basedir = (string) ini_get('open_basedir');
+    $out[] = health_item('open_basedir', 'ok', $basedir !== '' ? $basedir : 'not set');
+    $user = health_process_user();
+    $out[] = health_item('PHP runs as', 'ok', $user !== '' ? $user . ' (this user must be able to write storage/ and public/uploads/; cron should run as the same user)' : 'unknown');
+    $cli = health_php_cli();
+    $out[] = health_item('PHP for cron', $cli['confirmed'] ? 'ok' : 'warn', $cli['path'] . ($cli['confirmed']
+        ? ' (PHP ' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . ' command line)'
+        : ': could not be confirmed from here. Ask your host for the path of the PHP ' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . ' command-line binary'));
+    $out[] = health_item('Cron line', 'ok', health_detected_cron_line());
+    return $out;
+}
+
 /** Scheduled items whose publish time passed but are still "scheduled". */
 function health_overdue_scheduled(): int
 {
@@ -163,8 +314,8 @@ function health_checks(?int $now = null): array
     $running = health_cron_running($now);
     $last = setting('cron.last_run');
     $cron[] = health_item('Cron', $running ? 'ok' : 'bad', is_string($last)
-        ? 'last run ' . fmt_datetime($last) . ($running ? '' : ': not running. Add: * * * * * php ' . BASE . '/bin/cron')
-        : 'never ran. Add to the crontab: * * * * * php ' . BASE . '/bin/cron');
+        ? 'last run ' . fmt_datetime($last) . ($running ? '' : ': not running. Add this line to the crontab of the user PHP runs as: ' . health_detected_cron_line())
+        : 'never ran. Add this line to the crontab of the user PHP runs as: ' . health_detected_cron_line());
     foreach (health_cron_jobs($now) as $job) {
         $cron[] = health_item('Job ' . $job['name'], $job['failed'] !== null ? 'bad' : ($job['stale'] ? 'warn' : 'ok'), $job['every'] . ' · ' . ($job['last'] !== null ? 'last ' . fmt_datetime(gmdate('Y-m-d H:i:s', $job['last'])) : 'never')
             . ($job['failed'] !== null ? ' · failed at ' . fmt_datetime(gmdate('Y-m-d H:i:s', $job['failed'])) . ', retried every 15 minutes (see storage/logs/php-error.log)' : ''));
@@ -234,6 +385,7 @@ function health_checks(?int $now = null): array
         ($b['enabled'] ? 'on, daily at ' . $b['time'] . ', keeping ' . $b['keep'] : 'off') . ($latest ? ' · newest ' . fmt_datetime(gmdate('Y-m-d H:i:s', $latest['time'])) : ' · none stored'));
     $g['Mail and site'] = $m;
     $g['Bounces and complaints'] = health_bounce_items($now);
+    $g['Server and paths'] = health_path_items();
     return $g;
 }
 

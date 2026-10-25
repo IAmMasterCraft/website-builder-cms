@@ -18,7 +18,7 @@
             <button class="btn ghost" type="submit"><?= icon('download') ?> Download uploads</button>
           </form>
         </div>
-        <p class="hint">To restore, upload the files to a fresh copy of the site and run <code>php bin/restore gather-…-db.sql.gz</code>, then unzip the uploads into the site folder. See DEPLOY.md.</p>
+        <p class="hint">To restore, upload the files to a fresh copy of the site and run <code>php bin/restore gather-…-db.sql.gz</code>, then unzip the uploads into the site folder. The guide <em>docs/manager-guide/backups.md</em> walks through it.</p>
       </div>
     </section>
     <section class="panel"><div class="panel-head"><h2>Stored on the server</h2><span class="muted small-text">storage/backups (not reachable from the web)</span></div>
@@ -49,7 +49,7 @@
       <?= field_html('time', 'Time (site time zone)', 'time', (string) $settings['time'], $errors['time'] ?? null, ['prefix' => 'b']) ?>
       <?= field_html('keep', 'Keep the newest', 'number', (string) $settings['keep'], $errors['keep'] ?? null, ['prefix' => 'b', 'min' => 1, 'max' => 60, 'hint' => 'Older backups are deleted automatically (counted separately for database and uploads).']) ?>
       <?= field_html('uploads', 'Include uploaded files (needs disk space for a full copy each day)', 'checkbox', !empty($settings['uploads']) ? '1' : '', null, ['prefix' => 'b']) ?>
-      <p class="hint">Keep a copy off the server too: download one now and then, or add aaPanel’s own site and database backup tasks.</p>
+      <p class="hint">Keep a copy off the server too: download one now and then, or use your hosting’s own backup tool (cPanel Backup, Plesk Backup Manager, a VPS snapshot).</p>
       <button class="btn accent" type="submit"><?= icon('check') ?> Save schedule</button>
     </div>
   </form>

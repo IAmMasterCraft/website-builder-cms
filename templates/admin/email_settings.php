@@ -1,4 +1,4 @@
-<?php /** @var array $values @var array $errors @var bool $has_password @var array $counts @var array $user @var array $bounce @var array $bounce_errors @var array $bounce_saved @var array $bounce_state @var array $webhook_urls @var array $webhook_on @var int $unparsed_local */
+<?php /** @var array $values @var array $errors @var bool $has_password @var array $counts @var array $user @var array $bounce @var array $bounce_errors @var array $bounce_saved @var array $bounce_state @var array $webhook_urls @var array $webhook_on @var int $unparsed_local @var string $cron_line */
 $v = static fn (string $k): string => (string) ($values[$k] ?? '');
 $err = static fn (string $k): ?string => $errors[$k] ?? null;
 ?>
@@ -58,7 +58,7 @@ $err = static fn (string $k): ?string => $errors[$k] ?? null;
         <div><dt>Sent</dt><dd><?= (int) $counts['sent'] ?></dd></div>
         <div><dt>Failed</dt><dd><?= (int) $counts['failed'] ?></dd></div>
       </dl>
-      <p class="hint muted">Cron sends the queue every minute: <code>* * * * * php <?= e(BASE) ?>/bin/cron</code></p>
+      <p class="hint muted">Cron sends the queue every minute: <code><?= e($cron_line) ?></code></p>
     </div></section>
   </div>
 </div>

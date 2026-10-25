@@ -10,7 +10,7 @@ lint_errors=$(find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n
 for f in bin/migrate bin/make-admin bin/cron bin/demo bin/backup bin/restore; do
   out=$("$PHP" -l "$f" 2>&1) || lint_errors+=$'\n'"$out"
 done
-for f in bin/check bin/package; do out=$(bash -n "$f" 2>&1) || lint_errors+=$'\n'"$out"; done
+for f in bin/check bin/package dev-tools/htaccess-check.sh; do out=$(bash -n "$f" 2>&1) || lint_errors+=$'\n'"$out"; done
 if [ -n "$lint_errors" ]; then echo "$lint_errors"; exit 1; fi
 echo "all PHP files lint"
 

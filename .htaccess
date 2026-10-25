@@ -1,10 +1,24 @@
-# Safety net if the host points the web root at the project folder instead
-# of public/: route every request into public/.
+# Fallback for hosts where the document root cannot point at public/ (for
+# example the main domain of a cPanel account, which is fixed to public_html):
+# every request is routed into public/, so only public/ is ever served.
+# Pointing the document root at public/ is still the better setup; then this
+# file is not used (public/.htaccess has its own rewrite rules, which replace
+# these for everything inside public/).
+Options -Indexes
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  # Certificate checks (AutoSSL, Let's Encrypt) put files in .well-known/ of
+  # the document root: serve those as they are.
+  RewriteCond %{REQUEST_URI} !^/\.well-known/
   RewriteCond %{REQUEST_URI} !^/public/
   RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
-<FilesMatch "^(config\.php|config\.example\.php|\.env.*)$">
+# No dot-folders or dotfiles (.git from a Git deploy, .env...), except .well-known.
+<If "%{REQUEST_URI} =~ m#(^|/)\.(?!well-known/)#">
+  Require all denied
+</If>
+# Belt and braces if mod_rewrite is off: the private folders deny themselves
+# (each has its own .htaccess); these top-level files are denied here.
+<FilesMatch "^(config\.php|config\.example\.php|\.env.*|\.user\.ini|VERSION|nginx\.conf\.example)$|\.(md|sql|gz|zip|tar|log|bak|sh|lock)$">
   Require all denied
 </FilesMatch>

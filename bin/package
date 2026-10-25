@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
-# Build the upload archive for the aaPanel server (see DEPLOY.md).
-#   bin/package [git-ref]        default: HEAD  ->  dist/gather-<date>-<commit>.tar.gz
+# Build the upload archive for any host (see docs/getting-the-code.md).
+#   bin/package [--zip] [git-ref]   default: HEAD  ->  dist/gather-<date>-<commit>.tar.gz
+#   --zip also writes dist/gather-<date>-<commit>.zip (cPanel and Plesk file
+#   managers extract .zip with one click). Both hold one top folder, gather/.
 # Packages committed files only (git archive), then removes everything the
-# server must not get: config.php, storage contents, tests, dev tools and
-# developer notes. macOS metadata (._* files, xattrs) is kept out with
-# COPYFILE_DISABLE=1 and tar --no-xattrs --no-mac-metadata.
+# server does not need: config.php, storage contents, tests, dev tools,
+# developer notes and docs/ (read those on GitHub or in a clone). macOS
+# metadata (._* files, xattrs) is kept out with COPYFILE_DISABLE=1 and
+# tar --no-xattrs --no-mac-metadata.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-ref="${1:-HEAD}"
+zip=0
+ref=HEAD
+for arg in "$@"; do
+  case "$arg" in
+    --zip) zip=1 ;;
+    -h|--help) sed -n '2,5p' "$0"; exit 0 ;;
+    -*) echo "unknown option: $arg" >&2; exit 1 ;;
+    *) ref="$arg" ;;
+  esac
+done
+if [ "$zip" = 1 ]; then command -v zip >/dev/null || { echo "zip is needed for --zip" >&2; exit 1; }; fi
 command -v git >/dev/null || { echo "git is needed to package" >&2; exit 1; }
 git rev-parse --verify --quiet "$ref^{commit}" >/dev/null || { echo "unknown git ref: $ref" >&2; exit 1; }
 if [ "$ref" = "HEAD" ] && [ -n "$(git status --porcelain --untracked-files=no)" ]; then
@@ -24,7 +37,7 @@ git archive --format=tar "$ref" | tar -x -C "$stage/gather"
 
 cd "$stage/gather"
 # Never shipped: secrets, runtime data, tests, dev tooling, developer notes.
-rm -rf config.php tests dev-tools .gitignore BUILD-NOTES.md bin/check bin/package demo-assets/make-radio-demo.php
+rm -rf config.php tests dev-tools docs .gitignore BUILD-NOTES.md bin/check bin/package demo-assets/make-radio-demo.php
 find storage public/uploads -mindepth 2 -type f ! -name '.gitkeep' ! -name '.htaccess' -delete 2>/dev/null || true
 find public/uploads -mindepth 1 -type f ! -name '.gitkeep' ! -name '.htaccess' -delete
 find . \( -name '._*' -o -name '.DS_Store' \) -type f -delete
@@ -33,13 +46,24 @@ printf 'commit=%s\nbuilt=%s\n' "$commit_full" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >
 cd "$stage"
 COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata --exclude='._*' --exclude='.DS_Store' -czf "$ROOT/dist/$name.tar.gz" gather
 
-# Show what went in, and refuse to finish if anything private slipped through.
-list=$(tar -tzf "$ROOT/dist/$name.tar.gz")
-bad=$(printf '%s\n' "$list" | grep -E '^gather/config\.php$|^gather/storage/install-token$|^gather/tests/|^gather/dev-tools/|(^|/)\._|\.DS_Store$|^gather/storage/[^/]+/[^.][^/]*$|^gather/\.git/' || true)
-if [ -n "$bad" ]; then
-  echo "refusing: private files in the archive:" >&2
-  echo "$bad" >&2
-  rm -f "$ROOT/dist/$name.tar.gz"
-  exit 1
+if [ "$zip" = 1 ]; then
+  rm -f "$ROOT/dist/$name.zip"
+  # -X: no extra uid/gid fields; Unix permission bits are kept for unzip.
+  (cd "$stage" && zip -qrX "$ROOT/dist/$name.zip" gather -x '*/._*' '*/.DS_Store')
 fi
-printf 'dist/%s.tar.gz  (%s files, %s)\n' "$name" "$(printf '%s\n' "$list" | grep -vc '/$')" "$(du -h "$ROOT/dist/$name.tar.gz" | cut -f1)"
+
+# Show what went in, and refuse to finish if anything private slipped through.
+private='^gather/config\.php$|^gather/storage/install-token$|^gather/tests/|^gather/dev-tools/|(^|/)\._|\.DS_Store$|^gather/storage/[^/]+/[^.][^/]*$|^gather/\.git/'
+check_list() { # $1 = archive, $2 = file list
+  local bad
+  bad=$(printf '%s\n' "$2" | grep -E "$private" || true)
+  if [ -n "$bad" ]; then
+    echo "refusing: private files in $1:" >&2
+    echo "$bad" >&2
+    rm -f "$ROOT/dist/$name.tar.gz" "$ROOT/dist/$name.zip"
+    exit 1
+  fi
+  printf 'dist/%s  (%s files, %s)\n' "$1" "$(printf '%s\n' "$2" | grep -vc '/$')" "$(du -h "$ROOT/dist/$1" | cut -f1)"
+}
+check_list "$name.tar.gz" "$(tar -tzf "$ROOT/dist/$name.tar.gz")"
+if [ "$zip" = 1 ]; then check_list "$name.zip" "$(unzip -Z1 "$ROOT/dist/$name.zip")"; fi

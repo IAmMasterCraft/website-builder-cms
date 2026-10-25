@@ -165,7 +165,7 @@ test('backups cron job runs daily at the configured local time', function (): vo
 
 test('health checks report PHP, extensions, database, cron, storage and uploads', function (): void {
     $g = health_checks();
-    same(['PHP', 'Database', 'Cron', 'Storage', 'Uploads', 'Mail and site', 'Bounces and complaints'], array_keys($g));
+    same(['PHP', 'Database', 'Cron', 'Storage', 'Uploads', 'Mail and site', 'Bounces and complaints', 'Server and paths'], array_keys($g));
     $find = static function (string $label) use ($g): ?array {
         foreach ($g as $items) {
             foreach ($items as $i) {
@@ -252,4 +252,103 @@ test('analytics: only allow-listed providers with valid IDs; CSP widened just fo
     same(false, analytics_config()['cookies'], 'cookieless provider: no banner');
     setting_set('analytics', []);
     same(null, analytics_config());
+});
+
+// ---- A3: hosting-neutral paths, cron line and packaging ---------------------
+
+test('PHP CLI candidates cover FPM, LSAPI and CLI layouts without panel paths', function (): void {
+    // Debian/Ubuntu PHP-FPM
+    same(['/usr/bin/php8.3', '/usr/bin/php', '/usr/sbin/php'], health_php_cli_candidates('/usr/sbin/php-fpm8.3', '/usr/bin', 'fpm-fcgi', '8.3.6'));
+    // a panel that installs PHP under its own prefix (sbin/php-fpm -> bin/php)
+    $c = health_php_cli_candidates('/opt/panel/php/83/sbin/php-fpm', '/opt/panel/php/83/bin', 'fpm-fcgi', '8.3.1');
+    same('/opt/panel/php/83/bin/php8.3', $c[0]);
+    ok(in_array('/opt/panel/php/83/bin/php', $c, true));
+    // cPanel EasyApache with LSAPI: lsphp next to php
+    ok(in_array('/opt/cpanel/ea-php82/root/usr/bin/php', health_php_cli_candidates('/opt/cpanel/ea-php82/root/usr/bin/lsphp', '/opt/cpanel/ea-php82/root/usr/bin', 'litespeed', '8.2.20'), true));
+    // already the CLI: itself first
+    same('/usr/local/bin/php', health_php_cli_candidates('/usr/local/bin/php', '/usr/local/bin', 'cli', '8.4.0')[0]);
+    $cli = health_php_cli();
+    ok($cli['path'] !== '' && is_bool($cli['confirmed']));
+});
+
+test('cron line is generic, uses the install folder and quotes paths with spaces', function (): void {
+    same('* * * * * /usr/bin/php8.3 /var/www/gather/bin/cron >> /var/www/gather/storage/logs/cron.log 2>&1', health_cron_line('/usr/bin/php8.3', '/var/www/gather/'));
+    $line = health_cron_line('/usr/bin/php', '/home/me/My Site');
+    contains("'/home/me/My Site/bin/cron'", $line);
+    contains("'/home/me/My Site/storage/logs/cron.log'", $line);
+    $here = health_detected_cron_line();
+    contains(BASE . '/bin/cron', $here);
+    ok(str_starts_with($here, '* * * * * '));
+});
+
+test('document root mode tells public, project folder and other apart', function (): void {
+    same('public', health_docroot_mode(BASE . '/public', BASE));
+    same('public', health_docroot_mode(BASE . '/public/', BASE));
+    same('project', health_docroot_mode(BASE, BASE));
+    same('other', health_docroot_mode(sys_get_temp_dir(), BASE));
+    same('unknown', health_docroot_mode('', BASE));
+});
+
+test('health shows detected paths and the cron line; cron advice uses it', function (): void {
+    $items = array_column(health_checks()['Server and paths'], null, 'label');
+    foreach (['Web server', 'Install folder', 'Document root', 'Configuration file', 'php.ini', 'open_basedir', 'PHP runs as', 'PHP for cron', 'Cron line'] as $label) {
+        ok(isset($items[$label]), $label);
+    }
+    same(BASE, $items['Install folder']['detail']);
+    same(health_detected_cron_line(), $items['Cron line']['detail']);
+    setting_set('cron.last_run', null);
+    $cron = array_column(health_checks()['Cron'], null, 'label')['Cron'];
+    contains(health_detected_cron_line(), $cron['detail']);
+});
+
+test('shipped code and messages assume no control panel paths', function (): void {
+    $hits = [];
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(BASE, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        $rel = substr($f->getPathname(), strlen(BASE) + 1);
+        if (!$f->isFile() || !preg_match('#^(src|templates|bin|public|themes|migrations)/#', $rel) || str_starts_with($rel, 'public/uploads/') || str_starts_with($rel, 'public/assets/vendor/')
+            || !preg_match('/\.(php|js|css|json)$|^bin\/[a-z-]+$|\.htaccess$/', $rel)) {
+            continue;
+        }
+        $src = (string) file_get_contents($f->getPathname());
+        if (preg_match('#/www/(server|wwwroot)|aapanel|www:www#i', $src)) {
+            $hits[] = $rel;
+        }
+    }
+    same([], $hits, 'files with control-panel assumptions');
+});
+
+test('bin/package --zip builds matching tar.gz and zip without private files or docs', function (): void {
+    if (trim((string) shell_exec('command -v git zip unzip tar 2>/dev/null | wc -l')) !== '4' || !is_dir(BASE . '/.git')) {
+        echo "      (skipped: needs git, zip, unzip and tar)\n";
+        return;
+    }
+    $before = glob(BASE . '/dist/*') ?: [];
+    $out = (string) shell_exec('cd ' . escapeshellarg(BASE) . ' && bin/package --zip 2>&1');
+    $new = array_values(array_diff(glob(BASE . '/dist/*') ?: [], $before));
+    try {
+        contains('.tar.gz  (', $out);
+        contains('.zip  (', $out);
+        $tar = $zip = null;
+        foreach ($new as $f) {
+            if (str_ends_with($f, '.tar.gz')) { $tar = $f; }
+            if (str_ends_with($f, '.zip')) { $zip = $f; }
+        }
+        ok($tar !== null && $zip !== null, 'both archives written: ' . $out);
+        $t = array_filter(explode("\n", (string) shell_exec('tar -tzf ' . escapeshellarg($tar))), static fn (string $l): bool => $l !== '' && !str_ends_with($l, '/'));
+        $z = array_filter(explode("\n", (string) shell_exec('unzip -Z1 ' . escapeshellarg($zip))), static fn (string $l): bool => $l !== '' && !str_ends_with($l, '/'));
+        sort($t);
+        sort($z);
+        same($t, $z, 'zip and tar hold the same files');
+        foreach (['gather/public/index.php', 'gather/.htaccess', 'gather/nginx.conf.example', 'gather/config.example.php', 'gather/VERSION'] as $must) {
+            ok(in_array($must, $t, true), $must);
+        }
+        foreach ($t as $file) {
+            ok(!preg_match('#^gather/(config\.php|tests/|dev-tools/|docs/|BUILD-NOTES\.md)|/\._#', $file), 'not shipped: ' . $file);
+        }
+    } finally {
+        foreach ($new as $f) {
+            unlink($f);
+        }
+    }
 });
