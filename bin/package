@@ -3,6 +3,8 @@
 #   bin/package [--zip] [git-ref]   default: HEAD  ->  dist/gather-<date>-<commit>.tar.gz
 #   --zip also writes dist/gather-<date>-<commit>.zip (cPanel and Plesk file
 #   managers extract .zip with one click). Both hold one top folder, gather/.
+#   --flat (with --zip) writes the zip without the top folder instead, for
+#   extracting straight into an existing folder such as public_html.
 # Packages committed files only (git archive), then removes everything the
 # server does not need: config.php, storage contents, tests, dev tools,
 # developer notes and docs/ (read those on GitHub or in a clone). macOS
@@ -12,15 +14,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 zip=0
+flat=0
 ref=HEAD
 for arg in "$@"; do
   case "$arg" in
     --zip) zip=1 ;;
-    -h|--help) sed -n '2,5p' "$0"; exit 0 ;;
+    --flat) flat=1 ;;
+    -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
     -*) echo "unknown option: $arg" >&2; exit 1 ;;
     *) ref="$arg" ;;
   esac
 done
+if [ "$flat" = 1 ] && [ "$zip" = 0 ]; then echo "--flat needs --zip" >&2; exit 1; fi
 if [ "$zip" = 1 ]; then command -v zip >/dev/null || { echo "zip is needed for --zip" >&2; exit 1; }; fi
 command -v git >/dev/null || { echo "git is needed to package" >&2; exit 1; }
 git rev-parse --verify --quiet "$ref^{commit}" >/dev/null || { echo "unknown git ref: $ref" >&2; exit 1; }
@@ -29,6 +34,8 @@ if [ "$ref" = "HEAD" ] && [ -n "$(git status --porcelain --untracked-files=no)" 
 fi
 commit_full=$(git rev-parse "$ref")
 name="gather-$(date -u +%Y%m%d)-${commit_full:0:7}"
+zipname="$name.zip"
+[ "$flat" = 1 ] && zipname="$name-flat.zip"
 stage=$(mktemp -d "${TMPDIR:-/tmp}/gather-package.XXXXXX")
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/gather" "$ROOT/dist"
@@ -47,9 +54,13 @@ cd "$stage"
 COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata --exclude='._*' --exclude='.DS_Store' -czf "$ROOT/dist/$name.tar.gz" gather
 
 if [ "$zip" = 1 ]; then
-  rm -f "$ROOT/dist/$name.zip"
+  rm -f "$ROOT/dist/$zipname"
   # -X: no extra uid/gid fields; Unix permission bits are kept for unzip.
-  (cd "$stage" && zip -qrX "$ROOT/dist/$name.zip" gather -x '*/._*' '*/.DS_Store')
+  if [ "$flat" = 1 ]; then
+    (cd "$stage/gather" && zip -qrX "$ROOT/dist/$zipname" . -x '._*' '*/._*' '.DS_Store' '*/.DS_Store')
+  else
+    (cd "$stage" && zip -qrX "$ROOT/dist/$zipname" gather -x '*/._*' '*/.DS_Store')
+  fi
 fi
 
 # Show what went in, and refuse to finish if anything private slipped through.
@@ -60,10 +71,15 @@ check_list() { # $1 = archive, $2 = file list
   if [ -n "$bad" ]; then
     echo "refusing: private files in $1:" >&2
     echo "$bad" >&2
-    rm -f "$ROOT/dist/$name.tar.gz" "$ROOT/dist/$name.zip"
+    rm -f "$ROOT/dist/$name.tar.gz" "$ROOT/dist/$zipname"
     exit 1
   fi
   printf 'dist/%s  (%s files, %s)\n' "$1" "$(printf '%s\n' "$2" | grep -vc '/$')" "$(du -h "$ROOT/dist/$1" | cut -f1)"
 }
 check_list "$name.tar.gz" "$(tar -tzf "$ROOT/dist/$name.tar.gz")"
-if [ "$zip" = 1 ]; then check_list "$name.zip" "$(unzip -Z1 "$ROOT/dist/$name.zip")"; fi
+if [ "$zip" = 1 ]; then
+  # Check the flat zip with the same rules by adding the folder name back.
+  zlist=$(unzip -Z1 "$ROOT/dist/$zipname")
+  [ "$flat" = 1 ] && zlist=$(printf '%s\n' "$zlist" | sed 's#^#gather/#')
+  check_list "$zipname" "$zlist"
+fi

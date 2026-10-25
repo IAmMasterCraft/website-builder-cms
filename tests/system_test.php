@@ -318,7 +318,7 @@ test('shipped code and messages assume no control panel paths', function (): voi
     same([], $hits, 'files with control-panel assumptions');
 });
 
-test('bin/package --zip builds matching tar.gz and zip without private files or docs', function (): void {
+test('bin/package --zip (and --flat) builds matching archives without private files or docs', function (): void {
     if (trim((string) shell_exec('command -v git zip unzip tar 2>/dev/null | wc -l')) !== '4' || !is_dir(BASE . '/.git')) {
         echo "      (skipped: needs git, zip, unzip and tar)\n";
         return;
@@ -346,6 +346,18 @@ test('bin/package --zip builds matching tar.gz and zip without private files or 
         foreach ($t as $file) {
             ok(!preg_match('#^gather/(config\.php|tests/|dev-tools/|docs/|BUILD-NOTES\.md)|/\._#', $file), 'not shipped: ' . $file);
         }
+        // --flat: the same files without the top folder (for extracting into public_html)
+        $flatOut = (string) shell_exec('cd ' . escapeshellarg(BASE) . ' && bin/package --zip --flat 2>&1');
+        $flatFile = null;
+        foreach (array_diff(glob(BASE . '/dist/*') ?: [], $before, $new) as $f) {
+            $new[] = $f;
+            if (str_ends_with($f, '-flat.zip')) { $flatFile = $f; }
+        }
+        ok($flatFile !== null, 'flat zip written: ' . $flatOut);
+        $fz = array_filter(explode("\n", (string) shell_exec('unzip -Z1 ' . escapeshellarg($flatFile))), static fn (string $l): bool => $l !== '' && !str_ends_with($l, '/'));
+        $fz = array_map(static fn (string $l): string => 'gather/' . $l, $fz);
+        sort($fz);
+        same($t, $fz, 'flat zip holds the same files at the top level');
     } finally {
         foreach ($new as $f) {
             unlink($f);
