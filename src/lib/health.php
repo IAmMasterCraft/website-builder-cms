@@ -420,8 +420,12 @@ function health_bounce_items(int $now): array
     }
     $unparsed = $state['unparsed'];
     $out[] = health_item('Unprocessed bounce messages', $unparsed > 0 ? 'warn' : 'ok', $unparsed === 0 ? 'none'
-        : $unparsed . ' message(s) could not be read and were set aside (' . ($b['mailbox']['protocol'] === 'imap' ? 'folder “' . $b['mailbox']['aside_folder'] . '”' : 'storage/bounces/') . ')');
-    $out[] = health_item('Bounce address', $b['address'] !== '' ? 'ok' : 'warn', $b['address'] !== '' ? $b['address'] . ' (per-message VERP tags)' : 'not set: bounces go to the sender address and are matched by recipient only');
+        : $unparsed . ' message(s) could not be read and were set aside (' . ($b['mailbox']['protocol'] === 'imap' ? 'folder “' . $b['mailbox']['aside_folder'] . '”' : 'storage/bounces/ or deleted when too large') . ')'
+          . ($state['oversized'] > 0 ? ', ' . $state['oversized'] . ' of them larger than ' . (BOUNCE_MAX_MESSAGE_BYTES >> 20) . ' MB and never downloaded' : ''));
+    $review = bounce_review_count();
+    $out[] = health_item('Bounce reports to review', $review > 0 ? 'warn' : 'ok', $review === 0 ? 'none'
+        : $review . ' report(s) could not be tied to an email we sent and changed nothing: apply or dismiss them on the Suppression list');
+    $out[] = health_item('Bounce address', $b['address'] !== '' ? 'ok' : 'warn', $b['address'] !== '' ? $b['address'] . ' (per-message VERP tags)' : 'not set: bounces go to the sender address and are matched only by the tag in the returned headers (reports without it go to the review list)');
     return $out;
 }
 

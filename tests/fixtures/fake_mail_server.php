@@ -9,6 +9,8 @@ declare(strict_types=1);
  * Prints the listening port on stdout, serves connections one after another
  * and writes its state (folders, deleted messages, command log) to
  * state.json after every command. Exits after 30 s without a connection.
+ * Optional env FAKE_MAIL_LIE_SIZE=1 makes LIST / RFC822.SIZE report 100
+ * bytes for every message (a server that lies about sizes).
  */
 
 [, $proto, $mode, $cert, $key, $maildir, $stateFile, $user, $pass] = $argv;
@@ -118,12 +120,22 @@ while (true) {
                 }
                 $w('* SEARCH' . ($uids ? ' ' . implode(' ', $uids) : ''));
                 $w("$tag OK search done");
-            } elseif (preg_match('/^UID FETCH (\d+) \(BODY\.PEEK\[\]\)$/i', $cmd, $s)) {
+            } elseif (preg_match('/^UID FETCH ([\d,]+) \(RFC822\.SIZE\)$/i', $cmd, $s)) {
+                foreach (explode(',', $s[1]) as $u) {
+                    $uid = (int) $u;
+                    if (isset($box[$uid])) {
+                        $seq = array_search($uid, array_keys($box), true) + 1;
+                        $w("* $seq FETCH (UID $uid RFC822.SIZE " . (getenv('FAKE_MAIL_LIE_SIZE') ? 100 : strlen($box[$uid]['raw'])) . ')');
+                    }
+                }
+                $w("$tag OK fetch done");
+            } elseif (preg_match('/^UID FETCH (\d+) \(BODY\.PEEK\[\](?:<0\.(\d+)>)?\)$/i', $cmd, $s)) {
                 $uid = (int) $s[1];
                 if (isset($box[$uid])) {
-                    $raw = $box[$uid]['raw'];
+                    // Partial fetch (RFC 3501 6.4.5): at most N octets from the start.
+                    $raw = isset($s[2]) ? substr($box[$uid]['raw'], 0, (int) $s[2]) : $box[$uid]['raw'];
                     $seq = array_search($uid, array_keys($box), true) + 1;
-                    fwrite($c, "* $seq FETCH (UID $uid BODY[] {" . strlen($raw) . "}\r\n" . $raw . ")\r\n");
+                    fwrite($c, "* $seq FETCH (UID $uid BODY[]" . (isset($s[2]) ? '<0>' : '') . " {" . strlen($raw) . "}\r\n" . $raw . ")\r\n");
                 }
                 $w("$tag OK fetch done");
             } elseif (preg_match('/^UID STORE (\d+) \+FLAGS\.SILENT \(\\\\Deleted\)$/i', $cmd, $s)) {
@@ -189,7 +201,7 @@ while (true) {
             } elseif ($verb === 'LIST') {
                 $w('+OK ' . count($uids) . ' messages');
                 foreach ($uids as $i => $uid) {
-                    $w(($i + 1) . ' ' . strlen($folders['INBOX'][$uid]['raw']));
+                    $w(($i + 1) . ' ' . (getenv('FAKE_MAIL_LIE_SIZE') ? 100 : strlen($folders['INBOX'][$uid]['raw'])));
                 }
                 $w('.');
             } elseif ($verb === 'RETR' && isset($uids[(int) $arg - 1])) {

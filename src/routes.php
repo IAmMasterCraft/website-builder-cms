@@ -197,6 +197,7 @@ function app_routes(): Router
     $r->post('/admin/settings/email/bounces/poll', [Admin\EmailSettings::class, 'pollBounces']);
     $r->get('/admin/email-suppressions', [Admin\Suppressions::class, 'index']);
     $r->post('/admin/email-suppressions/clear', [Admin\Suppressions::class, 'clear']);
+    $r->post('/admin/email-suppressions/review/{id:\d+}', [Admin\Suppressions::class, 'review']);
     $r->get('/admin/campaigns', [Admin\Campaigns::class, 'index']);
     $r->post('/admin/campaigns', [Admin\Campaigns::class, 'store']);
     $r->get('/admin/campaigns/{id:\d+}', [Admin\Campaigns::class, 'edit']);

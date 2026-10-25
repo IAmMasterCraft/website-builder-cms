@@ -12,12 +12,16 @@ namespace Core\Mail;
  * - auto-replies, which are recognised and ignored.
  *
  * The result never decides suppression by itself: it lists the recipients
- * with their Action/Status/Diagnostic and every place a VERP tag or our
- * X-Gather-Message-Id header may appear; src/lib/bounces.php classifies and
- * records them.
+ * (at most MAX_RECIPIENTS) with their Action/Status/Diagnostic and every
+ * place a VERP tag or our X-Gather-Message-Id header may appear;
+ * src/lib/bounces.php checks the tag, classifies and records them. Anyone
+ * can write a report, so nothing here is trusted.
  */
 final class BounceParser
 {
+    /** Recipients read from one report at most (bounces.php records even fewer). */
+    public const MAX_RECIPIENTS = 20;
+
     /**
      * @return array{
      *   kind: string,
@@ -74,7 +78,7 @@ final class BounceParser
             if ($rcpts === []) {
                 $rcpts = $out['original_to'];
             }
-            foreach (array_unique($rcpts) as $email) {
+            foreach (array_slice(array_unique($rcpts), 0, self::MAX_RECIPIENTS) as $email) {
                 $out['recipients'][] = ['email' => $email, 'action' => 'complaint', 'status' => '', 'diagnostic' => $out['feedback_type']];
             }
             if ($out['gather_ids'] === []) {
@@ -119,6 +123,9 @@ final class BounceParser
             }
             $diag = (string) ($f['diagnostic-code'][0] ?? '');
             $diag = trim((string) preg_replace('/^[a-z0-9-]+;\s*/i', '', $diag));
+            if (count($out) >= self::MAX_RECIPIENTS) {
+                break;
+            }
             $out[] = [
                 'email' => $email,
                 'action' => strtolower(trim((string) ($f['action'][0] ?? ''))),
@@ -238,6 +245,9 @@ final class BounceParser
                     continue;
                 }
                 $out[] = self::textRecipient(strtolower($am[1]), $b, $permanent);
+                if (count($out) >= self::MAX_RECIPIENTS) {
+                    break;
+                }
             }
         }
         if ($out === []) {

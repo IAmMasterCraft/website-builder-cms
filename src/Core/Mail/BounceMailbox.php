@@ -13,10 +13,20 @@ interface BounceMailbox
     /** Connect, log in and open the inbox. */
     public function open(): void;
 
-    /** @return list<string> up to $limit message ids, oldest first */
+    /**
+     * Up to $limit messages, oldest first, with their size in bytes as the
+     * server reports it (-1 when unknown), so oversized messages can be set
+     * aside without being downloaded.
+     * @return array<string,int> id => size
+     */
     public function list(int $limit): array;
 
-    public function fetch(string $id): string;
+    /**
+     * The raw message, never more than $maxBytes (MessageTooLargeException
+     * when it is bigger; MessageUnreadableException when the server sends
+     * nothing usable; the session stays usable in both cases).
+     */
+    public function fetch(string $id, int $maxBytes): string;
 
     /** Mark for deletion (removed on close). */
     public function delete(string $id): void;

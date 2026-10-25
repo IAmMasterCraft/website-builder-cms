@@ -14,6 +14,8 @@ final class MimeMessage
     /** Hard limits so a hostile message cannot exhaust memory or recursion. */
     private const MAX_DEPTH = 6;
     private const MAX_PARTS = 60;
+    /** Parts across the whole message (all levels together). */
+    public const MAX_TOTAL_PARTS = 100;
 
     /** @param array<string, list<string>> $headers lower-case name => values */
     private function __construct(
@@ -24,9 +26,16 @@ final class MimeMessage
     ) {
     }
 
-    public static function parse(string $raw, int $depth = 0): self
+    public static function parse(string $raw): self
     {
-        $raw = str_replace("\r\n", "\n", $raw);
+        $budget = self::MAX_TOTAL_PARTS;
+        return self::parsePart(str_replace("\r\n", "\n", $raw), 0, $budget);
+    }
+
+    /** One part; $budget counts down the parts left for the whole message. */
+    private static function parsePart(string $raw, int $depth, int &$budget): self
+    {
+        $budget--;
         $split = strpos($raw, "\n\n");
         // A part may start with a blank line (no headers at all).
         if (str_starts_with($raw, "\n")) {
@@ -43,13 +52,13 @@ final class MimeMessage
         $msg = new self($headers, $body, []);
         $type = $msg->contentType();
         $parts = [];
-        if (str_starts_with($type, 'multipart/') && $depth < self::MAX_DEPTH) {
+        if ($budget > 0 && str_starts_with($type, 'multipart/') && $depth < self::MAX_DEPTH) {
             $boundary = $msg->param('content-type', 'boundary');
             if ($boundary !== null && $boundary !== '') {
-                $parts = self::splitMultipart($body, $boundary, $depth);
+                $parts = self::splitMultipart($body, $boundary, $depth, $budget);
             }
-        } elseif (($type === 'message/rfc822' || $type === 'message/global') && $depth < self::MAX_DEPTH) {
-            $parts = [self::parse($msg->decodedBody(), $depth + 1)];
+        } elseif ($budget > 0 && ($type === 'message/rfc822' || $type === 'message/global') && $depth < self::MAX_DEPTH) {
+            $parts = [self::parsePart(str_replace("\r\n", "\n", $msg->decodedBody()), $depth + 1, $budget)];
         }
         return new self($headers, $body, $parts);
     }
@@ -69,22 +78,30 @@ final class MimeMessage
         return $out;
     }
 
-    /** @return list<self> */
-    private static function splitMultipart(string $body, string $boundary, int $depth): array
+    /**
+     * Parts between boundaries, found one at a time (never more than
+     * MAX_PARTS chunks are cut out of the body).
+     * @return list<self>
+     */
+    private static function splitMultipart(string $body, string $boundary, int $depth, int &$budget): array
     {
         $parts = [];
-        $chunks = explode("\n--" . $boundary, "\n" . $body);
-        array_shift($chunks); // preamble
-        foreach ($chunks as $chunk) {
-            if (str_starts_with($chunk, '--')) {
+        $body = "\n" . $body;
+        $delim = "\n--" . $boundary;
+        $pos = strpos($body, $delim); // the preamble ends here
+        while ($pos !== false) {
+            $start = $pos + strlen($delim);
+            if (substr($body, $start, 2) === '--') {
                 break; // closing boundary
             }
+            $next = strpos($body, $delim, $start);
+            $chunk = $next === false ? substr($body, $start) : substr($body, $start, $next - $start);
             $nl = strpos($chunk, "\n");
-            $chunk = $nl === false ? '' : substr($chunk, $nl + 1);
-            $parts[] = self::parse($chunk, $depth + 1);
-            if (count($parts) >= self::MAX_PARTS) {
+            $parts[] = self::parsePart($nl === false ? '' : substr($chunk, $nl + 1), $depth + 1, $budget);
+            if (count($parts) >= self::MAX_PARTS || $budget <= 0) {
                 break;
             }
+            $pos = $next;
         }
         return $parts;
     }

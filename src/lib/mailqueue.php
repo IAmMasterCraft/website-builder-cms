@@ -179,7 +179,7 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
             $headers = json_decode((string) ($row['headers'] ?? ''), true);
             try {
                 $m = new Message((string) $row['to_email'], (string) $row['to_name'], (string) $row['subject'], (string) $row['text_body'], $row['html_body'], $row['reply_to'], is_array($headers) ? $headers : []);
-                mailer()->send(mail_with_envelope($m, verp_tag('q', (int) $row['id'])));
+                mailer()->send(mail_with_envelope($m, verp_tag('q', (int) $row['id'], (string) $row['to_email'])));
                 q("UPDATE email_queue SET status = 'sent', sent_at = ?, last_error = '' WHERE id = ?", [$nowSql, $row['id']]);
                 $stats['sent']++;
                 $domainSent[email_domain((string) $row['to_email'])] = ($domainSent[email_domain((string) $row['to_email'])] ?? 0) + 1;
@@ -225,7 +225,7 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
                 continue;
             }
             try {
-                mailer()->send(mail_with_envelope(campaign_message_for($campaigns[$cid], $row), verp_tag('c', (int) $row['id']), $cid));
+                mailer()->send(mail_with_envelope(campaign_message_for($campaigns[$cid], $row), verp_tag('c', (int) $row['id'], (string) $row['email']), $cid));
                 q("UPDATE campaign_recipients SET status = 'sent', sent_at = ?, error = '' WHERE id = ?", [$nowSql, $row['id']]);
                 $stats['sent']++;
                 $domainSent[email_domain((string) $row['email'])] = ($domainSent[email_domain((string) $row['email'])] ?? 0) + 1;
@@ -262,8 +262,8 @@ function mail_rejected(string $table, string $errorCol, array $row, RecipientRej
 {
     $type = bounce_classify($e->enhancedCode, $e->smtpCode, $e->detail);
     $email = (string) ($row['email'] ?? $row['to_email']);
-    $tag = verp_tag($table === 'campaign_recipients' ? 'c' : 'q', (int) $row['id']);
-    $event = ['email' => $email, 'status' => $e->enhancedCode, 'smtp_code' => $e->smtpCode, 'detail' => $e->detail, 'source' => 'smtp', 'tag' => $tag, 'now' => $now];
+    // Our own relay refused this row: the event belongs to it (no tag parsing needed).
+    $event = ['email' => $email, 'status' => $e->enhancedCode, 'smtp_code' => $e->smtpCode, 'detail' => $e->detail, 'source' => 'smtp', 'row' => bounce_queue_row($table, (int) $row['id']), 'now' => $now];
     if (!$e->permanent()) {
         $key = mail_fail($table, $errorCol, $row, $e, $now);
         if ($key === 'failed') {

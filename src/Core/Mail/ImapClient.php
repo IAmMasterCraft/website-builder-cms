@@ -5,12 +5,18 @@ namespace Core\Mail;
 
 /**
  * Minimal IMAP4rev1 client (RFC 3501) for the bounce mailbox: LOGIN,
- * SELECT, UID SEARCH, UID FETCH BODY.PEEK[], UID STORE \Deleted, UID COPY to
- * an "unprocessed" folder, EXPUNGE. Handles literals in responses; ASCII
- * credentials are sent as quoted strings, others as literals.
+ * SELECT, UID SEARCH, UID FETCH RFC822.SIZE, UID FETCH BODY.PEEK[]<0.n>
+ * (a partial fetch, so a message is never downloaded beyond the limit),
+ * UID STORE \Deleted, UID COPY to an "unprocessed" folder, EXPUNGE. Handles
+ * literals in responses (capped); ASCII credentials are sent as quoted
+ * strings, others as literals.
  */
 final class ImapClient extends MailboxSocket
 {
+    /** Literals other than message bodies (headers, search results) are small. */
+    private const MAX_LITERAL = 65536;
+    /** Lines of one response (without literals), in bytes. */
+    private const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
     private int $tag = 0;
     private bool $asideReady = false;
     private int $deleted = 0;
@@ -44,27 +50,42 @@ final class ImapClient extends MailboxSocket
 
     public function list(int $limit): array
     {
-        [$untagged] = $this->command('UID SEARCH ALL');
-        $uids = [];
+        $uids = $this->searchUids();
+        $uids = array_slice($uids, 0, max(0, $limit));
+        if ($uids === []) {
+            return [];
+        }
+        $sizes = array_fill_keys(array_map('strval', $uids), -1);
+        [$untagged] = $this->command('UID FETCH ' . implode(',', $uids) . ' (RFC822.SIZE)');
         foreach ($untagged as $line) {
-            if (preg_match('/^\* SEARCH\b(.*)$/i', $line, $m)) {
-                foreach (preg_split('/\s+/', trim($m[1])) ?: [] as $u) {
-                    if (ctype_digit($u)) {
-                        $uids[] = (int) $u;
-                    }
-                }
+            if (preg_match('/^\* \d+ FETCH \((.*)\)$/i', $line, $m) && preg_match('/\bUID (\d+)/i', $m[1], $u) && preg_match('/\bRFC822\.SIZE (\d+)/i', $m[1], $sz)
+                && array_key_exists($u[1], $sizes)) {
+                $sizes[$u[1]] = (int) $sz[1];
             }
         }
-        sort($uids);
-        return array_map('strval', array_slice($uids, 0, max(0, $limit)));
+        return $sizes;
     }
 
-    public function fetch(string $id): string
+    /** @return list<int> every UID in the selected folder, ascending */
+    private function searchUids(): array
+    {
+        [$untagged] = $this->command('UID SEARCH ALL');
+        $uids = array_map('intval', $this->searchResult($untagged));
+        sort($uids);
+        return $uids;
+    }
+
+    public function fetch(string $id, int $maxBytes): string
     {
         $this->uid($id);
-        [, , $literals] = $this->command('UID FETCH ' . $id . ' (BODY.PEEK[])');
+        $maxBytes = max(1, $maxBytes);
+        // Partial fetch: the server sends at most $maxBytes + 1 bytes, so "more than $maxBytes" means too large.
+        [, , $literals] = $this->command('UID FETCH ' . $id . ' (BODY.PEEK[]<0.' . ($maxBytes + 1) . '>)', true, $maxBytes + 1);
         if ($literals === []) {
-            throw new MailboxException('Message ' . $id . ' could not be read.');
+            throw new MessageUnreadableException('Message ' . $id . ' could not be read.');
+        }
+        if (strlen($literals[0]) > $maxBytes) {
+            throw new MessageTooLargeException('Message ' . $id . ' is larger than ' . $maxBytes . ' bytes.');
         }
         return $literals[0];
     }
@@ -110,7 +131,7 @@ final class ImapClient extends MailboxSocket
             [$untagged] = $this->command('UID SEARCH BEFORE ' . $before);
             $remove = $this->searchResult($untagged);
         }
-        $all = $this->list(PHP_INT_MAX);
+        $all = array_map('strval', $this->searchUids());
         $keep = array_values(array_diff($all, $remove));
         if ($maxCount > 0 && count($keep) > $maxCount) {
             $remove = array_merge($remove, array_slice($keep, 0, count($keep) - $maxCount));
@@ -177,10 +198,11 @@ final class ImapClient extends MailboxSocket
 
     /**
      * Send a command; returns [untagged lines, tagged status text, literals].
-     * With $strict a NO/BAD answer throws.
+     * With $strict a NO/BAD answer throws. A literal larger than
+     * $maxLiteral ends the session (it cannot be skipped safely).
      * @return array{0:list<string>,1:string,2:list<string>}
      */
-    private function command(string $cmd, bool $strict = true): array
+    private function command(string $cmd, bool $strict = true, int $maxLiteral = self::MAX_LITERAL): array
     {
         $tag = 'g' . (++$this->tag);
         // Literal arguments: send "{n}", wait for "+", then the bytes.
@@ -199,13 +221,22 @@ final class ImapClient extends MailboxSocket
         $this->write($line);
         $untagged = [];
         $literals = [];
+        $bytes = 0;
+        $literalBytes = 0;
         while (true) {
             $resp = $this->readLine();
+            $bytes += strlen($resp);
+            if ($bytes > self::MAX_RESPONSE_BYTES) {
+                $this->disconnect();
+                throw new MailboxException('The IMAP server sent a response that is too long.');
+            }
             // A line ending in {n} is followed by n bytes of data, then the rest of the response.
             while (preg_match('/\{(\d+)\}$/', $resp, $m)) {
                 $n = (int) $m[1];
-                if ($n > 50 * 1024 * 1024) {
-                    throw new MailboxException('A message is too large to process.');
+                $literalBytes += $n;
+                if ($n > $maxLiteral || $literalBytes > $maxLiteral + self::MAX_LITERAL) {
+                    $this->disconnect();
+                    throw new MailboxException('The IMAP server sent more data than allowed (' . $n . ' bytes).');
                 }
                 $literals[] = $this->readBytes($n);
                 $resp .= ' ' . $this->readLine();

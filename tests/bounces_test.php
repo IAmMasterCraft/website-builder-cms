@@ -87,9 +87,10 @@ function test_tls_cert(): array
  * Start a helper server script; returns [process, port].
  * @return array{0:resource,1:int}
  */
-function start_helper(string $script, array $args): array
+function start_helper(string $script, array $args, array $env = []): array
 {
-    $proc = proc_open(array_merge([PHP_BINARY, $script], $args), [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', BASE . '/storage/logs/test-helper.log', 'a']], $pipes);
+    $proc = proc_open(array_merge([PHP_BINARY, $script], $args), [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', BASE . '/storage/logs/test-helper.log', 'a']], $pipes,
+        null, $env !== [] ? $env + getenv() : null);
     stream_set_timeout($pipes[1], 10);
     $port = (int) trim((string) fgets($pipes[1]));
     if ($port <= 0) {
@@ -144,25 +145,34 @@ test('A5 classification: hard, soft, block from status codes, SMTP codes and tex
     same('hard', bounce_classify('', 0, 'smtp; 550 5.1.1 <a@b>: Recipient address rejected'), 'codes found inside the text');
 });
 
-test('A5 VERP tags are signed per row; forged or altered tags are ignored', function (): void {
+test('A5 VERP tags are signed per row and address; forged, altered or moved tags are ignored', function (): void {
     reset_bounces();
-    $tag = verp_tag('c', 123);
-    ok((bool) preg_match('/^c123-[a-f0-9]{12}$/', $tag));
-    same(['campaign_recipients', 123], verp_parse('bounces+' . $tag . '@harbourside.example.test'));
-    same(['email_queue', 9], verp_parse('<' . verp_tag('q', 9) . '.abc@x>'));
-    same(null, verp_parse('c124-' . substr($tag, 5)), 'id changed');
-    same(null, verp_parse('c123-000000000000'), 'signature forged');
+    $c = sent_campaign(['tagged@recipient.example.test', 'other@recipient.example.test']);
+    $id = $c['rows']['tagged@recipient.example.test'];
+    $tag = verp_tag('c', $id, 'tagged@recipient.example.test');
+    ok((bool) preg_match('/^c' . $id . '-[a-f0-9]{12}$/', $tag));
+    $hit = verp_parse('bounces+' . $tag . '@harbourside.example.test');
+    same(['campaign_recipients', $id, 'tagged@recipient.example.test'], [$hit['table'], $hit['id'], $hit['email']]);
+    same(verp_tag('c', $id, 'TAGGED@recipient.example.test'), $tag, 'the address is compared in lower case');
+    $q = db_insert('email_queue', ['to_email' => 'queued@recipient.example.test', 'subject' => 'S', 'text_body' => '', 'status' => 'sent', 'sent_at' => utc_now()]);
+    same(['email_queue', $q], array_values(array_slice(verp_parse('<' . verp_tag('q', $q, 'queued@recipient.example.test') . '.abc@x>'), 0, 2)));
+    $other = $c['rows']['other@recipient.example.test'];
+    same(null, verp_parse('c' . $other . '-' . substr($tag, strlen('c' . $id) + 1)), 'signature moved to another row');
+    same(null, verp_parse(verp_tag('c', $id, 'attacker@evil.example.test')), 'signed for another address');
+    same(null, verp_parse('c' . $id . '-000000000000'), 'signature forged');
+    same(null, verp_parse('c' . $id . '-' . substr(app_sign('verp|c' . $id), 0, 12)), 'old-style tag (without the address) is no longer trusted');
+    same(null, verp_parse(verp_tag('c', 999999, 'x@recipient.example.test')), 'no such row');
     same('bounces+' . $tag . '@harbourside.example.test', verp_return_path($tag));
     setting_set('mail.bounce', ['address' => '']);
     same(null, verp_return_path($tag), 'no bounce address: the From address stays the envelope sender');
-    throws(InvalidArgumentException::class, fn () => verp_tag('x', 1));
+    throws(InvalidArgumentException::class, fn () => verp_tag('x', 1, 'a@b.test'));
 });
 
 // ---- Parsing the sample reports -------------------------------------------------------------
 
 test('A5 parser reads Postfix, Gmail, Outlook and Exim DSNs, legacy text bounces and ARF reports', function (): void {
     reset_bounces();
-    $v = ['TAG' => verp_tag('c', 77), 'EMAIL' => 'gone@recipient.example.test'];
+    $v = ['TAG' => verp_tag('c', 77, 'gone@recipient.example.test'), 'EMAIL' => 'gone@recipient.example.test'];
     $r = BounceParser::parse(bounce_fixture('postfix_hard_511.eml', $v));
     same('dsn', $r['kind']);
     same([['email' => 'gone@recipient.example.test', 'action' => 'failed', 'status' => '5.1.1']], array_map(static fn (array $x): array => array_slice($x, 0, 3), $r['recipients']));
@@ -203,7 +213,7 @@ test('A5 hard bounce (DSN) suppresses at once and maps to exactly one row by tag
     reset_bounces();
     $c = sent_campaign(['gone@recipient.example.test', 'fine@recipient.example.test']);
     $row = $c['rows']['gone@recipient.example.test'];
-    $raw = bounce_fixture('postfix_hard_511.eml', ['TAG' => verp_tag('c', $row), 'EMAIL' => 'gone@recipient.example.test']);
+    $raw = bounce_fixture('postfix_hard_511.eml', ['TAG' => verp_tag('c', $row, 'gone@recipient.example.test'), 'EMAIL' => 'gone@recipient.example.test']);
     same('recorded', bounce_process_message($raw));
     same('hard_bounce', email_suppression('gone@recipient.example.test')['reason'] ?? null);
     same('hard', q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$row]));
@@ -217,7 +227,7 @@ test('A5 hard bounce (DSN) suppresses at once and maps to exactly one row by tag
 test('A5 a report naming a forwarded address still suppresses the address we sent to (tag wins)', function (): void {
     reset_bounces();
     $c = sent_campaign(['alias@club.example.test']);
-    $raw = bounce_fixture('postfix_hard_511.eml', ['TAG' => verp_tag('c', $c['rows']['alias@club.example.test']), 'EMAIL' => 'final.mailbox@elsewhere.example.test']);
+    $raw = bounce_fixture('postfix_hard_511.eml', ['TAG' => verp_tag('c', $c['rows']['alias@club.example.test'], 'alias@club.example.test'), 'EMAIL' => 'final.mailbox@elsewhere.example.test']);
     bounce_process_message($raw);
     ok(email_suppressed('alias@club.example.test'));
     ok(!email_suppressed('final.mailbox@elsewhere.example.test'));
@@ -229,23 +239,27 @@ test('A5 soft bounces: suppressed only after 3 within 30 days (mailbox full coun
     $fixtures = ['gmail_soft_422_mailbox_full.eml', 'outlook_mailbox_full_522.eml', 'gmail_soft_422_mailbox_full.eml'];
     foreach ($fixtures as $i => $f) {
         $c = sent_campaign([$email]);
-        same('recorded', bounce_process_message(bounce_fixture($f, ['TAG' => verp_tag('c', $c['rows'][$email]), 'EMAIL' => $email])));
+        same('recorded', bounce_process_message(bounce_fixture($f, ['TAG' => verp_tag('c', $c['rows'][$email], $email), 'EMAIL' => $email])));
         same($i < 2 ? null : 'soft_bounce', email_suppression($email)['reason'] ?? null, 'after soft bounce ' . ($i + 1));
     }
     // Soft bounces older than 30 days do not count.
     reset_bounces();
+    sent_campaign([$email]);
     $old = time() - 31 * 86400;
-    bounce_record(['email' => $email, 'type' => 'soft', 'source' => 'dsn', 'now' => $old]);
-    bounce_record(['email' => $email, 'type' => 'soft', 'source' => 'dsn', 'now' => $old + 60]);
-    bounce_record(['email' => $email, 'type' => 'soft', 'source' => 'dsn']);
+    same('recorded', bounce_record(['email' => $email, 'type' => 'soft', 'source' => 'ses', 'now' => $old]));
+    bounce_record(['email' => $email, 'type' => 'soft', 'source' => 'ses', 'now' => $old + 60]);
+    bounce_record(['email' => $email, 'type' => 'soft', 'source' => 'ses']);
     ok(!email_suppressed($email), 'two of the three are older than 30 days');
 });
 
-test('A5 block (5.7.1) pauses the campaign and does not suppress the address', function (): void {
+test('A5 block (5.7.1) from the provider pauses the campaign and does not suppress the address', function (): void {
     reset_bounces();
     $c = sent_campaign(['strict@recipient.example.test'], 'sending');
     db_insert('campaign_recipients', ['campaign_id' => $c['campaign'], 'email' => 'waiting@recipient.example.test', 'name' => 'W', 'first_name' => 'W']);
-    same('recorded', bounce_process_message(bounce_fixture('exim_block_571.eml', ['TAG' => verp_tag('c', $c['rows']['strict@recipient.example.test']), 'EMAIL' => 'strict@recipient.example.test'])));
+    same('recorded', bounce_process_message(bounce_fixture('exim_block_571.eml', ['TAG' => verp_tag('c', $c['rows']['strict@recipient.example.test'], 'strict@recipient.example.test'), 'EMAIL' => 'strict@recipient.example.test'])));
+    same('sending', q_val('SELECT status FROM campaigns WHERE id = ?', [$c['campaign']]), 'a single mailbox block only records');
+    // The same block reported by an authenticated provider webhook pauses at once.
+    same('recorded', bounce_record(['email' => 'strict@recipient.example.test', 'type' => 'block', 'detail' => '550 5.7.1 Message rejected as spam', 'source' => 'ses', 'ext_id' => 'ses:block-1']));
     ok(!email_suppressed('strict@recipient.example.test'));
     same('paused', q_val('SELECT status FROM campaigns WHERE id = ?', [$c['campaign']]));
     contains('spam or for policy reasons', (string) q_val('SELECT pause_reason FROM campaigns WHERE id = ?', [$c['campaign']]));
@@ -256,7 +270,7 @@ test('A5 block (5.7.1) pauses the campaign and does not suppress the address', f
     mail_queue_run();
     same(['waiting@recipient.example.test'], $rec->to(), 'resumed');
     $stats = bounce_stats(7);
-    same(1, $stats['block']);
+    same(2, $stats['block']);
     mailer(null, true);
 });
 
@@ -264,7 +278,7 @@ test('A5 ARF complaint suppresses bulk mail for the recipient of the tagged mess
     reset_bounces();
     $m = fixture_full_member(['email' => 'complainer'], ['newsletters' => true]);
     $c = sent_campaign([$m['email']]);
-    same('recorded', bounce_process_message(bounce_fixture('arf_complaint.eml', ['TAG' => verp_tag('c', $c['rows'][$m['email']]), 'EMAIL' => $m['email']])));
+    same('recorded', bounce_process_message(bounce_fixture('arf_complaint.eml', ['TAG' => verp_tag('c', $c['rows'][$m['email']], $m['email']), 'EMAIL' => $m['email']])));
     same('complaint', email_suppression($m['email'])['reason'] ?? null);
     same('complaint', q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$c['rows'][$m['email']]]));
     same(null, mail_undeliverable_reason($m['email']), 'transactional mail still goes to a complainer');
@@ -280,7 +294,7 @@ test('A5 ARF complaint suppresses bulk mail for the recipient of the tagged mess
 test('A5 delay notices and auto-replies are ignored; unparseable messages are reported as such', function (): void {
     reset_bounces();
     $c = sent_campaign(['slow@recipient.example.test']);
-    $v = ['TAG' => verp_tag('c', $c['rows']['slow@recipient.example.test']), 'EMAIL' => 'slow@recipient.example.test'];
+    $v = ['TAG' => verp_tag('c', $c['rows']['slow@recipient.example.test'], 'slow@recipient.example.test'), 'EMAIL' => 'slow@recipient.example.test'];
     same('ignored', bounce_process_message(bounce_fixture('postfix_delayed.eml', $v)));
     same('ignored', bounce_process_message(bounce_fixture('auto_reply.eml', $v)));
     same('unparsed', bounce_process_message(bounce_fixture('unparseable.eml', $v)));
@@ -289,14 +303,122 @@ test('A5 delay notices and auto-replies are ignored; unparseable messages are re
     same('hard_bounce', email_suppression('slow@recipient.example.test')['reason'] ?? null);
 });
 
-test('A5 an untagged report is matched to the latest message sent to that address', function (): void {
+test('A5 H1: an untagged mailbox report suppresses nothing and waits for review', function (): void {
     reset_bounces();
     $c = sent_campaign(['plain@recipient.example.test']);
-    // No VERP, no X-Gather-Message-Id: Final-Recipient only.
+    // No VERP, no X-Gather-Message-Id: Final-Recipient only. Anyone can write this.
     $raw = str_replace(['X-Gather-Message-Id: {{TAG}}', '{{TAG}}.'], ['', 'x.'], (string) file_get_contents(BOUNCE_FIXTURES . '/postfix_hard_511.eml'));
     $raw = str_replace(['bounces+{{TAG}}@', '{{EMAIL}}'], ['bounces@', 'plain@recipient.example.test'], $raw);
+    same('review', bounce_process_message($raw));
+    ok(!email_suppressed('plain@recipient.example.test'), 'not suppressed');
+    same(null, q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$c['rows']['plain@recipient.example.test']]), 'the message is not marked');
+    same(['hard', 'pending', null], array_values(q_one('SELECT type, review, queue_id FROM email_events')));
+    same(1, bounce_review_count());
+    same(0, bounce_stats(7)['hard'], 'reports waiting for review do not count in the rates');
+    // An admin applies it: now it suppresses (source "review", clearable).
+    $id = (int) q_val('SELECT id FROM email_events');
+    same('plain@recipient.example.test', bounce_review_decide($id, 'apply')['email']);
+    $sup = email_suppression('plain@recipient.example.test');
+    same(['hard_bounce', 'review'], [$sup['reason'] ?? null, $sup['source'] ?? null]);
+    same(null, bounce_review_decide($id, 'dismiss'), 'decided once');
+    same(0, bounce_review_count());
+});
+
+test('A5 H1: forged untagged DSN and ARF for any address never suppress', function (): void {
+    reset_bounces();
+    $victim = fixture_full_member(['email' => 'victim'], ['newsletters' => true]);
+    sent_campaign([$victim['email']]);
+    // Forged DSN without a tag naming the victim (and a random address we never mailed).
+    $dsn = str_replace(['X-Gather-Message-Id: {{TAG}}', '{{TAG}}.'], ['', 'x.'], (string) file_get_contents(BOUNCE_FIXTURES . '/postfix_hard_511.eml'));
+    same('review', bounce_process_message(str_replace(['bounces+{{TAG}}@', '{{EMAIL}}'], ['bounces@', $victim['email']], $dsn)));
+    same('review', bounce_process_message(str_replace(['bounces+{{TAG}}@', '{{EMAIL}}'], ['bounces@', 'never-mailed@recipient.example.test'], $dsn)));
+    // Forged ARF complaint without a tag.
+    $arf = bounce_fixture('arf_complaint.eml', ['TAG' => 'c1-000000000000', 'EMAIL' => $victim['email']]);
+    $arf = str_replace('redacted@mailbox.example.test', $victim['email'], $arf);
+    same('review', bounce_process_message($arf));
+    // A forged tag for the victim's row signed for another address, and a valid-looking tag for a row that was never sent.
+    $q = db_insert('email_queue', ['to_email' => $victim['email'], 'subject' => 'S', 'text_body' => '', 'status' => 'queued']);
+    same('review', bounce_process_message(bounce_fixture('postfix_hard_511.eml', ['TAG' => verp_tag('q', $q, $victim['email']), 'EMAIL' => $victim['email']])), 'tag for an unsent message');
+    ok(!email_suppressed($victim['email']), 'nothing suppressed the victim');
+    ok(!email_suppressed('never-mailed@recipient.example.test'));
+    same(0, (int) q_val("SELECT COUNT(*) FROM email_events WHERE review = ''"), 'every event waits for review');
+});
+
+test('A5 H1: a tagged report acts on the address in our row, once, whatever the report lists', function (): void {
+    reset_bounces();
+    $c = sent_campaign(['mine@recipient.example.test']);
+    $tag = verp_tag('c', $c['rows']['mine@recipient.example.test'], 'mine@recipient.example.test');
+    // A DSN with our valid tag that lists other people as failed recipients too.
+    $raw = bounce_fixture('postfix_hard_511.eml', ['TAG' => $tag, 'EMAIL' => 'someone.else@recipient.example.test']);
+    $extra = '';
+    foreach (range(1, 8) as $i) {
+        $extra .= "\nFinal-Recipient: rfc822; extra$i@recipient.example.test\nAction: failed\nStatus: 5.1.1\n";
+    }
+    $raw = preg_replace('/(Action: failed\s*\nStatus: 5\.1\.1[^\n]*\n)/', '$1' . $extra, $raw, 1);
     same('recorded', bounce_process_message($raw));
-    same('hard', q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$c['rows']['plain@recipient.example.test']]));
+    ok(email_suppressed('mine@recipient.example.test'), 'the address we sent to');
+    same(0, (int) q_val("SELECT COUNT(*) FROM email_suppressions WHERE email LIKE 'extra%' OR email = 'someone.else@recipient.example.test'"), 'never addresses written in the report');
+    same(1, (int) q_val('SELECT COUNT(*) FROM email_events'), 'one event per tagged report');
+});
+
+test('A5 H1: a multi-recipient legacy text bounce records at most 5 events, all for review', function (): void {
+    reset_bounces();
+    $list = '';
+    foreach (range(1, 40) as $i) {
+        $list .= "  person$i@recipient.example.test\n    SMTP error from remote mail server after RCPT TO: 550 5.1.1 User unknown\n";
+    }
+    $raw = "From: Mail Delivery System <Mailer-Daemon@mx.example.test>\nTo: bounces@harbourside.example.test\nSubject: Mail delivery failed: returning message to sender\n\n"
+        . "This message was created automatically by mail delivery software.\n\nA message that you sent could not be delivered to one or more of its\nrecipients. This is a permanent error. The following addresses failed:\n\n" . $list;
+    $parsed = BounceParser::parse($raw);
+    same('text-bounce', $parsed['kind']);
+    same(BounceParser::MAX_RECIPIENTS, count($parsed['recipients']), 'the parser keeps at most 20');
+    same('review', bounce_process_message($raw));
+    same(BOUNCE_REPORT_MAX_RECIPIENTS, (int) q_val('SELECT COUNT(*) FROM email_events'));
+    same(0, (int) q_val('SELECT COUNT(*) FROM email_suppressions'));
+});
+
+test('A5 H1: admins may clear complaints from emailed reports, not provider-webhook complaints', function (): void {
+    reset_bounces();
+    email_suppress('arf-complaint@recipient.example.test', 'complaint', 'Feedback report: abuse', 'arf');
+    email_suppress('ses-complaint@recipient.example.test', 'complaint', 'Complaint: abuse', 'ses');
+    ok(\Admin\Suppressions::clearable(email_suppression('arf-complaint@recipient.example.test')));
+    ok(!\Admin\Suppressions::clearable(email_suppression('ses-complaint@recipient.example.test')));
+    act_as(fixture_admin('admin', ['communications']));
+    foreach (['arf-complaint@recipient.example.test', 'ses-complaint@recipient.example.test'] as $addr) {
+        request('POST', '/admin/email-suppressions/clear', ['_csrf' => csrf_token(), 'email' => $addr]);
+        throws(\Core\Redirect::class, fn () => \Admin\Suppressions::clear([]));
+    }
+    ok(!email_suppressed('arf-complaint@recipient.example.test'), 'emailed complaint cleared');
+    ok(email_suppressed('ses-complaint@recipient.example.test'), 'provider complaint stays (person opts in again)');
+    // Review decisions through the handler: CSRF first, permission, audit.
+    bounce_record(['email' => 'untagged@recipient.example.test', 'type' => 'complaint', 'source' => 'arf', 'tag' => '', 'ext_id' => 'x1']);
+    $id = (int) q_val("SELECT id FROM email_events WHERE review = 'pending'");
+    request('POST', '/admin/email-suppressions/review/' . $id, ['_csrf' => csrf_token(), 'decision' => 'dismiss']);
+    throws(\Core\Redirect::class, fn () => \Admin\Suppressions::review(['id' => (string) $id]));
+    same('dismissed', q_val('SELECT review FROM email_events WHERE id = ?', [$id]));
+    ok(!email_suppressed('untagged@recipient.example.test'));
+    same(1, (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'review_dismiss'"));
+    act_as(fixture_admin('admin', ['content']));
+    request('POST', '/admin/email-suppressions/review/' . $id, ['_csrf' => csrf_token(), 'decision' => 'apply']);
+    same(403, throws(\Core\HttpException::class, fn () => \Admin\Suppressions::review(['id' => (string) $id]))->status);
+    act_as(null);
+});
+
+test('A5 M1: a recipient-forged 5.7.x DSN with their own tag does not pause; blocks from 3 domains do', function (): void {
+    reset_bounces();
+    $emails = ['a@one.example.test', 'b@one.example.test', 'c@two.example.test', 'd@three.example.test'];
+    $c = sent_campaign($emails, 'sending');
+    db_insert('campaign_recipients', ['campaign_id' => $c['campaign'], 'email' => 'waiting@recipient.example.test', 'name' => 'W', 'first_name' => 'W']);
+    $block = static fn (string $e): string => bounce_fixture('exim_block_571.eml', ['TAG' => verp_tag('c', $c['rows'][$e], $e), 'EMAIL' => $e]);
+    same('recorded', bounce_process_message($block('a@one.example.test')));
+    same('sending', q_val('SELECT status FROM campaigns WHERE id = ?', [$c['campaign']]), 'one recipient cannot pause the campaign');
+    same('block', q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$c['rows']['a@one.example.test']]), 'still recorded on the row');
+    bounce_process_message($block('b@one.example.test'));
+    bounce_process_message($block('c@two.example.test'));
+    same('sending', q_val('SELECT status FROM campaigns WHERE id = ?', [$c['campaign']]), 'two domains: still sending');
+    bounce_process_message($block('d@three.example.test'));
+    same('paused', q_val('SELECT status FROM campaigns WHERE id = ?', [$c['campaign']]), 'three different domains: paused');
+    ok(!email_suppressed('a@one.example.test'), 'blocks never suppress');
 });
 
 // ---- Sending: envelope, headers, SMTP-time rejections -----------------------------------
@@ -311,7 +433,7 @@ test('A5 queued mail gets a VERP Return-Path, unique Message-ID, tag and bulk he
     same(1, mail_queue_run()['sent']);
     $msg = $rec->sent[0];
     $rowId = (int) q_val('SELECT id FROM campaign_recipients WHERE campaign_id = ?', [$id]);
-    $tag = verp_tag('c', $rowId);
+    $tag = verp_tag('c', $rowId, $m['email']);
     same('bounces+' . $tag . '@harbourside.example.test', $msg->returnPath);
     same($tag, $msg->headers['X-Gather-Message-Id']);
     ok(str_starts_with($msg->headers['Message-ID'], '<' . $tag . '.'), 'Message-ID carries the tag');
@@ -324,7 +446,7 @@ test('A5 queued mail gets a VERP Return-Path, unique Message-ID, tag and bulk he
     ok(send_template_mail('direct@recipient.example.test', 'Di', 'password_reset', ['reset_url' => 'https://x.test/r']));
     $row = q_one("SELECT * FROM email_queue WHERE to_email = 'direct@recipient.example.test'");
     same(['sent', ''], [$row['status'], $row['text_body']]);
-    same(verp_tag('q', (int) $row['id']), $rec->sent[0]->headers['X-Gather-Message-Id']);
+    same(verp_tag('q', (int) $row['id'], 'direct@recipient.example.test'), $rec->sent[0]->headers['X-Gather-Message-Id']);
     not_contains('Feedback-ID', implode(',', array_keys($rec->sent[0]->headers)), 'transactional mail has no Feedback-ID');
     mailer(null, true);
 });
@@ -362,10 +484,10 @@ test('A5 SMTP-time rejections through a relay: 5xx hard is final, 4xx retried, 5
         mailer(null, true);
         $sessions = json_decode((string) file_get_contents($log), true)['sessions'] ?? [];
         $froms = array_merge(...array_column($sessions, 'mail_from'));
-        ok(in_array('bounces+' . verp_tag('c', $rows['ok@recipient.example.test']) . '@harbourside.example.test', $froms, true), 'MAIL FROM is the VERP address: ' . json_encode($froms));
+        ok(in_array('bounces+' . verp_tag('c', $rows['ok@recipient.example.test'], 'ok@recipient.example.test') . '@harbourside.example.test', $froms, true), 'MAIL FROM is the VERP address: ' . json_encode($froms));
         $data = implode("\n", array_merge(...array_column($sessions, 'data')));
-        contains('X-Gather-Message-Id: ' . verp_tag('c', $rows['ok@recipient.example.test']), $data);
-        contains('Message-ID: <' . verp_tag('c', $rows['ok@recipient.example.test']) . '.', $data);
+        contains('X-Gather-Message-Id: ' . verp_tag('c', $rows['ok@recipient.example.test'], 'ok@recipient.example.test'), $data);
+        contains('Message-ID: <' . verp_tag('c', $rows['ok@recipient.example.test'], 'ok@recipient.example.test') . '.', $data);
     } finally {
         stop_helper($proc);
         is_file($log) && unlink($log);
@@ -422,8 +544,8 @@ test('A5 IMAP over TLS: processed reports deleted, unreadable ones moved aside, 
         reset_bounces();
         $c = sent_campaign(['gone@recipient.example.test', 'complainer@recipient.example.test']);
         $msgs = [
-            'hard' => bounce_fixture('postfix_hard_511.eml', ['TAG' => verp_tag('c', $c['rows']['gone@recipient.example.test']), 'EMAIL' => 'gone@recipient.example.test']),
-            'arf' => bounce_fixture('arf_complaint.eml', ['TAG' => verp_tag('c', $c['rows']['complainer@recipient.example.test']), 'EMAIL' => 'x']),
+            'hard' => bounce_fixture('postfix_hard_511.eml', ['TAG' => verp_tag('c', $c['rows']['gone@recipient.example.test'], 'gone@recipient.example.test'), 'EMAIL' => 'gone@recipient.example.test']),
+            'arf' => bounce_fixture('arf_complaint.eml', ['TAG' => verp_tag('c', $c['rows']['complainer@recipient.example.test'], 'complainer@recipient.example.test'), 'EMAIL' => 'x']),
             'auto' => bounce_fixture('auto_reply.eml', ['TAG' => 'x', 'EMAIL' => 'someone@recipient.example.test']),
             'junk' => bounce_fixture('unparseable.eml', []),
         ];
@@ -442,7 +564,7 @@ test('A5 IMAP over TLS: processed reports deleted, unreadable ones moved aside, 
             ok(str_contains($st['folders']['Gather-Unprocessed'][0]['name'], 'junk'));
             $login = array_values(array_filter($st['log'], static fn (array $l): bool => $l['cmd'] === 'LOGIN ***'))[0];
             ok($login['tls'] === true, "$mode: credentials only sent over TLS");
-            ok(in_array('UID FETCH 1 (BODY.PEEK[])', array_column($st['log'], 'cmd'), true));
+            ok(in_array('UID FETCH 1 (BODY.PEEK[]<0.' . (BOUNCE_MAX_MESSAGE_BYTES + 1) . '>)', array_column($st['log'], 'cmd'), true), 'partial fetch capped at the limit');
             same('hard_bounce', email_suppression('gone@recipient.example.test')['reason'] ?? null);
             same('complaint', email_suppression('complainer@recipient.example.test')['reason'] ?? null);
             same(1, bounce_mailbox_state()['unparsed']);
@@ -501,7 +623,7 @@ test('A5 POP3 with STLS: reports deleted on QUIT, unreadable messages kept local
     }
     $c = sent_campaign(['full@recipient.example.test']);
     $dir = fake_maildir([
-        'soft' => bounce_fixture('gmail_soft_422_mailbox_full.eml', ['TAG' => verp_tag('c', $c['rows']['full@recipient.example.test']), 'EMAIL' => 'full@recipient.example.test']),
+        'soft' => bounce_fixture('gmail_soft_422_mailbox_full.eml', ['TAG' => verp_tag('c', $c['rows']['full@recipient.example.test'], 'full@recipient.example.test'), 'EMAIL' => 'full@recipient.example.test']),
         'dotted' => bounce_fixture('unparseable.eml', []) . "\n.\n..leading dots survive\n",
     ]);
     $state = $dir . '/state.json';
@@ -521,6 +643,96 @@ test('A5 POP3 with STLS: reports deleted on QUIT, unreadable messages kept local
     } finally {
         stop_helper($proc);
     }
+});
+
+test('A5 M2: an oversized message is set aside unread (IMAP) and never blocks the messages behind it', function (): void {
+    reset_bounces();
+    $cert = test_tls_cert();
+    $c = sent_campaign(['after-big@recipient.example.test']);
+    $big = "From: someone@evil.example.test\nSubject: huge\nContent-Type: text/plain\n\n" . str_repeat(str_repeat('A', 998) . "\n", (int) (BOUNCE_MAX_MESSAGE_BYTES / 999) + 50);
+    $dir = fake_maildir([
+        'big' => $big,
+        'hard' => bounce_fixture('postfix_hard_511.eml', ['TAG' => verp_tag('c', $c['rows']['after-big@recipient.example.test'], 'after-big@recipient.example.test'), 'EMAIL' => 'after-big@recipient.example.test']),
+    ]);
+    $state = $dir . '/state.json';
+    foreach ([[], ['FAKE_MAIL_LIE_SIZE' => '1']] as $env) {
+        q('DELETE FROM email_events');
+        q('DELETE FROM email_suppressions');
+        setting_set('mail.bounce_state', null);
+        is_file($state) && unlink($state);
+        [$proc, $port] = start_helper(__DIR__ . '/fixtures/fake_mail_server.php', ['imap', 'ssl', $cert['cert'], $cert['key'], $dir, $state, 'u', 'p'], $env);
+        $label = $env === [] ? 'size reported' : 'server lies about the size';
+        try {
+            $s = bounce_mailbox_poll(new ImapClient(['host' => '127.0.0.1', 'port' => $port, 'encryption' => 'ssl', 'username' => 'u', 'password' => 'p', 'cafile' => $cert['cert'], 'timeout' => 5]));
+            same('', $s['error'], $label);
+            same([2, 1, 1], [$s['read'], $s['oversized'], $s['recorded']], $label);
+            $st = json_decode((string) file_get_contents($state), true);
+            same([], $st['folders']['INBOX'], "$label: the inbox is emptied");
+            same(['01-big.eml'], array_column($st['folders']['Gather-Unprocessed'], 'name'), "$label: the big one is set aside");
+            $cmds = array_column($st['log'], 'cmd');
+            if ($env === []) {
+                same([], array_values(array_filter($cmds, static fn (string $cmd): bool => str_starts_with($cmd, 'UID FETCH 1 (BODY'))), 'never downloaded');
+            } else {
+                ok(in_array('UID FETCH 1 (BODY.PEEK[]<0.' . (BOUNCE_MAX_MESSAGE_BYTES + 1) . '>)', $cmds, true), 'only a capped partial fetch');
+            }
+            ok(email_suppressed('after-big@recipient.example.test'), "$label: the report behind it was processed");
+            same(1, bounce_mailbox_state()['oversized']);
+        } finally {
+            stop_helper($proc);
+        }
+    }
+});
+
+test('A5 M2: POP3 deletes an oversized message without RETR; a lying server is cut off at the limit', function (): void {
+    reset_bounces();
+    $cert = test_tls_cert();
+    foreach (bounce_local_aside_files() as $f) {
+        unlink($f);
+    }
+    $c = sent_campaign(['pop-after@recipient.example.test']);
+    $big = "From: someone@evil.example.test\nSubject: huge\n\n" . str_repeat("\n", BOUNCE_MAX_MESSAGE_BYTES) . "end\n"; // many empty lines: also over the line cap
+    $tagged = bounce_fixture('gmail_soft_422_mailbox_full.eml', ['TAG' => verp_tag('c', $c['rows']['pop-after@recipient.example.test'], 'pop-after@recipient.example.test'), 'EMAIL' => 'pop-after@recipient.example.test']);
+    foreach ([[], ['FAKE_MAIL_LIE_SIZE' => '1']] as $env) {
+        q('DELETE FROM email_events');
+        setting_set('mail.bounce_state', null);
+        $dir = fake_maildir(['big' => $big, 'soft' => $tagged]);
+        $state = $dir . '/state.json';
+        [$proc, $port] = start_helper(__DIR__ . '/fixtures/fake_mail_server.php', ['pop3', 'ssl', $cert['cert'], $cert['key'], $dir, $state, 'popper', 'secret'], $env);
+        $label = $env === [] ? 'size reported' : 'server lies about the size';
+        try {
+            $s = bounce_mailbox_poll(new Pop3Client(['host' => '127.0.0.1', 'port' => $port, 'encryption' => 'ssl', 'username' => 'popper', 'password' => 'secret', 'cafile' => $cert['cert'], 'timeout' => 5]));
+            same('', $s['error'], $label);
+            same([2, 1, 1], [$s['read'], $s['oversized'], $s['recorded']], $label);
+            $st = json_decode((string) file_get_contents($state), true);
+            same([true, true], array_column($st['folders']['INBOX'], 'deleted'), "$label: both deleted, the big one too");
+            if ($env === []) {
+                ok(!in_array('RETR 1', array_column($st['log'], 'cmd'), true), 'the big message was never downloaded');
+            }
+            same([], bounce_local_aside_files(), 'nothing big written to disk');
+            same(1, (int) q_val("SELECT COUNT(*) FROM email_events WHERE type = 'soft'"), "$label: the next report was processed");
+        } finally {
+            stop_helper($proc);
+        }
+    }
+});
+
+test('A5 M2: MIME parsing stops after 100 parts across all levels', function (): void {
+    $part = static function (int $depth) use (&$part): string {
+        if ($depth === 0) {
+            return "Content-Type: text/plain\n\nleaf\n";
+        }
+        $b = 'b' . $depth;
+        $out = "Content-Type: multipart/mixed; boundary=\"$b\"\n\n";
+        for ($i = 0; $i < 20; $i++) {
+            $out .= "--$b\n" . $part($depth - 1);
+        }
+        return $out . "--$b--\n";
+    };
+    $raw = $part(3); // 20 + 400 + 8,000 parts if unbounded
+    ok(strlen($raw) < BOUNCE_MAX_MESSAGE_BYTES * 2);
+    $msg = \Core\Mail\MimeMessage::parse($raw);
+    ok(count($msg->flatten()) <= \Core\Mail\MimeMessage::MAX_TOTAL_PARTS, 'parts kept: ' . count($msg->flatten()));
+    same('unparsed', bounce_process_message($raw), 'not a report, and parsing finished');
 });
 
 // ---- Provider webhooks ----------------------------------------------------------------------
@@ -557,7 +769,7 @@ test('A5 SES via SNS: signature checked against the certificate from an allow-li
         return $url === $signer['url'] ? $signer['pem'] : 'confirmed';
     };
     $c = sent_campaign(['ses-gone@recipient.example.test']);
-    $tag = verp_tag('c', $c['rows']['ses-gone@recipient.example.test']);
+    $tag = verp_tag('c', $c['rows']['ses-gone@recipient.example.test'], 'ses-gone@recipient.example.test');
     $msg = sns_message('Notification', ['Message' => webhook_fixture('ses_bounce_message.json', ['EMAIL' => 'ses-gone@recipient.example.test', 'TAG' => $tag])]);
     $r = webhook_handle('ses', json_encode($msg), [], $fetch);
     same([200, 1], [$r['status'], $r['recorded']]);
@@ -597,7 +809,7 @@ test('A5 Mailgun webhook: HMAC signature and timestamp checked', function (): vo
     $c = sent_campaign(['mg@recipient.example.test']);
     $ts = (string) time();
     $token = bin2hex(random_bytes(25));
-    $vars = ['TS' => $ts, 'TOKEN' => $token, 'SIGNATURE' => hash_hmac('sha256', $ts . $token, 'key-mailgun-signing-123'), 'EMAIL' => 'mg@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['mg@recipient.example.test'])];
+    $vars = ['TS' => $ts, 'TOKEN' => $token, 'SIGNATURE' => hash_hmac('sha256', $ts . $token, 'key-mailgun-signing-123'), 'EMAIL' => 'mg@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['mg@recipient.example.test'], 'mg@recipient.example.test')];
     $r = webhook_handle('mailgun', webhook_fixture('mailgun_failed_permanent.json', $vars), []);
     same([200, 1], [$r['status'], $r['recorded']]);
     same('hard', q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$c['rows']['mg@recipient.example.test']]));
@@ -610,13 +822,13 @@ test('A5 Postmark webhook: basic auth or token header required', function (): vo
     reset_bounces();
     setting_set('mail.bounce', ['webhooks' => ['postmark_user' => 'pm', 'postmark_password' => secret_seal('pm-pass'), 'postmark_token' => secret_seal('pm-token')]]);
     $c = sent_campaign(['pm@recipient.example.test', 'pm2@recipient.example.test']);
-    $vars = ['EMAIL' => 'pm@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['pm@recipient.example.test'])];
+    $vars = ['EMAIL' => 'pm@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['pm@recipient.example.test'], 'pm@recipient.example.test')];
     same(401, webhook_handle('postmark', webhook_fixture('postmark_hard_bounce.json', $vars), [])['status']);
     same(401, webhook_handle('postmark', webhook_fixture('postmark_hard_bounce.json', $vars), ['PHP_AUTH_USER' => 'pm', 'PHP_AUTH_PW' => 'nope'])['status']);
     $r = webhook_handle('postmark', webhook_fixture('postmark_hard_bounce.json', $vars), ['HTTP_AUTHORIZATION' => 'Basic ' . base64_encode('pm:pm-pass')]);
     same([200, 1], [$r['status'], $r['recorded']]);
     ok(email_suppressed('pm@recipient.example.test'));
-    $vars2 = ['EMAIL' => 'pm2@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['pm2@recipient.example.test'])];
+    $vars2 = ['EMAIL' => 'pm2@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['pm2@recipient.example.test'], 'pm2@recipient.example.test')];
     same(1, webhook_handle('postmark', webhook_fixture('postmark_spam_complaint.json', $vars2), ['HTTP_X_GATHER_WEBHOOK_TOKEN' => 'pm-token'])['recorded']);
     same('complaint', email_suppression('pm2@recipient.example.test')['reason'] ?? null);
 });
@@ -629,7 +841,7 @@ test('A5 SendGrid signed event webhook: ECDSA signature over timestamp + body', 
     setting_set('mail.bounce', ['webhooks' => ['sendgrid_key' => $b64]]);
     $c = sent_campaign(['sg@recipient.example.test', 'sg2@recipient.example.test']);
     $ts = (string) time();
-    $body = webhook_fixture('sendgrid_events.json', ['TS' => $ts, 'EMAIL' => 'sg@recipient.example.test', 'EMAIL2' => 'sg2@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['sg@recipient.example.test'])]);
+    $body = webhook_fixture('sendgrid_events.json', ['TS' => $ts, 'EMAIL' => 'sg@recipient.example.test', 'EMAIL2' => 'sg2@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['sg@recipient.example.test'], 'sg@recipient.example.test')]);
     openssl_sign($ts . $body, $sig, $key, OPENSSL_ALGO_SHA256);
     $server = ['HTTP_X_TWILIO_EMAIL_EVENT_WEBHOOK_SIGNATURE' => base64_encode($sig), 'HTTP_X_TWILIO_EMAIL_EVENT_WEBHOOK_TIMESTAMP' => $ts];
     $r = webhook_handle('sendgrid', $body, $server);
@@ -644,7 +856,7 @@ test('A5 Brevo webhook: bearer token required', function (): void {
     reset_bounces();
     setting_set('mail.bounce', ['webhooks' => ['brevo_token' => secret_seal('brevo-secret-token')]]);
     $c = sent_campaign(['bv@recipient.example.test']);
-    $body = webhook_fixture('brevo_hard_bounce.json', ['EMAIL' => 'bv@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['bv@recipient.example.test'])]);
+    $body = webhook_fixture('brevo_hard_bounce.json', ['EMAIL' => 'bv@recipient.example.test', 'TAG' => verp_tag('c', $c['rows']['bv@recipient.example.test'], 'bv@recipient.example.test')]);
     same(401, webhook_handle('brevo', $body, ['HTTP_AUTHORIZATION' => 'Bearer wrong'])['status']);
     same(1, webhook_handle('brevo', $body, ['HTTP_AUTHORIZATION' => 'Bearer brevo-secret-token'])['recorded']);
     same('hard', q_val('SELECT bounce FROM campaign_recipients WHERE id = ?', [$c['rows']['bv@recipient.example.test']]));
@@ -723,14 +935,14 @@ test('A5 health page: bounce and complaint rates with warnings above 2% / 0.1%',
     q('DELETE FROM campaign_recipients');
     q('DELETE FROM email_queue');
     $c = sent_campaign(array_map(static fn (int $i): string => "r$i@recipient.example.test", range(1, 50)));
-    bounce_record(['email' => 'r1@recipient.example.test', 'type' => 'hard', 'source' => 'dsn']);
+    bounce_record(['email' => 'r1@recipient.example.test', 'type' => 'hard', 'source' => 'ses']);
     $find = static fn (string $label): array => array_values(array_filter(health_checks()['Bounces and complaints'], static fn (array $i): bool => $i['label'] === $label))[0];
     same('ok', $find('Bounce rate (7 days)')['status'], '1 of 50 = 2% is not above 2%');
-    bounce_record(['email' => 'r2@recipient.example.test', 'type' => 'hard', 'source' => 'dsn']);
+    bounce_record(['email' => 'r2@recipient.example.test', 'type' => 'hard', 'source' => 'ses']);
     same('warn', $find('Bounce rate (7 days)')['status']);
     contains('4.00%', $find('Bounce rate (30 days)')['detail']);
     same('ok', $find('Complaint rate (7 days)')['status']);
-    bounce_record(['email' => 'r3@recipient.example.test', 'type' => 'complaint', 'source' => 'arf']);
+    bounce_record(['email' => 'r3@recipient.example.test', 'type' => 'complaint', 'source' => 'ses']);
     same('warn', $find('Complaint rate (7 days)')['status'], '1 complaint in 50 is above 0.1%');
     same('warn', $find('Bounce mailbox')['status'], 'not set up');
     setting_set('mail.bounce_state', ['last_poll' => time(), 'last_error' => 'The mail server closed the connection.']);
@@ -739,11 +951,12 @@ test('A5 health page: bounce and complaint rates with warnings above 2% / 0.1%',
     same(0, $c['campaign'] - $c['campaign']);
 });
 
-test('A5 suppression list: admins clear bounces, never unsubscribes or complaints', function (): void {
+test('A5 suppression list: admins clear bounces, never unsubscribes', function (): void {
     reset_bounces();
+    sent_campaign(['fixed@recipient.example.test']);
     email_suppress('fixed@recipient.example.test', 'hard_bounce', 'User unknown', 'dsn');
     email_suppress('choice@recipient.example.test', 'unsubscribe');
-    bounce_record(['email' => 'fixed@recipient.example.test', 'type' => 'soft', 'source' => 'dsn']);
+    same('recorded', bounce_record(['email' => 'fixed@recipient.example.test', 'type' => 'soft', 'source' => 'ses']));
     act_as(fixture_admin('admin', ['communications']));
     request('POST', '/admin/email-suppressions/clear', ['_csrf' => csrf_token(), 'email' => 'choice@recipient.example.test']);
     throws(\Core\Redirect::class, fn () => \Admin\Suppressions::clear([]));
@@ -752,6 +965,6 @@ test('A5 suppression list: admins clear bounces, never unsubscribes or complaint
     throws(\Core\Redirect::class, fn () => \Admin\Suppressions::clear([]));
     ok(!email_suppressed('fixed@recipient.example.test'));
     same(0, (int) q_val("SELECT COUNT(*) FROM email_events WHERE email = 'fixed@recipient.example.test' AND type = 'soft'"), 'old soft bounces no longer count');
-    same(1, (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'clear' AND item_type = 'suppression'"));
+    same(1, (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'clear' AND item_type = 'suppression' AND summary LIKE 'fixed@%'"));
     act_as(null);
 });

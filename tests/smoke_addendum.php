@@ -62,7 +62,7 @@ $ts = (string) time();
 $tok = bin2hex(random_bytes(20));
 $payload = json_encode(['signature' => ['timestamp' => $ts, 'token' => $tok, 'signature' => hash_hmac('sha256', $ts . $tok, 'smoke-mailgun-key')],
     'event-data' => ['id' => 'smoke-' . $tok, 'event' => 'failed', 'severity' => 'permanent', 'recipient' => 'mg-smoke@recipient.example.test',
-        'delivery-status' => ['code' => 550, 'message' => '5.1.1 user unknown', 'enhanced-code' => '5.1.1'], 'user-variables' => ['gather_id' => verp_tag('c', $mgRow)]]]);
+        'delivery-status' => ['code' => 550, 'message' => '5.1.1 user unknown', 'enhanced-code' => '5.1.1'], 'user-variables' => ['gather_id' => verp_tag('c', $mgRow, (string) q_val('SELECT email FROM campaign_recipients WHERE id = ?', [$mgRow]))]]]);
 $hook = new Browser($base);
 $r = $hook->post('/webhooks/email/mailgun', $payload, ['Content-Type: application/json']);
 check('A5: a signed Mailgun webhook is accepted without a CSRF token and records the hard bounce', $r['status'] === 200

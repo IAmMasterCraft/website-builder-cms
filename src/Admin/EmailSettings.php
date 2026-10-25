@@ -158,7 +158,7 @@ final class EmailSettings
         } elseif ($s['error'] !== '') {
             flash('The bounce mailbox could not be read: ' . $s['error'], 'error');
         } else {
-            flash(sprintf('Bounce mailbox checked: %d read, %d recorded, %d ignored, %d set aside.', $s['read'], $s['recorded'], $s['ignored'], $s['unparsed']));
+            flash(sprintf('Bounce mailbox checked: %d read, %d recorded, %d to review (Suppression list), %d ignored, %d set aside.', $s['read'], $s['recorded'], $s['review'], $s['ignored'], $s['unparsed'] + $s['oversized']));
         }
         redirect('/admin/settings/email#bounces');
     }

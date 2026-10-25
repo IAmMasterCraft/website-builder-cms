@@ -76,10 +76,18 @@ asks for themselves (such as a password reset).
 At the top you see the bounce and complaint rates for the last 7 and 30 days.
 At the bottom, the **latest bounces and complaints** as they came in.
 
-**Clear** (bounces only): when a member has fixed their address or their
-mailbox works again, clear the suppression so they receive email again.
-Unsubscribes and complaints show **Person's choice**: only the member can
-undo them, by switching news emails back on in their preferences.
+**Reports to review** appears when bounce or complaint reports arrived that
+Gather could not tie to an email it sent (no valid tag). They changed
+nothing. **Apply** handles one as genuine (a bounce or complaint then
+suppresses the address); **Dismiss** ignores it. Complaints that came by
+email ("via arf") can be cleared like bounces; complaints from your
+provider's webhook cannot.
+
+**Clear** (bounces, and complaints that came by email): when a member has
+fixed their address or their mailbox works again, clear the suppression so
+they receive email again. Unsubscribes and provider-reported complaints show
+**Person's choice**: only the member can undo them, by switching news emails
+back on in their preferences.
 
 Members whose address bounced see a banner in their account asking them to
 update it.

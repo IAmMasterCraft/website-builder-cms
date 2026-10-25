@@ -161,7 +161,7 @@ function mail_send_now(Message $m, string $kind = 'transactional', bool $queueOn
         'text_body' => '', 'html_body' => null, 'reply_to' => $m->replyTo, 'status' => 'sending', 'attempts' => 1, 'claimed_at' => $nowSql, 'next_attempt_at' => $nowSql,
     ]);
     try {
-        mailer()->send(mail_with_envelope($m, verp_tag('q', $id)));
+        mailer()->send(mail_with_envelope($m, verp_tag('q', $id, $m->toEmail)));
         q("UPDATE email_queue SET status = 'sent', sent_at = ? WHERE id = ?", [gmdate('Y-m-d H:i:s'), $id]);
         return true;
     } catch (RecipientRejectedException $e) {

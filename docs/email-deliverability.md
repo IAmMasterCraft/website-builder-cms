@@ -161,7 +161,22 @@ Gather **deletes** every message it has processed, so the mailbox never
 fills up. Messages it cannot understand (rare) go to an IMAP folder (default
 `Gather-Unprocessed`) or, with POP3, to `storage/bounces/` on the server. It
 keeps at most the number and age you set and deletes older ones. Out-of-office
-replies and "delayed" notices are ignored.
+replies and "delayed" notices are ignored. Messages larger than 2 MB (real
+bounce reports are a few kilobytes) are never downloaded: they go straight to
+the unprocessed folder (IMAP) or are deleted (POP3), so one huge message can
+never hold up the reports behind it.
+
+**Only tagged reports change anything.** Anyone can send email to the
+bounce address, so a report counts only when it carries the tag of an email
+Gather actually sent (in the return address or the returned headers), and it
+then applies to the address that email went to, never to an address written
+in the report. Reports without a valid tag (for example from a server that
+drops the return address and the original headers) change nothing: they wait
+under **Suppression list → Reports to review**, where an admin can **Apply**
+or **Dismiss** each one. System health shows how many are waiting. A single
+recipient's server refusing a message as spam is recorded but only pauses a
+campaign when blocks come from three or more different receiving domains
+(refusals from your own SMTP server or a provider webhook pause at once).
 
 ## 4. Provider webhooks
 
@@ -210,9 +225,16 @@ your SPF/DKIM/DMARC records and the content, then press **Resume sending** on
 the campaign.
 
 Admins can **Clear** a bounce suppression once the address has been
-corrected or the mailbox works again. Unsubscribes and complaints are the
-**person's choice**: only the person can undo them, by switching "News and
-event updates" back on in their email preferences. Essential membership
+corrected or the mailbox works again. They can also clear a complaint that
+arrived as an emailed feedback report (shown "via arf", "via dsn" or "via
+review"), because such reports can be forged. Unsubscribes, and complaints
+reported by your sending provider's signed webhook, are the **person's
+choice**: only the person can undo them, by switching "News and event
+updates" back on in their email preferences.
+
+Provider webhooks are authenticated, but a provider report about an address
+Gather has not emailed in the last 30 days also goes to **Reports to
+review** instead of suppressing it. Essential membership
 notices (see [Campaigns](manager-guide/campaigns.md)) still skip every
 suppressed address.
 

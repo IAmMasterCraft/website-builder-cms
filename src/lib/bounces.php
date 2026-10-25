@@ -5,18 +5,33 @@ use Core\Mail\BounceParser;
 use Core\Mail\Message;
 
 /*
- * Bounce and complaint handling (Addendum A5).
+ * Bounce and complaint handling (Addendum A5, hardened after the second
+ * security review).
  *
  * Every outgoing queued message gets a signed per-message tag ("c123-…" for
- * a campaign recipient row, "q45-…" for an email_queue row). It is used in
- * the VERP envelope sender (bounces+TAG@domain), the Message-ID and an
- * X-Gather-Message-Id header, so a delivery report maps to exactly one row.
- * Failures are classified as hard, soft, block (policy/spam) or complaint;
- * bounce_record() stores the event and applies the suppression rules:
- *   hard -> suppressed at once; soft -> suppressed after 3 within 30 days;
- *   complaint -> suppressed from bulk mail at once; block -> the campaign is
- *   paused and the health page warns (a reputation/content problem, not a
- *   bad address).
+ * a campaign recipient row, "q45-…" for an email_queue row; the HMAC covers
+ * the row and the address it was sent to). It is used in the VERP envelope
+ * sender (bounces+TAG@domain), the Message-ID and an X-Gather-Message-Id
+ * header, so a delivery report maps to exactly one row.
+ *
+ * Who is trusted for what:
+ * - SMTP-time rejections (our own relay) and authenticated provider
+ *   webhooks act on the address they name, but only when we sent a message
+ *   to it in the last 30 days (otherwise: recorded for review).
+ * - The bounce mailbox is public: anyone can email it. A mailbox report
+ *   (DSN, ARF, legacy text bounce) acts only when it carries a valid tag for
+ *   a message that was actually sent, and then only on the address stored
+ *   in that row, never on an address written in the report. Untagged or
+ *   forged reports are recorded with review = 'pending' for an admin
+ *   (Suppression list) and change nothing. At most
+ *   BOUNCE_REPORT_MAX_RECIPIENTS events are recorded per report.
+ *
+ * Rules once a report is trusted: hard -> suppressed at once; soft ->
+ * suppressed after 3 within 30 days; complaint -> suppressed from bulk mail
+ * at once; block -> the campaign is paused (SMTP-time or provider block, or
+ * mailbox blocks from BOUNCE_BLOCK_PAUSE_DOMAINS different recipient
+ * domains) and the health page warns: a reputation/content problem, not a
+ * bad address.
  */
 
 const BOUNCE_SOFT_LIMIT = 3;
@@ -24,8 +39,14 @@ const BOUNCE_SOFT_DAYS = 30;
 const BOUNCE_RATE_WARN = 0.02;
 const COMPLAINT_RATE_WARN = 0.001;
 const BOUNCE_TAG_SIG_CHARS = 12;
-/** How long after sending a report without a tag may still be matched to a message by address. */
+/** How long after sending an authenticated report without a tag may still be matched to a message by address. */
 const BOUNCE_MATCH_DAYS = 30;
+/** Events recorded from one mailbox report at most (a forged report could list thousands of addresses). */
+const BOUNCE_REPORT_MAX_RECIPIENTS = 5;
+/** Sources that are unauthenticated email to the public bounce mailbox. */
+const BOUNCE_MAILBOX_SOURCES = ['dsn', 'arf'];
+/** Mailbox-reported blocks pause a campaign only when they come from this many different recipient domains. */
+const BOUNCE_BLOCK_PAUSE_DOMAINS = 3;
 
 /** Bounce settings (super admin, Email settings) with defaults; secrets stay sealed here. */
 function bounce_settings(): array
@@ -61,30 +82,65 @@ function bounce_secret(string $group, string $key): string
 
 // ---- Per-message tags and envelope -----------------------------------------------------
 
-/** Signed tag for a queue row: kind 'c' (campaign_recipients) or 'q' (email_queue). */
-function verp_tag(string $kind, int $id): string
+/**
+ * Signed tag for a queue row: kind 'c' (campaign_recipients) or 'q'
+ * (email_queue). The signature covers the row and the address it is sent
+ * to, so a tag cannot be moved to another row or address.
+ */
+function verp_tag(string $kind, int $id, string $email): string
 {
     if ($kind !== 'c' && $kind !== 'q') {
         throw new InvalidArgumentException('tag kind');
     }
-    return $kind . $id . '-' . substr(app_sign('verp|' . $kind . $id), 0, BOUNCE_TAG_SIG_CHARS);
+    return $kind . $id . '-' . verp_signature($kind, $id, $email);
+}
+
+function verp_signature(string $kind, int $id, string $email): string
+{
+    return substr(app_sign('verp2|' . $kind . $id . '|' . strtolower(trim($email))), 0, BOUNCE_TAG_SIG_CHARS);
+}
+
+/** A queue row by table and id. @return array{table:string,id:int,email:string,campaign_id:?int,sent_at:?string}|null */
+function bounce_queue_row(string $table, int $id): ?array
+{
+    $row = match ($table) {
+        'campaign_recipients' => q_one('SELECT id, email, campaign_id, sent_at FROM campaign_recipients WHERE id = ?', [$id]),
+        'email_queue' => q_one('SELECT id, to_email AS email, NULL AS campaign_id, sent_at FROM email_queue WHERE id = ?', [$id]),
+        default => throw new InvalidArgumentException('table'),
+    };
+    if ($row === null) {
+        return null;
+    }
+    return ['table' => $table, 'id' => (int) $row['id'], 'email' => strtolower((string) $row['email']),
+        'campaign_id' => $row['campaign_id'] !== null ? (int) $row['campaign_id'] : null, 'sent_at' => $row['sent_at'] !== null ? (string) $row['sent_at'] : null];
 }
 
 /**
  * The queue row a tag points to, from any text that contains it (a VERP
- * address, a Message-ID, a header value). Forged or altered tags are ignored.
- * @return array{0:string,1:int}|null [table, id]
+ * address, a Message-ID, a header value). Forged or altered tags, tags for
+ * rows that do not exist, and tags signed before the address was part of
+ * the signature are ignored. At most 10 different candidates are checked.
+ * @return array{table:string,id:int,email:string,campaign_id:?int,sent_at:?string}|null
  */
 function verp_parse(string $text): ?array
 {
     if (!preg_match_all('/\b([qc])(\d{1,12})-([a-f0-9]{' . BOUNCE_TAG_SIG_CHARS . '})\b/i', $text, $m, PREG_SET_ORDER)) {
         return null;
     }
+    $seen = [];
     foreach ($m as $hit) {
+        $key = strtolower($hit[0]);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        if (count($seen) > 10) {
+            break;
+        }
         $kind = strtolower($hit[1]);
-        $id = (int) $hit[2];
-        if (hash_equals(substr(app_sign('verp|' . $kind . $id), 0, BOUNCE_TAG_SIG_CHARS), strtolower($hit[3]))) {
-            return [$kind === 'c' ? 'campaign_recipients' : 'email_queue', $id];
+        $row = bounce_queue_row($kind === 'c' ? 'campaign_recipients' : 'email_queue', (int) $hit[2]);
+        if ($row !== null && hash_equals(verp_signature($kind, $row['id'], $row['email']), strtolower($hit[3]))) {
+            return $row;
         }
     }
     return null;
@@ -213,34 +269,29 @@ function bounce_classify(string $status, int $smtpCode, string $text): string
 // ---- Recording and suppression -------------------------------------------------------------
 
 /**
- * The queue row a report is about: by tag first, otherwise the latest
- * message sent to the address in the last 30 days.
- * @return array{table:string,id:int,email:string,campaign_id:?int}|null
+ * The queue row a report is about: by tag first; for authenticated sources
+ * ($byAddress) otherwise the latest message sent to the address in the last
+ * 30 days.
+ * @return array{table:string,id:int,email:string,campaign_id:?int,sent_at:?string}|null
  */
-function bounce_find_row(?string $tagText, string $email): ?array
+function bounce_find_row(?string $tagText, string $email, bool $byAddress = true): ?array
 {
     $hit = $tagText !== null && $tagText !== '' ? verp_parse($tagText) : null;
     if ($hit !== null) {
-        [$table, $id] = $hit;
-        $row = $table === 'campaign_recipients'
-            ? q_one('SELECT id, email, campaign_id FROM campaign_recipients WHERE id = ?', [$id])
-            : q_one('SELECT id, to_email AS email, NULL AS campaign_id FROM email_queue WHERE id = ?', [$id]);
-        if ($row !== null) {
-            return ['table' => $table, 'id' => (int) $row['id'], 'email' => strtolower((string) $row['email']), 'campaign_id' => $row['campaign_id'] !== null ? (int) $row['campaign_id'] : null];
-        }
+        return $hit;
     }
     $email = strtolower(trim($email));
-    if ($email === '') {
+    if (!$byAddress || $email === '') {
         return null;
     }
     $since = gmdate('Y-m-d H:i:s', time() - BOUNCE_MATCH_DAYS * 86400);
     $c = q_one('SELECT id, email, campaign_id, sent_at FROM campaign_recipients WHERE email = ? AND sent_at > ? ORDER BY sent_at DESC, id DESC LIMIT 1', [$email, $since]);
     $q = q_one('SELECT id, to_email AS email, sent_at FROM email_queue WHERE to_email = ? AND sent_at > ? ORDER BY sent_at DESC, id DESC LIMIT 1', [$email, $since]);
     if ($c !== null && ($q === null || $c['sent_at'] >= $q['sent_at'])) {
-        return ['table' => 'campaign_recipients', 'id' => (int) $c['id'], 'email' => $email, 'campaign_id' => (int) $c['campaign_id']];
+        return ['table' => 'campaign_recipients', 'id' => (int) $c['id'], 'email' => $email, 'campaign_id' => (int) $c['campaign_id'], 'sent_at' => (string) $c['sent_at']];
     }
     if ($q !== null) {
-        return ['table' => 'email_queue', 'id' => (int) $q['id'], 'email' => $email, 'campaign_id' => null];
+        return ['table' => 'email_queue', 'id' => (int) $q['id'], 'email' => $email, 'campaign_id' => null, 'sent_at' => (string) $q['sent_at']];
     }
     return null;
 }
@@ -268,8 +319,14 @@ function email_suppress(string $email, string $reason, string $detail = '', stri
 /**
  * Record one bounce or complaint and apply the suppression rules.
  * $ev: email, type (hard|soft|block|complaint), status, smtp_code, detail,
- * source, tag (text that may contain a tag), ext_id (dedupe key), now.
- * Returns recorded | duplicate | ignored.
+ * source, tag (text that may contain a tag), row (a queue row already
+ * looked up from a verified tag), ext_id (dedupe key), now.
+ *
+ * A report acts only when it is tied to a message we sent: by its verified
+ * tag, or (SMTP time and authenticated webhooks only) by the address. The
+ * address acted on is always the one in our row. Everything else is stored
+ * with review = 'pending' and changes nothing.
+ * Returns recorded | review | duplicate | ignored.
  */
 function bounce_record(array $ev): string
 {
@@ -279,27 +336,42 @@ function bounce_record(array $ev): string
     }
     $now = (int) ($ev['now'] ?? time());
     $nowSql = gmdate('Y-m-d H:i:s', $now);
-    $row = bounce_find_row(isset($ev['tag']) ? (string) $ev['tag'] : null, (string) ($ev['email'] ?? ''));
+    $source = (string) ($ev['source'] ?? 'smtp');
+    $mailbox = in_array($source, BOUNCE_MAILBOX_SOURCES, true);
+    $row = isset($ev['row']) && is_array($ev['row']) ? $ev['row']
+        : bounce_find_row(isset($ev['tag']) ? (string) $ev['tag'] : null, (string) ($ev['email'] ?? ''), !$mailbox);
+    if ($row !== null && $mailbox && $row['sent_at'] === null) {
+        $row = null; // a tag for a message that never left: not a real report
+    }
     // The address we sent to (a report may name the final, forwarded address instead).
     $email = $row['email'] ?? strtolower(trim((string) ($ev['email'] ?? '')));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return 'ignored';
     }
+    $review = $row === null ? 'pending' : '';
     $detail = mb_substr(trim((string) ($ev['detail'] ?? '')), 0, 500);
-    $source = (string) ($ev['source'] ?? 'smtp');
-    $ins = q('INSERT IGNORE INTO email_events (email, type, status_code, smtp_code, detail, source, queue_table, queue_id, campaign_id, ext_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+    $ins = q('INSERT IGNORE INTO email_events (email, type, status_code, smtp_code, detail, source, queue_table, queue_id, campaign_id, ext_id, review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
         $email, $type, mb_substr((string) ($ev['status'] ?? ''), 0, 12), ($ev['smtp_code'] ?? null) ? (int) $ev['smtp_code'] : null, $detail, $source,
-        $row['table'] ?? null, $row['id'] ?? null, $row['campaign_id'] ?? null, isset($ev['ext_id']) && $ev['ext_id'] !== '' ? mb_substr((string) $ev['ext_id'], 0, 190) : null, $nowSql,
+        $row['table'] ?? null, $row['id'] ?? null, $row['campaign_id'] ?? null, isset($ev['ext_id']) && $ev['ext_id'] !== '' ? mb_substr((string) $ev['ext_id'], 0, 190) : null,
+        $review, $nowSql,
     ]);
     if ($ins->rowCount() !== 1) {
         return 'duplicate';
     }
-    if ($row !== null) {
-        // Keep the most serious outcome on the row: complaint > hard > block > soft.
-        $rank = "FIELD(bounce, 'soft', 'block', 'hard', 'complaint')";
-        $newRank = ['soft' => 1, 'block' => 2, 'hard' => 3, 'complaint' => 4][$type];
-        q('UPDATE ' . db_ident($row['table']) . " SET bounce = ?, bounced_at = ? WHERE id = ? AND (bounce IS NULL OR $rank < ?)", [$type, $nowSql, $row['id'], $newRank]);
+    if ($row === null) {
+        return 'review';
     }
+    // Keep the most serious outcome on the row: complaint > hard > block > soft.
+    $rank = "FIELD(bounce, 'soft', 'block', 'hard', 'complaint')";
+    $newRank = ['soft' => 1, 'block' => 2, 'hard' => 3, 'complaint' => 4][$type];
+    q('UPDATE ' . db_ident($row['table']) . " SET bounce = ?, bounced_at = ? WHERE id = ? AND (bounce IS NULL OR $rank < ?)", [$type, $nowSql, $row['id'], $newRank]);
+    bounce_apply_rules($email, $type, $detail, $source, $now, $row['campaign_id'], $mailbox);
+    return 'recorded';
+}
+
+/** The suppression/pause rules for a trusted event (also used when an admin applies a reviewed report). */
+function bounce_apply_rules(string $email, string $type, string $detail, string $source, int $now, ?int $campaignId, bool $mailbox): void
+{
     switch ($type) {
         case 'hard':
             email_suppress($email, 'hard_bounce', $detail, $source);
@@ -309,17 +381,24 @@ function bounce_record(array $ev): string
             break;
         case 'soft':
             $since = gmdate('Y-m-d H:i:s', $now - BOUNCE_SOFT_DAYS * 86400);
-            if ((int) q_val("SELECT COUNT(*) FROM email_events WHERE email = ? AND type = 'soft' AND created_at > ?", [$email, $since]) >= BOUNCE_SOFT_LIMIT) {
+            if ((int) q_val("SELECT COUNT(*) FROM email_events WHERE email = ? AND type = 'soft' AND review IN ('', 'applied') AND created_at > ?", [$email, $since]) >= BOUNCE_SOFT_LIMIT) {
                 email_suppress($email, 'soft_bounce', $detail, $source);
             }
             break;
         case 'block':
-            if (($row['campaign_id'] ?? null) !== null) {
-                campaign_pause((int) $row['campaign_id'], 'A receiving server refused a message as spam or for policy reasons (' . ($detail !== '' ? mb_substr($detail, 0, 200) : $email) . '). Check the content and your SPF/DKIM/DMARC set-up, then resume.');
+            // Any recipient can send us a DSN with their own tag, so mailbox blocks pause only
+            // when several recipient domains report them; SMTP-time and provider blocks pause at once.
+            if ($campaignId !== null && (!$mailbox || bounce_block_domains($campaignId) >= BOUNCE_BLOCK_PAUSE_DOMAINS)) {
+                campaign_pause($campaignId, 'A receiving server refused a message as spam or for policy reasons (' . ($detail !== '' ? mb_substr($detail, 0, 200) : $email) . '). Check the content and your SPF/DKIM/DMARC set-up, then resume.');
             }
             break;
     }
-    return 'recorded';
+}
+
+/** Different recipient domains that reported a block for a campaign. */
+function bounce_block_domains(int $campaignId): int
+{
+    return (int) q_val("SELECT COUNT(DISTINCT SUBSTRING_INDEX(email, '@', -1)) FROM email_events WHERE campaign_id = ? AND type = 'block' AND review IN ('', 'applied')", [$campaignId]);
 }
 
 /** Pause a sending campaign after a block (waiting recipients stay queued). */
@@ -340,14 +419,16 @@ function campaign_resume(int $id): bool
 // ---- Delivery reports from the bounce mailbox --------------------------------------------
 
 /**
- * Process one raw message from the bounce mailbox.
- * Returns recorded (at least one event), ignored (auto-reply, delay notice,
- * duplicate, a report about an address we do not know) or unparsed.
+ * Process one raw message from the bounce mailbox. A report with a valid tag
+ * for a sent message records one event for that message's address; one
+ * without records up to BOUNCE_REPORT_MAX_RECIPIENTS events for review.
+ * Returns recorded (an event was applied), review (only events waiting for
+ * an admin), ignored (auto-reply, delay notice, duplicate) or unparsed.
  */
 function bounce_process_message(string $raw, ?int $now = null): string
 {
     $now ??= time();
-    if (strlen($raw) > 10 * 1024 * 1024) {
+    if (strlen($raw) > BOUNCE_MAX_MESSAGE_BYTES) {
         return 'unparsed';
     }
     $r = BounceParser::parse($raw);
@@ -357,42 +438,88 @@ function bounce_process_message(string $raw, ?int $now = null): string
     if ($r['kind'] === 'unknown' || ($r['kind'] === 'text-bounce' && $r['recipients'] === [])) {
         return 'unparsed';
     }
-    $tagText = implode(' ', array_merge($r['envelope'], $r['gather_ids']));
+    $row = verp_parse(implode(' ', array_merge($r['envelope'], $r['gather_ids'])));
+    if ($row !== null && $row['sent_at'] === null) {
+        $row = null;
+    }
     $hash = hash('sha256', $raw);
-    $recorded = 0;
+    $results = [];
     if ($r['kind'] === 'arf') {
         if (in_array($r['feedback_type'], ['not-spam', 'auth-failure'], true)) {
             return 'ignored';
         }
-        $recipients = $r['recipients'] !== [] ? $r['recipients'] : [['email' => '', 'diagnostic' => $r['feedback_type']]];
-        foreach ($recipients as $i => $rc) {
-            $res = bounce_record(['email' => $rc['email'], 'type' => 'complaint', 'detail' => 'Feedback report: ' . $r['feedback_type'], 'source' => 'arf',
-                'tag' => $tagText, 'ext_id' => 'mbox:' . $hash . ':' . $i, 'now' => $now]);
-            $recorded += $res === 'recorded' ? 1 : 0;
+        $ev = ['type' => 'complaint', 'detail' => 'Feedback report: ' . $r['feedback_type'], 'source' => 'arf', 'now' => $now];
+        if ($row !== null) {
+            $results[] = bounce_record($ev + ['row' => $row, 'ext_id' => 'mbox:' . $hash . ':t']);
+        } else {
+            foreach (array_slice($r['recipients'], 0, BOUNCE_REPORT_MAX_RECIPIENTS) as $i => $rc) {
+                $results[] = bounce_record($ev + ['email' => $rc['email'], 'tag' => '', 'ext_id' => 'mbox:' . $hash . ':' . $i]);
+            }
         }
-        return $recorded > 0 ? 'recorded' : 'ignored';
+        return bounce_process_result($results);
     }
-    $anyFailure = false;
-    foreach ($r['recipients'] as $i => $rc) {
+    $failures = [];
+    foreach ($r['recipients'] as $rc) {
         if (in_array($rc['action'], ['delayed', 'delivered', 'relayed', 'expanded'], true)) {
             continue;
         }
         $type = bounce_classify($rc['status'], 0, $rc['diagnostic']);
-        if (!in_array($type, ['hard', 'soft', 'block'], true)) {
-            continue;
+        if (in_array($type, ['hard', 'soft', 'block'], true)) {
+            $failures[] = $rc + ['type' => $type];
         }
-        $anyFailure = true;
+    }
+    if ($failures === []) {
+        return $r['recipients'] !== [] ? 'ignored' : 'unparsed';
+    }
+    $event = static function (array $rc) use ($now): array {
         $code = preg_match('/\b([45]\d\d)\b/', $rc['diagnostic'], $m) ? (int) $m[1] : null;
-        // With several recipients only an untagged report needs the address; a tag names our one recipient.
-        $res = bounce_record(['email' => $rc['email'], 'type' => $type, 'status' => $rc['status'], 'smtp_code' => $code,
-            'detail' => $rc['diagnostic'] !== '' ? $rc['diagnostic'] : $rc['status'], 'source' => 'dsn',
-            'tag' => count($r['recipients']) === 1 ? $tagText : '', 'ext_id' => 'mbox:' . $hash . ':' . $i, 'now' => $now]);
-        $recorded += $res === 'recorded' ? 1 : 0;
+        return ['email' => $rc['email'], 'type' => $rc['type'], 'status' => $rc['status'], 'smtp_code' => $code,
+            'detail' => $rc['diagnostic'] !== '' ? $rc['diagnostic'] : $rc['status'], 'source' => 'dsn', 'now' => $now];
+    };
+    if ($row !== null) {
+        // The tag names exactly one message: one event, for the address in our row. The report's
+        // line for that address gives the diagnosis (or the first failure when it names another one).
+        $mine = array_values(array_filter($failures, static fn (array $f): bool => strtolower($f['email']) === $row['email']));
+        $results[] = bounce_record($event($mine[0] ?? $failures[0]) + ['row' => $row, 'ext_id' => 'mbox:' . $hash . ':t']);
+    } else {
+        foreach (array_slice($failures, 0, BOUNCE_REPORT_MAX_RECIPIENTS) as $i => $rc) {
+            $results[] = bounce_record($event($rc) + ['tag' => '', 'ext_id' => 'mbox:' . $hash . ':' . $i]);
+        }
     }
-    if ($recorded > 0) {
-        return 'recorded';
+    return bounce_process_result($results);
+}
+
+/** @param list<string> $results bounce_record() answers */
+function bounce_process_result(array $results): string
+{
+    return in_array('recorded', $results, true) ? 'recorded' : (in_array('review', $results, true) ? 'review' : 'ignored');
+}
+
+/** Reports waiting for an admin (untagged mailbox reports, provider reports for addresses we did not mail). */
+function bounce_review_count(): int
+{
+    return (int) q_val("SELECT COUNT(*) FROM email_events WHERE review = 'pending'");
+}
+
+/**
+ * An admin's decision on a report waiting for review: apply (the rules run
+ * as for a trusted report, with source "review"; a block never pauses) or
+ * dismiss. Returns the event, or null when it is not waiting.
+ */
+function bounce_review_decide(int $id, string $decision, ?int $now = null): ?array
+{
+    if (!in_array($decision, ['apply', 'dismiss'], true)) {
+        return null;
     }
-    return $anyFailure || $r['recipients'] !== [] ? 'ignored' : 'unparsed';
+    $ev = q_one("SELECT * FROM email_events WHERE id = ? AND review = 'pending'", [$id]);
+    if ($ev === null) {
+        return null;
+    }
+    q('UPDATE email_events SET review = ? WHERE id = ?', [$decision === 'apply' ? 'applied' : 'dismissed', $id]);
+    if ($decision === 'apply' && $ev['type'] !== 'block') {
+        bounce_apply_rules((string) $ev['email'], (string) $ev['type'], (string) $ev['detail'], 'review', $now ?? time(), null, true);
+    }
+    return $ev;
 }
 
 // ---- Reporting ----------------------------------------------------------------------------
@@ -406,7 +533,7 @@ function bounce_stats(int $days, ?int $now = null): array
     $since = gmdate('Y-m-d H:i:s', ($now ?? time()) - $days * 86400);
     $sent = (int) q_val('SELECT (SELECT COUNT(*) FROM email_queue WHERE sent_at > ?) + (SELECT COUNT(*) FROM campaign_recipients WHERE sent_at > ?)', [$since, $since]);
     $out = ['sent' => $sent, 'hard' => 0, 'soft' => 0, 'block' => 0, 'complaint' => 0];
-    foreach (q_all('SELECT type, COUNT(*) AS n FROM email_events WHERE created_at > ? GROUP BY type', [$since]) as $r) {
+    foreach (q_all("SELECT type, COUNT(*) AS n FROM email_events WHERE created_at > ? AND review IN ('', 'applied') GROUP BY type", [$since]) as $r) {
         $out[$r['type']] = (int) $r['n'];
     }
     $out['bounce_rate'] = $sent > 0 ? ($out['hard'] + $out['soft']) / $sent : 0.0;
@@ -420,13 +547,15 @@ function bounce_mailbox_state(): array
     $s = setting('mail.bounce_state', []);
     $s = is_array($s) ? $s : [];
     return ['last_poll' => (int) ($s['last_poll'] ?? 0), 'last_error' => (string) ($s['last_error'] ?? ''), 'processed' => (int) ($s['processed'] ?? 0),
-        'unparsed' => (int) ($s['unparsed'] ?? 0), 'last_result' => (string) ($s['last_result'] ?? '')];
+        'unparsed' => (int) ($s['unparsed'] ?? 0), 'oversized' => (int) ($s['oversized'] ?? 0), 'last_result' => (string) ($s['last_result'] ?? '')];
 }
 
 // ---- Bounce mailbox polling (cron) -------------------------------------------------------
 
 /** Messages read per cron run, so one run never takes too long. */
 const BOUNCE_POLL_LIMIT = 200;
+/** Real delivery reports are small; anything bigger is set aside without being downloaded. */
+const BOUNCE_MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
 
 /** Folder for unprocessed messages when the mailbox has no folders (POP3). */
 function bounce_local_aside_dir(): string
@@ -453,23 +582,50 @@ function bounce_mailbox_client(): ?Core\Mail\BounceMailbox
  * cannot be understood are moved to the "unprocessed" folder (IMAP) or
  * saved under storage/bounces/ and deleted (POP3); both are kept under the
  * configured maximum count and age, and counted on the health page.
- * @return array{read:int, recorded:int, ignored:int, unparsed:int, pruned:int, error:string}
+ * Messages over BOUNCE_MAX_MESSAGE_BYTES (by the size the server reports,
+ * or found while reading) are moved aside (IMAP) or deleted (POP3) without
+ * being downloaded or parsed, so no message can stay at the head of the
+ * mailbox and stop the ones behind it.
+ * @return array{read:int, recorded:int, review:int, ignored:int, unparsed:int, oversized:int, pruned:int, error:string}
  */
 function bounce_mailbox_poll(?Core\Mail\BounceMailbox $mb = null, int $limit = BOUNCE_POLL_LIMIT, ?int $now = null): array
 {
     $now ??= time();
-    $stats = ['read' => 0, 'recorded' => 0, 'ignored' => 0, 'unparsed' => 0, 'pruned' => 0, 'error' => ''];
+    $stats = ['read' => 0, 'recorded' => 0, 'review' => 0, 'ignored' => 0, 'unparsed' => 0, 'oversized' => 0, 'pruned' => 0, 'error' => ''];
     $mb ??= bounce_mailbox_client();
     if ($mb === null) {
         $stats['error'] = 'off';
         return $stats;
     }
     $cfg = bounce_settings()['mailbox'];
+    // Set aside (IMAP folder) or, without folders, delete; the raw message is kept locally only when we have it.
+    $aside = static function (string $id, ?string $raw) use ($mb, $now): void {
+        if (!$mb->moveAside($id)) {
+            if ($raw !== null) {
+                bounce_save_aside($raw, $now);
+            }
+            $mb->delete($id);
+        }
+    };
     try {
         $mb->open();
-        foreach ($mb->list($limit) as $id) {
-            $raw = $mb->fetch($id);
+        foreach ($mb->list($limit) as $id => $size) {
+            $id = (string) $id;
             $stats['read']++;
+            if ($size > BOUNCE_MAX_MESSAGE_BYTES) {
+                error_log('Bounce message ' . $id . ' set aside unread: ' . $size . ' bytes');
+                $stats['oversized']++;
+                $aside($id, null);
+                continue;
+            }
+            try {
+                $raw = $mb->fetch($id, BOUNCE_MAX_MESSAGE_BYTES);
+            } catch (Core\Mail\MessageUnreadableException $e) {
+                error_log('Bounce message ' . $id . ' set aside: ' . $e->getMessage());
+                $stats[$e instanceof Core\Mail\MessageTooLargeException ? 'oversized' : 'unparsed']++;
+                $aside($id, null);
+                continue;
+            }
             try {
                 $result = bounce_process_message($raw, $now);
             } catch (Throwable $e) {
@@ -478,13 +634,11 @@ function bounce_mailbox_poll(?Core\Mail\BounceMailbox $mb = null, int $limit = B
             }
             $stats[$result]++;
             if ($result === 'unparsed') {
-                if (!$mb->moveAside($id)) {
-                    bounce_save_aside($raw, $now);
-                    $mb->delete($id);
-                }
+                $aside($id, $raw);
             } else {
                 $mb->delete($id);
             }
+            unset($raw);
         }
         $stats['pruned'] = $mb->pruneAside((int) $cfg['max_messages'], (int) $cfg['max_age_days']) + bounce_prune_local((int) $cfg['max_messages'], (int) $cfg['max_age_days'], $now);
         $mb->close();
@@ -499,8 +653,9 @@ function bounce_mailbox_poll(?Core\Mail\BounceMailbox $mb = null, int $limit = B
     }
     $state = bounce_mailbox_state();
     setting_set('mail.bounce_state', [
-        'last_poll' => $now, 'last_error' => $stats['error'], 'processed' => $state['processed'] + $stats['read'], 'unparsed' => $state['unparsed'] + $stats['unparsed'],
-        'last_result' => sprintf('%d read, %d recorded, %d ignored, %d unprocessed', $stats['read'], $stats['recorded'], $stats['ignored'], $stats['unparsed']),
+        'last_poll' => $now, 'last_error' => $stats['error'], 'processed' => $state['processed'] + $stats['read'],
+        'unparsed' => $state['unparsed'] + $stats['unparsed'] + $stats['oversized'], 'oversized' => $state['oversized'] + $stats['oversized'],
+        'last_result' => sprintf('%d read, %d recorded, %d to review, %d ignored, %d unprocessed (%d too large)', $stats['read'], $stats['recorded'], $stats['review'], $stats['ignored'], $stats['unparsed'] + $stats['oversized'], $stats['oversized']),
     ]);
     return $stats;
 }

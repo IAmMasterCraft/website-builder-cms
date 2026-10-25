@@ -5,11 +5,18 @@ namespace Core\Mail;
 
 /**
  * Minimal POP3 client (RFC 1939, STLS from RFC 2595) for the bounce
- * mailbox: USER/PASS, LIST, RETR (dot-unstuffing), DELE, QUIT. POP3 has no
- * folders, so unprocessed messages are kept locally by the caller.
+ * mailbox: USER/PASS, LIST (with sizes), RETR (dot-unstuffing, capped in
+ * bytes and lines), DELE, QUIT. POP3 has no folders, so unprocessed
+ * messages are kept locally by the caller; oversized ones are deleted
+ * without being downloaded.
  */
 final class Pop3Client extends MailboxSocket
 {
+    private const MAX_LINES = 100_000;
+    private const MAX_LIST_BYTES = 1_048_576;
+    /** A message bigger than announced is read to its end and discarded, up to this many bytes. */
+    private const DRAIN_BYTES = 16 * 1024 * 1024;
+
     public function open(): void
     {
         $this->connect();
@@ -29,21 +36,21 @@ final class Pop3Client extends MailboxSocket
     {
         $this->write('LIST');
         $this->expectOk($this->readLine(), 'LIST');
-        $ids = [];
-        foreach ($this->multiline() as $line) {
-            if (preg_match('/^(\d+)\s+\d+/', $line, $m)) {
-                $ids[] = $m[1];
+        $out = [];
+        foreach ($this->multiline(self::MAX_LIST_BYTES) as $line) {
+            if (preg_match('/^(\d+)\s+(\d+)/', $line, $m) && count($out) < max(0, $limit)) {
+                $out[$m[1]] = (int) $m[2];
             }
         }
-        return array_slice($ids, 0, max(0, $limit));
+        return $out;
     }
 
-    public function fetch(string $id): string
+    public function fetch(string $id, int $maxBytes): string
     {
         $this->id($id);
         $this->write('RETR ' . $id);
         $this->expectOk($this->readLine(), 'RETR');
-        return implode("\r\n", $this->multiline()) . "\r\n";
+        return implode("\r\n", $this->multiline(max(1, $maxBytes))) . "\r\n";
     }
 
     public function delete(string $id): void
@@ -76,20 +83,36 @@ final class Pop3Client extends MailboxSocket
         }
     }
 
-    /** Lines of a multi-line response up to the terminating ".", dot-unstuffed. @return list<string> */
-    private function multiline(): array
+    /**
+     * Lines of a multi-line response up to the terminating ".", dot-unstuffed,
+     * at most $maxBytes and MAX_LINES lines. When a message is bigger, the
+     * rest is read and thrown away (up to DRAIN_BYTES, so the session stays
+     * in step) and MessageTooLargeException is thrown.
+     * @return list<string>
+     */
+    private function multiline(int $maxBytes): array
     {
         $out = [];
         $bytes = 0;
+        $tooLarge = false;
         while (($line = $this->readLine()) !== '.') {
             if (str_starts_with($line, '..')) {
                 $line = substr($line, 1);
             }
             $bytes += strlen($line) + 2;
-            if ($bytes > 50 * 1024 * 1024) {
-                throw new MailboxException('A message is too large to process.');
+            if ($tooLarge || $bytes > $maxBytes || count($out) >= self::MAX_LINES) {
+                $tooLarge = true;
+                $out = [];
+                if ($bytes > self::DRAIN_BYTES) {
+                    $this->disconnect();
+                    throw new MailboxException('The POP3 server sent more data than allowed.');
+                }
+                continue;
             }
             $out[] = $line;
+        }
+        if ($tooLarge) {
+            throw new MessageTooLargeException('A message is larger than ' . $maxBytes . ' bytes.');
         }
         return $out;
     }
