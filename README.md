@@ -2,21 +2,30 @@
 
 A self-hosted community website builder and CMS in plain PHP 8.2+ (no
 framework, no Composer at runtime) for charities, diaspora unions, clubs and
-alumni bodies. Clean-room build from
-`projects/website-builder-re/specs/website-builder.md` (spec only; the study's
-`targets/` and `evidence/` are never read).
+alumni bodies: a page builder with 29 section types, news and events with
+registration, galleries, membership with digital ID cards, newsletters with
+bounce handling, a job board and an online radio station. It runs on ordinary
+shared hosting (cPanel, Plesk), a VPS or aaPanel.
 
-Status: phases 1 (skeleton), 2 (media, content types, menus), 3 (page builder,
-themes, design controls), 4 (membership, ID cards), 5 (communications, birthdays,
-jobs, likes and comments), 6 (online radio) and 7 (users and roles, audit log,
-backups, system health, hardening, accessibility pass, deployment kit) are built.
-See [BUILD-NOTES.md](BUILD-NOTES.md) for what is done and what is left.
+**Documentation: [docs/](docs/README.md)**: installation guides for each kind
+of hosting, a [website manager guide](docs/manager-guide/README.md) with a
+[How do I…?](docs/manager-guide/how-do-i.md) index, a
+[member guide](docs/member-guide.md) and
+[email deliverability](docs/email-deliverability.md).
+
+Built clean-room from a written specification (no code, text or assets from
+other products). Developer notes: [BUILD-NOTES.md](BUILD-NOTES.md).
+
+![The demo site](docs/images/public-home.webp)
 
 ## Requirements
 
-- PHP 8.2+ with `pdo_mysql`, `gd` (with WebP), `fileinfo`, `mbstring`, `intl` (optional, better slugs), `exif` (optional, photo orientation)
+- PHP 8.2+ with `pdo_mysql`, `gd` (with WebP), `fileinfo`, `mbstring`, `sodium`, `openssl`, `zlib`; `intl` and `exif` recommended
 - MySQL 8 or MariaDB 10.6+ (utf8mb4)
-- Apache with `mod_rewrite` (document root = `public/`), or `php -S` for development
+- Apache with `mod_rewrite`, LiteSpeed, or Nginx (see `nginx.conf.example`); document root = `public/`, or the root `.htaccess` fallback on Apache/LiteSpeed
+- A cron job every minute, HTTPS
+
+Details: [docs/requirements.md](docs/requirements.md).
 
 ## Run locally
 
@@ -58,16 +67,18 @@ The tests drop and recreate every table in the test database.
 | `php bin/migrate [--status]` | Apply pending SQL migrations in `migrations/` |
 | `php bin/make-admin <email> [--role=super_admin\|admin] [--perm=content,events,...]` | Create or update an admin |
 | `php bin/demo <admin-email>` | Load demo content into an empty site |
-| `php bin/cron [--force\|--list]` | Run due scheduled jobs: publishing, cleanup, purge of unverified sign-ups (14 days), scheduled campaigns, the email queue (per-minute limit), birthdays (daily at the configured time), job expiry; crontab: `* * * * * php /path/bin/cron` |
+| `php bin/cron [--force\|--list]` | Run due scheduled jobs: publishing, cleanup, purge of unverified sign-ups (14 days), scheduled campaigns, the email queue (per-minute limit), birthdays (daily at the configured time), job expiry, bounce mailbox, daily backups. The exact crontab line for your server is shown on Admin → System health |
 | `php bin/backup [--uploads]` | Write a database backup (and optionally an uploads zip) into `storage/backups` |
 | `php bin/restore <file.sql.gz> [--yes]` | Replace every table with a Gather backup (asks for the database name) |
 | `bin/check` | Lint, secrets check, tests and smoke test |
-| `bin/package [ref]` | Build `dist/gather-<date>-<commit>.tar.gz` for upload (no config, storage, tests or dev tools) |
+| `bin/package [--zip [--flat]] [ref]` | Build `dist/gather-<date>-<commit>.tar.gz` (and `.zip`, or a `-flat.zip` without the top folder) for upload: no config, storage, tests, dev tools or docs |
 
 ## Layout
 
 ```
 public/            web root: index.php (front controller), .htaccess, assets/, uploads/ (WebP variants only)
+.htaccess          fallback when the document root is the project folder: routes everything into public/
+nginx.conf.example Nginx server block
 src/               bootstrap, lib/ (helpers), Core/ (router, sanitiser, mail), Sections/ (page-builder section types),
                    Site/, Account/, Admin/, Install/ handlers
 templates/         layouts/, site/, account/, admin/, sections/, install/, email/, partials/  (print only)
@@ -84,13 +95,18 @@ tests/             run.php (runner), *_test.php, smoke.php
 
 ## Deploy
 
-Target: the aaPanel server (Apache + PHP-FPM + MySQL). Follow
-[DEPLOY.md](DEPLOY.md): `bin/check`, commit, `bin/package`, create the site
-with running directory `/public`, upload and unpack (code owned by root,
-only `storage/` and `public/uploads/` writable by the web server), enable
-HTTPS, create the install token, run `/install`, add the one cron line, then
-check Admin -> System health. The site refuses to run without an `app_key` of
-at least 32 characters. Behind a proxy/CDN, list it in `trusted_proxies`.
+See [docs/](docs/README.md): [cPanel](docs/install-cpanel.md),
+[VPS](docs/install-vps.md), [aaPanel](docs/install-aaPanel.md),
+[Plesk](docs/install-plesk.md). In short: `bin/check`, commit,
+`bin/package --zip`, upload, document root at `public/`, HTTPS, create the
+install token, run `/install`, add the cron line from **Admin → System
+health**, then fix anything that page marks as a problem. The site refuses to
+run without an `app_key` of at least 32 characters. Behind a proxy/CDN, list
+it in `trusted_proxies`.
+
+`dev-tools/htaccess-check.sh` checks the Apache rules against a real Apache +
+PHP-FPM (both document-root layouts); `dev-tools/doc-shots.mjs` regenerates
+the screenshots in `docs/images/`.
 
 ## Accessibility audit (dev only)
 
