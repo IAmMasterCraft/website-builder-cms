@@ -323,9 +323,16 @@ test('bin/package --zip (and --flat) builds matching archives without private fi
         echo "      (skipped: needs git, zip, unzip and tar)\n";
         return;
     }
+    // Archives are named by date and commit, so a package built earlier for this
+    // commit may already exist; read the paths from the output and only delete
+    // files this test created.
     $before = glob(BASE . '/dist/*') ?: [];
+    $written = static function (string $out): array {
+        preg_match_all('#^(dist/\S+)  \(#m', $out, $m);
+        return array_map(static fn (string $rel): string => BASE . '/' . $rel, $m[1]);
+    };
     $out = (string) shell_exec('cd ' . escapeshellarg(BASE) . ' && bin/package --zip 2>&1');
-    $new = array_values(array_diff(glob(BASE . '/dist/*') ?: [], $before));
+    $new = $written($out);
     try {
         contains('.tar.gz  (', $out);
         contains('.zip  (', $out);
@@ -349,7 +356,7 @@ test('bin/package --zip (and --flat) builds matching archives without private fi
         // --flat: the same files without the top folder (for extracting into public_html)
         $flatOut = (string) shell_exec('cd ' . escapeshellarg(BASE) . ' && bin/package --zip --flat 2>&1');
         $flatFile = null;
-        foreach (array_diff(glob(BASE . '/dist/*') ?: [], $before, $new) as $f) {
+        foreach ($written($flatOut) as $f) {
             $new[] = $f;
             if (str_ends_with($f, '-flat.zip')) { $flatFile = $f; }
         }
@@ -359,8 +366,10 @@ test('bin/package --zip (and --flat) builds matching archives without private fi
         sort($fz);
         same($t, $fz, 'flat zip holds the same files at the top level');
     } finally {
-        foreach ($new as $f) {
-            unlink($f);
+        foreach (array_diff(array_unique($new), $before) as $f) {
+            if (is_file($f)) {
+                unlink($f);
+            }
         }
     }
 });
