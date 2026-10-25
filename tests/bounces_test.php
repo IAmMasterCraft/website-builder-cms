@@ -988,6 +988,45 @@ test('A5 MX checks: injected resolver, cache, reserved names, time budget; typo 
     same(null, email_typo_suggestion('amara@harbourside.org'));
 });
 
+test('A5 M4: sign-up DNS checks are MX-only, globally capped and the cache is pruned', function (): void {
+    reset_bounces();
+    q("DELETE FROM rate_hits WHERE bucket = 'dns-lookup'");
+    $calls = [];
+    dns_resolver(static function (string $d, bool $mxOnly = false) use (&$calls): string {
+        $calls[] = [$d, $mxOnly];
+        return 'ok';
+    });
+    try {
+        email_domain_problem('a@quick-one.example.net', true);
+        email_domain_problem('a@full-one.example.net');
+        same([['quick-one.example.net', true], ['full-one.example.net', false]], $calls, 'sign-up asks for MX only');
+        // The quick budget is smaller than the normal one.
+        dns_forget();
+        dns_budget_spent(DNS_QUICK_BUDGET_SECONDS);
+        same('unknown', email_domain_status('quick-two.example.net', null, true), 'quick budget used up');
+        same('ok', email_domain_status('normal-two.example.net'), 'the normal budget is larger');
+        // Global cap on uncached lookups (all visitors together).
+        dns_forget();
+        q("DELETE FROM rate_hits WHERE bucket = 'dns-lookup'");
+        for ($i = 0; $i < DNS_LOOKUPS_PER_10_MIN; $i++) {
+            rate_hit('dns-lookup');
+        }
+        $before = count($calls);
+        same('unknown', email_domain_status('capped.example.net'), 'over the cap: accepted without a lookup');
+        same($before, count($calls));
+        q("DELETE FROM rate_hits WHERE bucket = 'dns-lookup'");
+    } finally {
+        dns_resolver(static fn (string $d): string => 'unknown');
+        dns_forget();
+    }
+    q('DELETE FROM email_domains');
+    q("INSERT INTO email_domains (domain, status, checked_at) VALUES ('fresh.example.net', 'ok', UTC_TIMESTAMP()), ('stale.example.net', 'ok', UTC_TIMESTAMP() - INTERVAL 8 DAY),
+        ('none-stale.example.net', 'none', UTC_TIMESTAMP() - INTERVAL 2 DAY), ('none-fresh.example.net', 'none', UTC_TIMESTAMP() - INTERVAL 1 HOUR)");
+    same(2, email_domains_prune());
+    same(['fresh.example.net', 'none-fresh.example.net'], array_column(q_all('SELECT domain FROM email_domains ORDER BY domain'), 'domain'));
+    contains('cached domain checks', cron_cleanup());
+});
+
 test('A5 campaign queueing and CSV import skip domains without a mail server', function (): void {
     reset_bounces();
     dns_resolver(static fn (string $d): string => $d === 'deadmail.example.net' ? 'none' : 'ok');

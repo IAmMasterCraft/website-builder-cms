@@ -36,7 +36,8 @@ function cron_cleanup(): string
     q("DELETE FROM settings WHERE `key` LIKE 'birthdays.digest.%' AND updated_at < UTC_TIMESTAMP() - INTERVAL 30 DAY");
     // Sent copies of queued emails hold full message bodies: keep them for the delivery log for 90 days.
     $d = q("DELETE FROM email_queue WHERE status IN ('sent','suppressed') AND COALESCE(sent_at, created_at) < UTC_TIMESTAMP() - INTERVAL " . MAIL_KEEP_SENT_DAYS . ' DAY')->rowCount();
-    return "removed $a attempts, $b rate hits, $c expired resets, $d old sent emails";
+    $e = email_domains_prune();
+    return "removed $a attempts, $b rate hits, $c expired resets, $d old sent emails, $e cached domain checks";
 }
 
 /** Accounts that did not verify their email within 14 days are deleted (D7). */

@@ -11,6 +11,14 @@ declare(strict_types=1);
  * which further domains count as "unknown" (accepted). Only a definite
  * "no mail server" rejects an address: a lookup error never does.
  *
+ * Sign-up is a public form, so it uses the quick mode: MX only (no A/AAAA
+ * fallback; an empty MX answer is "unknown"), a 2-second request budget,
+ * and every mode skips the A/AAAA step when the MX lookup alone took more
+ * than a second. Uncached lookups are also limited across all requests
+ * (DNS_LOOKUPS_PER_10_MIN), so many parallel sign-ups cannot tie up the PHP
+ * workers waiting on DNS; the cache table is pruned by the daily cron
+ * (expired rows, at most DNS_CACHE_MAX_ROWS).
+ *
  * Tests inject a resolver with dns_resolver(); names reserved for testing
  * and documentation (RFC 2606/6761) are answered without any lookup.
  */
@@ -18,6 +26,13 @@ declare(strict_types=1);
 const DNS_OK_TTL_DAYS = 7;
 const DNS_NONE_TTL_HOURS = 24;
 const DNS_REQUEST_BUDGET_SECONDS = 4.0;
+/** Budget per request in quick mode (sign-up). */
+const DNS_QUICK_BUDGET_SECONDS = 2.0;
+/** An MX lookup slower than this is not followed by A/AAAA lookups. */
+const DNS_SLOW_LOOKUP_SECONDS = 1.0;
+/** Uncached lookups across all requests per 10 minutes; beyond that, "unknown" (accepted). */
+const DNS_LOOKUPS_PER_10_MIN = 60;
+const DNS_CACHE_MAX_ROWS = 20000;
 
 /** Big mailbox providers: never looked up (saves time on every sign-up). */
 const DNS_KNOWN_DOMAINS = [
@@ -27,8 +42,8 @@ const DNS_KNOWN_DOMAINS = [
 ];
 
 /**
- * The resolver: fn(string $domain): 'ok'|'none'|'unknown'. Pass one to
- * replace it (tests), or $reset to go back to the real one.
+ * The resolver: fn(string $domain, bool $mxOnly = false): 'ok'|'none'|'unknown'.
+ * Pass one to replace it (tests), or $reset to go back to the real one.
  */
 function dns_resolver(?callable $set = null, bool $reset = false): callable
 {
@@ -44,8 +59,9 @@ function dns_resolver(?callable $set = null, bool $reset = false): callable
 }
 
 /** Real lookup with dns_get_record(); warnings from the resolver are caught, not printed. */
-function dns_resolve_system(string $domain): string
+function dns_resolve_system(string $domain, bool $mxOnly = false): string
 {
+    $start = microtime(true);
     $lookup = static function (string $d, int $type): array|false {
         set_error_handler(static fn (): bool => true);
         try {
@@ -64,6 +80,10 @@ function dns_resolve_system(string $domain): string
         // RFC 7505 null MX: "0 ." = this domain does not accept mail.
         $hosts = array_map(static fn (array $r): string => rtrim((string) ($r['target'] ?? ''), '.'), $mx);
         return array_filter($hosts, static fn (string $h): bool => $h !== '') === [] ? 'none' : 'ok';
+    }
+    // No MX: the A/AAAA fallback costs two more lookups. Skip it at sign-up or when DNS is slow.
+    if ($mxOnly || microtime(true) - $start > DNS_SLOW_LOOKUP_SECONDS) {
+        return 'unknown';
     }
     $a = $lookup($domain . '.', DNS_A);
     if ($a === false) {
@@ -93,7 +113,7 @@ function dns_budget_spent(float $add = 0.0, bool $reset = false): float
  * Can $domain receive mail? 'ok', 'none' (definitely not) or 'unknown'
  * (lookup failed or the time budget is used up: treated as fine).
  */
-function email_domain_status(string $domain, ?int $now = null): string
+function email_domain_status(string $domain, ?int $now = null, bool $quick = false): string
 {
     $domain = strtolower(rtrim(trim($domain), '.'));
     if ($domain === '' || !preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/', $domain)) {
@@ -120,11 +140,15 @@ function email_domain_status(string $domain, ?int $now = null): string
             return $memo[$domain] = (string) $cached['status'];
         }
     }
-    if (dns_budget_spent() >= DNS_REQUEST_BUDGET_SECONDS) {
+    if (dns_budget_spent() >= ($quick ? DNS_QUICK_BUDGET_SECONDS : DNS_REQUEST_BUDGET_SECONDS)) {
         return 'unknown';
     }
+    if (rate_limited('dns-lookup', DNS_LOOKUPS_PER_10_MIN, 600)) {
+        return 'unknown';
+    }
+    rate_hit('dns-lookup');
     $t = microtime(true);
-    $status = (dns_resolver())($domain);
+    $status = (dns_resolver())($domain, $quick);
     dns_budget_spent(microtime(true) - $t);
     $status = in_array($status, ['ok', 'none'], true) ? $status : 'unknown';
     if ($status !== 'unknown') {
@@ -132,6 +156,19 @@ function email_domain_status(string $domain, ?int $now = null): string
             [$domain, $status, gmdate('Y-m-d H:i:s', $now)]);
     }
     return $memo[$domain] = $status;
+}
+
+/** Daily cron: drop expired cache rows and keep at most DNS_CACHE_MAX_ROWS. Returns rows removed. */
+function email_domains_prune(?int $now = null): int
+{
+    $now ??= time();
+    $n = q("DELETE FROM email_domains WHERE (status = 'ok' AND checked_at < ?) OR (status = 'none' AND checked_at < ?)",
+        [gmdate('Y-m-d H:i:s', $now - DNS_OK_TTL_DAYS * 86400), gmdate('Y-m-d H:i:s', $now - DNS_NONE_TTL_HOURS * 3600)])->rowCount();
+    $over = (int) q_val('SELECT COUNT(*) FROM email_domains') - DNS_CACHE_MAX_ROWS;
+    if ($over > 0) {
+        $n += q('DELETE FROM email_domains ORDER BY checked_at ASC LIMIT ' . $over)->rowCount();
+    }
+    return $n;
 }
 
 /** Per-request answers. */
@@ -149,11 +186,11 @@ function dns_forget(): void
     $memo = [];
 }
 
-/** A message for an address whose domain cannot receive mail, or null. */
-function email_domain_problem(string $email): ?string
+/** A message for an address whose domain cannot receive mail, or null. $quick: public forms (MX only, smaller budget). */
+function email_domain_problem(string $email, bool $quick = false): ?string
 {
     $domain = email_domain($email);
-    return email_domain_status($domain) === 'none' ? 'We could not find a mail server for “' . $domain . '”. Please check the address.' : null;
+    return email_domain_status($domain, null, $quick) === 'none' ? 'We could not find a mail server for “' . $domain . '”. Please check the address.' : null;
 }
 
 /** Common domains for typo suggestions on the sign-up form. */

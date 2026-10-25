@@ -40,8 +40,9 @@ final class Join
         // registered): the owner gets an email instead and the visitor sees the usual answer.
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
             $errors['email'] = 'Enter a valid email address.';
-        } elseif (($problem = email_domain_problem($email)) !== null) {
-            // A5 list hygiene: the domain has no mail server (MX/A lookup, cached).
+        } elseif (($problem = email_domain_problem($email, true)) !== null) {
+            // A5 list hygiene: the domain has no mail server (MX lookup, cached; quick mode for this public form,
+            // which guard() has already rate limited per IP before any lookup).
             $errors['email'] = $problem;
         } elseif (($suggest = email_typo_suggestion($email)) !== null && strtolower(trim((string) ($in['email_checked'] ?? ''))) !== $email) {
             // Asked once: sending the form again with the same address keeps it.
