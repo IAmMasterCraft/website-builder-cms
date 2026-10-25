@@ -38,7 +38,7 @@
         <label class="check"><input type="checkbox" name="show_auth" value="1"<?= $header['show_auth'] ? ' checked' : '' ?>> Show log in and “Join us” buttons</label>
         <label class="check"><input type="checkbox" name="sticky" value="1"<?= $header['sticky'] ? ' checked' : '' ?>> Keep the header visible when scrolling</label>
         <label class="check"><input type="checkbox" name="listen_live" value="1"<?= $header['listen_live'] ? ' checked' : '' ?>> Show a “Listen live” button while the radio is on air</label>
-        <p class="hint">The radio arrives in a later update; the button appears automatically once the station is switched on.</p>
+        <p class="hint">The button appears only while the station is switched on (Radio → Library) and something is on air.</p>
       </div></section>
       <div class="panel panel-body"><button class="btn accent" type="submit"><?= icon('check') ?> Save header and footer</button></div>
     </div>

@@ -220,7 +220,7 @@ function content_types(): array
             'fields' => [
                 ['name' => 'name', 'type' => 'text', 'label' => 'Name', 'required' => true, 'max' => 200],
                 ['name' => 'slug', 'type' => 'slug', 'label' => 'URL slug', 'from' => 'name'],
-                ['name' => 'group_number', 'type' => 'text', 'label' => 'Group ID', 'max' => 40, 'help' => 'Assigned automatically when a group signs up (phase 4); can be set by hand.'],
+                ['name' => 'group_number', 'type' => 'text', 'label' => 'Group ID', 'max' => 40, 'help' => 'Assigned automatically when a group signs up; can be set by hand.'],
                 ['name' => 'contact_person', 'type' => 'text', 'label' => 'Contact person', 'max' => 160],
                 ['name' => 'email', 'type' => 'email', 'label' => 'Email'],
                 ['name' => 'phone', 'type' => 'text', 'label' => 'Phone', 'max' => 40],

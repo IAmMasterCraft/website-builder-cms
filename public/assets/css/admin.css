@@ -178,7 +178,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 /* Forms */
 .form-layout { display: grid; gap: 1rem; align-items: start; }
 @media (min-width: 64rem) { .form-layout { grid-template-columns: minmax(0, 1fr) 20rem; } .form-layout .side { position: sticky; top: 4.5rem; } }
-.fields { display: grid; gap: 1.1rem; }
+.fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; }
 .field { display: grid; gap: 0.35rem; }
 .field > label, .field > .label, fieldset legend { font-weight: 600; font-size: 0.88rem; }
 .field .hint { color: var(--muted); font-size: 0.82rem; margin: 0; }
@@ -620,6 +620,7 @@ code { overflow-wrap: anywhere; }
 .health-grid > .panel { margin: 0; }
 .health-list .row-title { overflow-wrap: anywhere; }
 .health-list p { overflow-wrap: anywhere; }
+.health-code { display: inline-block; padding: .2rem .45rem; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); font-size: .8125rem; user-select: all; }
 .date-range { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .date-range input { width: auto; min-height: 36px; }
 

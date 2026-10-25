@@ -76,6 +76,7 @@ LoadModule deflate_module $MODS/mod_deflate.so
 LoadModule proxy_module $MODS/mod_proxy.so
 LoadModule proxy_fcgi_module $MODS/mod_proxy_fcgi.so
 LoadModule log_config_module $MODS/mod_log_config.so
+LoadModule alias_module $MODS/mod_alias.so
 TypesConfig /dev/null
 AddType text/css .css
 AddType text/javascript .js

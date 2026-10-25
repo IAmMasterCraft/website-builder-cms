@@ -27,10 +27,13 @@ function health_extensions(): array
     ];
 }
 
-/** @return array{label:string,status:string,detail:string} */
-function health_item(string $label, string $status, string $detail): array
+/**
+ * @param bool $code show the detail as copyable code (paths, the cron line)
+ * @return array{label:string,status:string,detail:string,code:bool}
+ */
+function health_item(string $label, string $status, string $detail, bool $code = false): array
 {
-    return ['label' => $label, 'status' => $status, 'detail' => $detail];
+    return ['label' => $label, 'status' => $status, 'detail' => $detail, 'code' => $code];
 }
 
 /** Bytes from a php.ini size such as "64M". */
@@ -219,7 +222,7 @@ function health_path_items(): array
     $out = [];
     $software = (string) ($_SERVER['SERVER_SOFTWARE'] ?? '');
     $out[] = health_item('Web server', 'ok', ($software !== '' ? $software : 'unknown') . ' · PHP ' . PHP_SAPI);
-    $out[] = health_item('Install folder', 'ok', BASE);
+    $out[] = health_item('Install folder', 'ok', BASE, true);
     $docroot = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
     $mode = health_docroot_mode($docroot, BASE);
     $out[] = health_item('Document root', $mode === 'other' ? 'warn' : 'ok', match ($mode) {
@@ -228,7 +231,7 @@ function health_path_items(): array
         'unknown' => 'not reported (built-in development server or command line)',
         default => $docroot . ': expected ' . BASE . '/public',
     });
-    $out[] = health_item('Configuration file', 'ok', config_path());
+    $out[] = health_item('Configuration file', 'ok', config_path(), true);
     $ini = php_ini_loaded_file();
     $scanned = php_ini_scanned_files();
     $userIni = (string) ini_get('user_ini.filename');
@@ -243,7 +246,7 @@ function health_path_items(): array
     $out[] = health_item('PHP for cron', $cli['confirmed'] ? 'ok' : 'warn', $cli['path'] . ($cli['confirmed']
         ? ' (PHP ' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . ' command line)'
         : ': could not be confirmed from here. Ask your host for the path of the PHP ' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . ' command-line binary'));
-    $out[] = health_item('Cron line', 'ok', health_detected_cron_line());
+    $out[] = health_item('Cron line', 'ok', health_detected_cron_line(), true);
     return $out;
 }
 

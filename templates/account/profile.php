@@ -4,7 +4,7 @@
     <h2>Details</h2>
     <form class="form" method="post" action="/account/profile" novalidate>
       <?= csrf_field() ?>
-      <div class="field"><span class="label">Email</span><p class="static-value"><?= e($user['email']) ?></p><p class="hint">To change your email, please contact us.</p></div>
+      <div class="field"><span class="label">Email</span><p class="static-value"><?= e($user['email']) ?></p><p class="hint">Change it under <a href="/account/password">Email and password</a>.</p></div>
       <?= view('partials/profile_inputs', ['values' => $values, 'errors' => $errors, 'settings' => $settings]) ?>
       <?= view('partials/custom_fields_inputs', ['fields' => $fields, 'values' => $values, 'errors' => $errors]) ?>
       <p><button class="btn accent" type="submit"><?= icon('check') ?> Save profile</button></p>

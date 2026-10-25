@@ -11,7 +11,7 @@ $badge = ['ok' => 'ok', 'warn' => 'warn', 'bad' => 'bad'];
   <section class="panel"><div class="panel-head"><h2><?= e($title) ?></h2></div>
     <ul class="row-list health-list">
       <?php foreach ($items as $i): ?>
-        <li><div><span class="row-title"><?= e($i['label']) ?></span><p class="muted small-text"><?= e($i['detail']) ?></p></div>
+        <li><div><span class="row-title"><?= e($i['label']) ?></span><?php if (!empty($i['code'])): ?><p class="small-text"><code class="health-code"><?= e($i['detail']) ?></code></p><?php else: ?><p class="muted small-text"><?= e($i['detail']) ?></p><?php endif ?></div>
           <div class="row-meta"><span class="badge <?= e($badge[$i['status']]) ?>"><?= e($label[$i['status']]) ?></span></div></li>
       <?php endforeach ?>
     </ul>

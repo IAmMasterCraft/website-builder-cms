@@ -7,16 +7,18 @@
 Options -Indexes
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  # No dot-folders or dotfiles (.git from a Git deploy, .env...), except .well-known.
+  RewriteRule (^|/)\.(?!well-known/) - [F]
   # Certificate checks (AutoSSL, Let's Encrypt) put files in .well-known/ of
   # the document root: serve those as they are.
   RewriteCond %{REQUEST_URI} !^/\.well-known/
   RewriteCond %{REQUEST_URI} !^/public/
   RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
-# No dot-folders or dotfiles (.git from a Git deploy, .env...), except .well-known.
-<If "%{REQUEST_URI} =~ m#(^|/)\.(?!well-known/)#">
-  Require all denied
-</If>
+# The same dot-path rule for servers without mod_rewrite (needs mod_alias).
+<IfModule mod_alias.c>
+  RedirectMatch 404 "(^|/)\.(?!well-known/)"
+</IfModule>
 # Belt and braces if mod_rewrite is off: the private folders deny themselves
 # (each has its own .htaccess); these top-level files are denied here.
 <FilesMatch "^(config\.php|config\.example\.php|\.env.*|\.user\.ini|VERSION|nginx\.conf\.example)$|\.(md|sql|gz|zip|tar|log|bak|sh|lock)$">
