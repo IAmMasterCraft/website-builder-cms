@@ -25,6 +25,7 @@ export function initHeader() {
     if (!toggle || !nav) return;
     toggle.setAttribute('aria-expanded', String(open));
     if (label) label.textContent = open ? 'Close' : 'Menu';
+    if (open) nav.style.setProperty('--nav-top', `${Math.max(0, Math.round(header.getBoundingClientRect().bottom))}px`);
     nav.classList.toggle('open', open);
     document.body.classList.toggle('nav-open', open && mobile.matches);
     if (open && mobile.matches) {
@@ -62,7 +63,10 @@ export function initHeader() {
   };
   subs.forEach((li) => {
     const btn = li.querySelector('.sub-toggle');
+    let hoverAt = 0;
     btn?.addEventListener('click', () => {
+      // A click right after hovering opened it keeps it open instead of closing it.
+      if (li.classList.contains('open') && Date.now() - hoverAt < 700) return;
       const open = !li.classList.contains('open');
       closeAll(li);
       li.classList.toggle('open', open);
@@ -74,6 +78,7 @@ export function initHeader() {
       if (e.pointerType !== 'mouse' || mobile.matches) return;
       clearTimeout(leave);
       closeAll(li);
+      if (!li.classList.contains('open')) hoverAt = Date.now();
       li.classList.add('open');
       btn?.setAttribute('aria-expanded', 'true');
     });

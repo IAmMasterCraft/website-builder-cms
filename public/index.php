@@ -1,11 +1,35 @@
 <?php
 declare(strict_types=1);
 
-// Built-in dev server: let it serve real files under public/ directly.
+// Built-in dev server: let it serve real files under public/ directly. Text
+// assets are gzipped and versioned ones cached, like .htaccess does on Apache,
+// so local Lighthouse runs measure what production sends.
 if (PHP_SAPI === 'cli-server') {
     $file = __DIR__ . (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+    $gzip = str_contains((string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? ''), 'gzip');
     if ($file !== __DIR__ . '/' && is_file($file) && !str_ends_with($file, '.php')) {
-        return false;
+        $types = ['css' => 'text/css', 'js' => 'text/javascript', 'svg' => 'image/svg+xml', 'txt' => 'text/plain; charset=utf-8'];
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        $cache = isset($_GET['v']) || str_contains($file, '/assets/fonts/') || str_contains($file, '/uploads/');
+        if (!$gzip || !isset($types[$ext]) || realpath($file) === false || !str_starts_with((string) realpath($file), __DIR__ . '/')) {
+            if ($cache) {
+                header('Cache-Control: public, max-age=31536000, immutable');
+            }
+            return false;
+        }
+        header('Content-Type: ' . $types[$ext]);
+        header('Content-Encoding: gzip');
+        header('Vary: Accept-Encoding');
+        header('X-Content-Type-Options: nosniff');
+        if ($cache) {
+            header('Cache-Control: public, max-age=31536000, immutable');
+        }
+        echo gzencode((string) file_get_contents($file), 6);
+        return true;
+    }
+    $devPath = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+    if ($gzip && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !preg_match('#^/(media|downloads|admin/backups|api/radio|theme-preview|uploads)/#', $devPath)) {
+        ob_start('ob_gzhandler');
     }
 }
 

@@ -41,7 +41,8 @@ $proof = function () use ($avatars, $proofText, $proofCount): string {
       <?php else: ?>
         <div class="hero-slides">
           <?php foreach ($slides as $i => $sl): ?>
-            <figure class="hero-slide<?= $i === 0 ? ' is-current' : '' ?>"><?= img_html($sl['media'], '100vw', '', '', !($first && $i === 0), 1600) ?></figure>
+            <?php if ($i === 0): ?><figure class="hero-slide is-current"><?= img_html($sl['media'], '100vw', '', '', !$first, 1600) ?></figure>
+            <?php else: /* later photos load after the page, so they never compete with the first one */ ?><figure class="hero-slide"><template data-slide><?= img_html($sl['media'], '100vw', '', '', true, 1600) ?></template></figure><?php endif ?>
           <?php endforeach ?>
         </div>
       <?php endif ?>

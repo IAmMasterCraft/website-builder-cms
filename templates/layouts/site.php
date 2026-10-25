@@ -29,8 +29,6 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
 <?php foreach ($extra_css ?? [] as $css): ?><link rel="stylesheet" href="<?= e(asset($css)) ?>">
 <?php endforeach ?><script src="<?= e(asset('assets/js/boot.js')) ?>"></script>
 <script type="module" src="<?= e(asset('assets/js/site.js')) ?>"></script>
-<?php foreach (['header', 'motion', 'hero', 'carousel', 'accordion'] as $mod): ?><link rel="modulepreload" href="<?= e(asset('assets/js/' . $mod . '.js')) ?>">
-<?php endforeach ?>
 <?php if ($c['analytics'] !== null): ?><script type="module" src="<?= e(asset('assets/js/analytics.js')) ?>"></script>
 <meta name="analytics" content="<?= e(json_attr(['provider' => $c['analytics']['provider'], 'id' => $c['analytics']['id'], 'script' => $c['analytics']['script'], 'consent' => $c['analytics']['cookies']])) ?>">
 <?php endif ?>

@@ -18,6 +18,9 @@ export function initHero() {
     const slides = [...stage.querySelectorAll('.hero-slide')];
     const ui = section?.querySelector('.hero-ui');
     if (slides.length < 2 || !ui) return;
+    // Later photos are shipped in <template>s; add them once the page has loaded.
+    const materialise = () => stage.querySelectorAll('template[data-slide]').forEach((t) => t.replaceWith(t.content.cloneNode(true)));
+    if (document.readyState === 'complete') materialise(); else window.addEventListener('load', materialise, { once: true });
     ui.hidden = false;
     const dots = [...ui.querySelectorAll('[data-go]')];
     const toggle = ui.querySelector('[data-pause]');

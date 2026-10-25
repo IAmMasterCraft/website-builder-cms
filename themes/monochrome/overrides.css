@@ -18,3 +18,4 @@
 .page-hero::before { mask-image: none; opacity: 0.6; }
 .date-badge, .date-tile, .step-badge { border-radius: 0; }
 .neu-btn { box-shadow: none; border: 1px solid currentColor; background: transparent; }
+.hero-float, .float-chip, .cta-glass { box-shadow: none; }

@@ -84,6 +84,8 @@
   --c-dark-muted: rgb(255 255 255 / 0.68);
   --c-dark-line: rgb(255 255 255 / 0.14);
   --c-glow: var(--c-accent);
+  /* Accent-coloured text on dark bands (themes with a dark highlight lighten it). */
+  --c-dark-accent-text: var(--c-highlight);
 
   --radius-pill: 999px;
 }
