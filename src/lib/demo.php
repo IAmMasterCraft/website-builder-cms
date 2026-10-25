@@ -499,7 +499,7 @@ function demo_home_sections(array $ph, string $festivalUrl): array
         builder_make('latest_posts', ['eyebrow' => 'Latest', 'heading' => 'News and stories', 'head_layout' => 'split', 'intro' => 'Updates from the committee, volunteers and projects.', 'count' => 4, 'layout' => 'magazine', 'link_label' => 'All news', 'link_url' => '/news']),
         builder_make('gallery', ['eyebrow' => 'Moments', 'heading' => 'Life by the harbour', 'count' => 6, 'layout' => 'mosaic', 'link_label' => 'Browse every album', 'link_url' => '/gallery'], ['background' => 'soft']),
         builder_make('radio_player', ['heading' => 'Harbourside Radio', 'size' => 'mini'], ['spacing' => 'compact']),
-        builder_make('birthdays', ['hide_when_empty' => true]),
+        builder_make('birthdays', ['hide_when_empty' => true], ['background' => 'soft', 'spacing' => 'compact']),
         builder_make('cta', ['eyebrow' => 'Membership', 'heading' => 'Your neighbourhood needs you', 'text' => 'Join free today: a digital member card, first news of every event and a real say in what we do next.', 'button1_label' => 'Join us today', 'button1_url' => '/join', 'button2_label' => 'Ways to give', 'button2_url' => '/contact', 'tone' => 'image', 'media_id' => $ph['selfie']]),
     ];
 }

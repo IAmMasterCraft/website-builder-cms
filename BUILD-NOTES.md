@@ -612,8 +612,33 @@ uses Bold).
 
 ## Tests
 
-`bin/check`: lint of every PHP file, `tests/run.php` (265 unit/DB tests after
-Addendum A1/A2/A5) and `tests/smoke.php` (437 checks through `php -S`).
+`bin/check`: lint of every PHP file, `tests/run.php` (271 unit/DB tests after
+Addendum A6) and `tests/smoke.php` (482 checks through `php -S`).
+Addendum A6 added `tests/design_test.php` (6 tests) and
+`tests/smoke_design.php` (45 checks); builder/smoke counts updated for 29
+section types and 5 themes.
+
+A6 visual, accessibility and performance checks (2026-10-25, Bold theme
+on the dev site, headless Chrome via the suite's playwright-core):
+- Screenshots (`dev-tools/shots.mjs`, 1440 and 375 px, one image per
+  screenful plus full-page): home, about, membership, news detail, events,
+  event detail, gallery, leaders, radio, join, login, member dashboard, ID
+  card, admin dashboard, builder and section picker, open mobile menu,
+  each theme's home page; also checked with JavaScript disabled and with
+  reduced motion.
+- No horizontal overflow on 16 public pages at 360, 390, 768, 1024, 1280
+  and 1920 px (a 21:9 + min-height image overflowed at 768 px; fixed).
+- axe-core 4.11 (WCAG 2.0/2.1/2.2 A+AA + best practice, after scrolling so
+  revealed content is tested): 82 page runs (26 public pages, member pages,
+  10 admin screens incl. builder and design, 1366 and 375 px, admin dark
+  mode): **0 violations of any impact**; plus 29 runs per theme for Civic,
+  Heritage, Harvest, Monochrome and Bold: 0 serious/critical (fixed on the
+  way: crimson accent text on dark bands, partner names on soft tints).
+- Lighthouse 12.8 mobile (dev server with gzip, see Performance): home
+  95-98 performance (3 of 4 runs 98; LCP 2.3-2.9 s, CLS 0, TBT 0), news
+  detail 99, event detail 99, events 99, membership 99, join 99, gallery
+  98; accessibility, best practices and SEO 100 on all of them. Desktop
+  home 100/100/100/100 (CLS 0.002).
 Addendum A added `tests/optin_test.php` (A2), `tests/bounces_test.php`
 (A5: classification table, tags, every DSN/ARF fixture in
 `tests/fixtures/bounces/`, suppression rules, SMTP-time rejections through
@@ -1044,6 +1069,21 @@ Data integrity
   (git-ignored; ~250 MB after many runs here): clear them by hand. The unit
   tests and the smoke test share one test database (each run starts by
   dropping it).
+
+- Addendum A6 gaps: the hero video was checked with the validation and
+  markup tests only (the demo uses the photo slider; the only demo video is
+  a 15 s generated studio clip, not a good hero). Variants stay
+  400/800/1600, so small avatars download the 400 px file. "Mega menu" =
+  dropdowns with more than five links become a two-column panel (menu
+  items have no descriptions or images). Art direction is done with focal
+  points (one photo cropped per breakpoint), not separate mobile uploads.
+  Lucide has no X or WhatsApp marks, so the six social glyphs are our own.
+  Reveal-card photos appear on hover and keyboard focus inside the card
+  (cards without a link show the photo only on hover, and always on touch
+  screens). The demo post published "today" can be scheduled an hour
+  ahead when the demo is loaded during the autumn clock change (existing
+  local-time behaviour). Lighthouse was run on the PHP built-in server
+  (now gzipping like Apache), not on a real host.
 
 ## Acceptance check (spec §14), final status
 

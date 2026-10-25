@@ -13,7 +13,7 @@ $uid = 'rp' . bin2hex(random_bytes(3));
 <div class="radio-player size-<?= e($size) ?><?= $on ? '' : ' is-offline' ?>" data-radio-player data-api="/api/radio/now-playing" aria-labelledby="<?= $uid ?>-h">
   <div class="rp-stage">
     <div class="rp-cover">
-      <img data-rp-cover src="<?= e((string) ($m['cover_image'] ?? '')) ?>" alt=""<?= empty($m['cover_image']) ? ' hidden' : '' ?> width="400" height="400">
+      <img data-rp-cover src="<?= e((string) ($m['cover_image'] ?? '')) ?>" alt=""<?= empty($m['cover_image']) ? ' hidden' : '' ?> width="400" height="400" loading="lazy" decoding="async">
       <span class="rp-cover-fallback" data-rp-fallback<?= empty($m['cover_image']) ? '' : ' hidden' ?> aria-hidden="true"><?= icon('radio') ?></span>
       <video data-rp-video playsinline preload="none" hidden aria-label="Live video"></video>
     </div>
