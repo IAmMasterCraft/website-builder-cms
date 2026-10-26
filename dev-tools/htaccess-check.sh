@@ -114,7 +114,8 @@ expect() { # $1 = label, $2 = path, $3 = allowed codes (regex)
 
 private_checks() {
   for p in /config.php /config.example.php /src/bootstrap.php /storage/logs/php-error.log /storage/install-token /bin/cron \
-           /vendor/phpmailer/src/PHPMailer.php /migrations/001_core.sql /templates/layouts/site.php /README.md /VERSION /.git/HEAD /.htaccess; do
+           /vendor/phpmailer/src/PHPMailer.php /migrations/001_core.sql /templates/layouts/site.php /README.md /VERSION /.git/HEAD /.htaccess \
+           /docs/README.md /docs/images/admin-members.webp /templates/help/docs.css /bin/docs-html; do
     expect "private: $p" "$p" '403|404'
   done
 }

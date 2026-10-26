@@ -1,0 +1,25 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// Build the documentation website from docs/ into dist/docs-site/ (B3).
+//   php bin/docs-html [folder-name]   default folder: dist/docs-site
+// Static HTML with relative links (open index.html, upload anywhere, or
+// publish on GitHub Pages: see docs/docs-website.md). Needs no database.
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require __DIR__ . '/../src/load.php';
+
+$name = $argv[1] ?? 'docs-site';
+if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,60}$/', $name)) {
+    fwrite(STDERR, "Folder name: letters, digits, dots, dashes and underscores only (it is created inside dist/).\n");
+    exit(1);
+}
+try {
+    $stats = help_export_static(BASE . '/dist/' . $name);
+} catch (Throwable $e) {
+    fwrite(STDERR, 'Could not build the documentation site: ' . $e->getMessage() . "\n");
+    exit(1);
+}
+printf("dist/%s: %d pages, %d images. Open dist/%s/index.html, or see docs/docs-website.md to publish it.\n", $name, $stats['pages'], $stats['images'], $name);

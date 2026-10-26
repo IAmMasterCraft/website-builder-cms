@@ -604,6 +604,9 @@ require __DIR__ . '/smoke_addendum.php';
 // Addendum A6 design system.
 require __DIR__ . '/smoke_design.php';
 
+// Addendum B: sidebar groups, log in as a member, help centre.
+require __DIR__ . '/smoke_addendum_b.php';
+
 // ---- Login safety ----------------------------------------------------------
 $r = $visitor->post('/login', ['email' => 'sam@example.test', 'password' => 'x']);
 check('login POST without CSRF token is rejected (419)', $r['status'] === 419);

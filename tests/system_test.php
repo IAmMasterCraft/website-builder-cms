@@ -311,6 +311,10 @@ test('shipped code and messages assume no control panel paths', function (): voi
             continue;
         }
         $src = (string) file_get_contents($f->getPathname());
+        if ($rel === 'src/lib/help.php') {
+            // B3: the help manifest names the guide files, one of which is install-aaPanel.md (a guide, not an assumption).
+            $src = str_replace("'install-aaPanel'", "''", $src);
+        }
         if (preg_match('#/www/(server|wwwroot)|aapanel|www:www#i', $src)) {
             $hits[] = $rel;
         }
@@ -318,7 +322,7 @@ test('shipped code and messages assume no control panel paths', function (): voi
     same([], $hits, 'files with control-panel assumptions');
 });
 
-test('bin/package --zip (and --flat) builds matching archives without private files or docs', function (): void {
+test('bin/package --zip (and --flat) builds matching archives without private files, with docs (B3)', function (): void {
     if (trim((string) shell_exec('command -v git zip unzip tar 2>/dev/null | wc -l')) !== '4' || !is_dir(BASE . '/.git')) {
         echo "      (skipped: needs git, zip, unzip and tar)\n";
         return;
@@ -347,11 +351,13 @@ test('bin/package --zip (and --flat) builds matching archives without private fi
         sort($t);
         sort($z);
         same($t, $z, 'zip and tar hold the same files');
-        foreach (['gather/public/index.php', 'gather/.htaccess', 'gather/nginx.conf.example', 'gather/config.example.php', 'gather/VERSION'] as $must) {
+        // B3: docs/ ships for the help centre (and denies web access itself).
+        foreach (['gather/public/index.php', 'gather/.htaccess', 'gather/nginx.conf.example', 'gather/config.example.php', 'gather/VERSION',
+            'gather/docs/README.md', 'gather/docs/.htaccess', 'gather/docs/manager-guide/members.md', 'gather/docs/images/admin-members.webp', 'gather/bin/docs-html'] as $must) {
             ok(in_array($must, $t, true), $must);
         }
         foreach ($t as $file) {
-            ok(!preg_match('#^gather/(config\.php|tests/|dev-tools/|docs/|BUILD-NOTES\.md)|/\._#', $file), 'not shipped: ' . $file);
+            ok(!preg_match('#^gather/(config\.php|tests/|dev-tools/|BUILD-NOTES\.md|dist/)|/\._#', $file), 'not shipped: ' . $file);
         }
         // --flat: the same files without the top folder (for extracting into public_html)
         $flatOut = (string) shell_exec('cd ' . escapeshellarg(BASE) . ' && bin/package --zip --flat 2>&1');

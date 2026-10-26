@@ -11,6 +11,7 @@ $links = [
     ['preferences', '/account/preferences', 'Email preferences', 'mail', $verified],
     ['password', '/account/password', 'Email and password', 'lock', true],
     ['privacy', '/account/privacy', 'Your data', 'shield', true],
+    ['help', '/help', 'Help', 'help', true],
 ];
 ?>
 <div class="account-head">

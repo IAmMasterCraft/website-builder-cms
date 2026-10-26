@@ -32,7 +32,7 @@ function sample_path(string $pattern, array $ids = []): string
             'slug', 'group' => 'no-such-thing',
             'type' => 'posts',
             'key' => 'verify_email',
-            'name' => str_contains($m[2] ?? '', 'gather-') ? 'gather-20260101-000000-db.sql.gz' : 'file.txt',
+            'name' => str_contains($m[2] ?? '', 'gather-') ? 'gather-20260101-000000-db.sql.gz' : (str_contains($m[2] ?? '', 'webp') ? 'admin-members.webp' : 'file.txt'),
             'number' => 'ORG-26-0001',
             'code' => 'abcdef12',
             default => 'x',
@@ -48,6 +48,10 @@ function expected_permission(string $path): ?string
         '#^/admin(/search|/media/picker)?$#' => null,
         // Every staff user manages their own profile.
         '#^/admin/profile(/|$)#' => null,
+        // B3: every staff user can read the help centre.
+        '#^/admin/help(/|$)#' => null,
+        // B2: the start screen of "Log in as this member".
+        '#^/admin/impersonate(/|$)#' => 'impersonate',
         '#^/admin/(settings|design|custom-fields|users|audit|backups|health)(\b|/|\.)#' => 'super_admin',
         '#^/admin/(media|albums)(/|$)#' => 'gallery_media',
         '#^/admin/(menus|pages|templates|layout)(/|$)#' => 'pages_menus',

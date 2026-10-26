@@ -6,8 +6,9 @@
 #   --flat (with --zip) writes the zip without the top folder instead, for
 #   extracting straight into an existing folder such as public_html.
 # Packages committed files only (git archive), then removes everything the
-# server does not need: config.php, storage contents, tests, dev tools,
-# developer notes and docs/ (read those on GitHub or in a clone). macOS
+# server does not need: config.php, storage contents, tests, dev tools and
+# developer notes. docs/ is shipped: the admin help centre and /help render
+# it (it denies web access itself, like src/). macOS
 # metadata (._* files, xattrs) is kept out with COPYFILE_DISABLE=1 and
 # tar --no-xattrs --no-mac-metadata.
 set -euo pipefail
@@ -44,7 +45,7 @@ git archive --format=tar "$ref" | tar -x -C "$stage/gather"
 
 cd "$stage/gather"
 # Never shipped: secrets, runtime data, tests, dev tooling, developer notes.
-rm -rf config.php tests dev-tools docs .gitignore BUILD-NOTES.md bin/check bin/package demo-assets/make-radio-demo.php
+rm -rf config.php tests dev-tools .gitignore BUILD-NOTES.md bin/check bin/package demo-assets/make-radio-demo.php
 find storage public/uploads -mindepth 2 -type f ! -name '.gitkeep' ! -name '.htaccess' -delete 2>/dev/null || true
 find public/uploads -mindepth 1 -type f ! -name '.gitkeep' ! -name '.htaccess' -delete
 find . \( -name '._*' -o -name '.DS_Store' \) -type f -delete

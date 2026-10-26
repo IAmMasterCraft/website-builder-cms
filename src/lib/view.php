@@ -40,6 +40,9 @@ function view(string $template, array $data = []): string
 function render(string $template, array $data = [], string $layout = 'site', int $status = 200): void
 {
     $content = view($template, $data);
+    if ($layout === 'admin' && $status < 400) {
+        $content = help_link_insert($content, request_path()); // B3: contextual Help link in the screen header
+    }
     $layoutData = $data + ['title' => '', 'content' => $content];
     $layoutData['content'] = $content;
     if ($layout === 'site') {
