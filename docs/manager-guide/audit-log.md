@@ -29,8 +29,9 @@ the action, the item, details, and the network (IP) address.
 When an admin uses [Log in as this member](members.md#log-in-as-a-member),
 the log shows:
 
-- **impersonate_start**: who started, which member (with their number),
-  the reason typed, and whether changes were allowed;
+- **impersonate_start**: who started, which member or group (with their
+  number), the reason typed, whether changes were allowed, and whether the
+  member notice email was sent;
 - every change made during the visit (for example **profile_update**,
   **photo**, **register**, **cancel**), under the admin's name with a
   yellow **as** *member's name* label (the CSV export has an **On behalf
@@ -39,7 +40,8 @@ the log shows:
   (returned to admin, ended automatically after 30 minutes, logged out, or
   ended because the admin's session or permission was removed).
 
-Filter **Action** by *impersonate_start* to see every such visit.
+Filter **Action** by *impersonate_start* to see every such visit. These
+records stay complete even after the member's account is removed.
 
 ## What it is for
 

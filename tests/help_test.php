@@ -291,3 +291,32 @@ test('B1: sidebar groups follow permissions; empty groups disappear; active pare
     act_as(fixture_admin('admin', ['essential_notices', 'impersonate']));
     same(['site'], array_column(admin_nav(current_user()), 'key'));
 });
+
+test('B3 review: /help serves only the screenshots the member guide uses', function (): void {
+    $pub = help_public_images();
+    ok(in_array('member-card.webp', $pub, true) && in_array('public-join.webp', $pub, true));
+    foreach ($pub as $name) {
+        ok(!str_starts_with($name, 'admin-'), "no admin screenshot: $name");
+        ok(help_image_file($name) !== null, "exists: $name");
+    }
+    ok(!in_array('admin-members.webp', $pub, true) && !in_array('admin-health-paths.webp', $pub, true));
+});
+
+test('B3 review: bin/docs-html refuses an output folder that is a symbolic link', function (): void {
+    $target = sys_get_temp_dir() . '/gather-symlink-target-' . bin2hex(random_bytes(3));
+    mkdir($target);
+    file_put_contents($target . '/keep.txt', 'must survive');
+    $link = BASE . '/dist/docs-site-link-test';
+    if (!is_dir(BASE . '/dist')) {
+        mkdir(BASE . '/dist');
+    }
+    symlink($target, $link);
+    try {
+        throws(InvalidArgumentException::class, fn () => help_export_static($link));
+        ok(is_file($target . '/keep.txt'), 'the link target was not emptied');
+    } finally {
+        unlink($link);
+        unlink($target . '/keep.txt');
+        rmdir($target);
+    }
+});

@@ -148,6 +148,35 @@ function help_image_file(string $name): ?string
     return $path;
 }
 
+/**
+ * Image names the public member guide (/help) may serve: only those
+ * referenced by the guides of the public mode (admin screenshots stay staff
+ * only). Cached per request and per file modification time.
+ * @return list<string>
+ */
+function help_public_images(): array
+{
+    static $cache = [];
+    $names = [];
+    foreach (help_mode_slugs('public') as $slug) {
+        $file = help_dir() . '/' . help_manifest()[$slug]['file'];
+        $key = $file . '|' . (string) filemtime($file);
+        if (!isset($cache[$key])) {
+            preg_match_all('/!\[[^\]]*\]\(<?([^)\s>]+)/', (string) file_get_contents($file), $m);
+            $cache[$key] = [];
+            $baseDir = dirname(help_manifest()[$slug]['file']);
+            foreach ($m[1] as $src) {
+                $path = help_normalise_path($baseDir, rawurldecode($src));
+                if ($path !== null && str_starts_with($path, 'images/') && help_image_name_ok(substr($path, 7))) {
+                    $cache[$key][] = substr($path, 7);
+                }
+            }
+        }
+        $names = array_merge($names, $cache[$key]);
+    }
+    return array_values(array_unique($names));
+}
+
 /** Normalise "a/b/../c.md" (relative to docs/); null when it leaves docs/. */
 function help_normalise_path(string $baseDir, string $rel): ?string
 {
@@ -531,6 +560,9 @@ function help_export_static(string $outDir): array
         throw new InvalidArgumentException('The output folder must be inside dist/.');
     }
     $outDir = $parent . '/' . basename($outDir);
+    if (is_link($outDir)) {
+        throw new InvalidArgumentException('The output folder is a symbolic link; remove it first.');
+    }
     if (is_dir($outDir)) {
         help_remove_tree($outDir);
     }

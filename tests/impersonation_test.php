@@ -44,7 +44,7 @@ test('B2: staff accounts can never be impersonated; members and groups can', fun
     $admin = imp_admin();
     foreach ([fixture_admin(), fixture_admin('admin', ['members'])] as $staffId) {
         $e = throws(DomainException::class, fn () => impersonation_start($admin, $staffId, '', false, true));
-        contains('Staff accounts', $e->getMessage());
+        contains('cannot be viewed as a member', $e->getMessage());
     }
     ok(!is_impersonating(), 'nothing started');
     same(0, (int) q_val('SELECT COUNT(*) FROM impersonations WHERE admin_id = ?', [$admin['id']]));
@@ -73,7 +73,7 @@ test('B2: starting switches the session to the member, keeps the admin separatel
     ok(!is_staff(current_user()), 'the member has no admin rights');
     $row = q_one("SELECT * FROM audit_log WHERE action = 'impersonate_start' ORDER BY id DESC LIMIT 1");
     same($admin['id'], (int) $row['user_id'], 'start is logged as the admin');
-    same($m['user_id'], (int) $row['item_id']);
+    same(['member', $m['member_id']], [$row['item_type'], (int) $row['item_id']]);
     contains('Imani Start (TST-26-0042)', $row['summary']);
     contains('reason: Cannot find her card', $row['summary']);
     contains('changes allowed', $row['summary']);
@@ -235,7 +235,7 @@ test('B2: removing the permission or the member account ends the impersonation',
     $m = fixture_full_member();
     impersonation_start($admin, $m['user_id'], '', false, false);
     q("DELETE FROM admin_permissions WHERE user_id = ? AND permission = 'impersonate'", [$admin['id']]);
-    same('redirect:/admin', imp_guard('GET', '/account'));
+    same('redirect:/admin/members/' . $m['member_id'], imp_guard('GET', '/account'), 'still has the members permission: back to the member page');
     same($admin['id'], $_SESSION['user_id'], 'admin session continues');
     $admin2 = imp_admin();
     $m2 = fixture_full_member();
@@ -280,4 +280,103 @@ test('B2: the notice email template is editable and only uses its own placeholde
     same([], email_template_validate('impersonation_notice', 'Notice from {site_name}', "Hi {first_name}, {admin_name} looked on {date}.", 'Open'));
     ok(email_template_validate('impersonation_notice', 'x', 'Your password is {password}', '') !== [], 'unknown placeholder refused');
     ok(isset($def['placeholders']['admin_name'], $def['placeholders']['date']));
+});
+
+// ---- Security review fixes (B2) -----------------------------------------------------
+
+/** Throws from send(): the notice must never break the switch. */
+final class ExplodingMailer implements \Core\Mail\Mailer
+{
+    public function send(\Core\Mail\Message $message): void
+    {
+        throw new Error('mail transport exploded');
+    }
+}
+
+test('B2 review: refusals are generic (staff and unknown ids look the same)', function (): void {
+    $staff = impersonation_refusal(impersonation_target(fixture_admin()));
+    $none = impersonation_refusal(impersonation_target(987654));
+    same($staff, $none);
+    not_contains('Staff', (string) $staff);
+});
+
+test('B2 review: a failing notice email never breaks the switch and is recorded as failed', function (): void {
+    mailer(new ExplodingMailer());
+    $admin = imp_admin();
+    $m = fixture_full_member();
+    impersonation_start($admin, $m['user_id'], '', false, false);
+    same($m['user_id'], $_SESSION['user_id'], 'the switch completed');
+    same('failed', q_val('SELECT notified FROM impersonations ORDER BY id DESC LIMIT 1'));
+    contains('member notice: failed', (string) q_val("SELECT summary FROM audit_log WHERE action = 'impersonate_start' ORDER BY id DESC LIMIT 1"));
+});
+
+test('B2 review: notice outcome sent/off is recorded; bounced addresses still get the notice', function (): void {
+    $mailer = rec_mailer();
+    $admin = imp_admin();
+    $m = fixture_full_member();
+    email_suppress($m['email'], 'hard_bounce', 'test', 'test');
+    impersonation_start($admin, $m['user_id'], '', false, false);
+    same('sent', q_val('SELECT notified FROM impersonations ORDER BY id DESC LIMIT 1'));
+    same([$m['email']], $mailer->to(), 'impersonation_notice bypasses bounce suppression');
+    ok(in_array('impersonation_notice', MAIL_BOUNCE_BYPASS_TEMPLATES, true));
+    impersonation_end('returned');
+    setting_set('impersonation.notify', false);
+    settings_all([]);
+    $m2 = fixture_full_member();
+    impersonation_start(current_user(), $m2['user_id'], '', false, false);
+    same('off', q_val('SELECT notified FROM impersonations ORDER BY id DESC LIMIT 1'));
+    contains('member notice: off', (string) q_val("SELECT summary FROM audit_log WHERE action = 'impersonate_start' ORDER BY id DESC LIMIT 1"));
+    setting_set('impersonation.notify', true);
+    settings_all([]);
+});
+
+test('B2 review: audit entries use members.id / groups_orgs.id like other member and group entries', function (): void {
+    rec_mailer();
+    $admin = imp_admin();
+    $m = fixture_full_member();
+    impersonation_start($admin, $m['user_id'], '', false, false);
+    impersonation_end('returned');
+    $rows = q_all("SELECT action, item_type, item_id FROM audit_log WHERE action IN ('impersonate_start', 'impersonate_end') ORDER BY id DESC LIMIT 2");
+    foreach ($rows as $r) {
+        same(['member', $m['member_id']], [$r['item_type'], (int) $r['item_id']], $r['action']);
+    }
+    $gUid = create_user('grp-' . bin2hex(random_bytes(3)) . '@example.test', 'correct horse battery', 'group', 'Audit Group', 'active');
+    $gid = db_insert('groups_orgs', ['user_id' => $gUid, 'name' => 'Audit Group', 'slug' => 'audit-group-' . bin2hex(random_bytes(3)), 'contact_person' => 'Gina']);
+    impersonation_start(current_user(), $gUid, '', false, false);
+    impersonation_end('returned');
+    $rows = q_all("SELECT item_type, item_id FROM audit_log WHERE action IN ('impersonate_start', 'impersonate_end') ORDER BY id DESC LIMIT 2");
+    same([['group', $gid], ['group', $gid]], array_map(static fn (array $r): array => [$r['item_type'], (int) $r['item_id']], $rows));
+    same('/admin/groups/' . $gid . '/edit', impersonation_return_path('/admin/groups/' . $gid . '/edit', current_user()));
+});
+
+test('B2 review: impersonation evidence survives deleting the member account', function (): void {
+    rec_mailer();
+    $admin = imp_admin();
+    $m = fixture_full_member(['first_name' => 'Gone', 'last_name' => 'Later']);
+    impersonation_start($admin, $m['user_id'], 'evidence', true, false);
+    audit('profile_update', 'member', $m['member_id'], 'profile details');
+    impersonation_end('returned');
+    $rowId = (int) q_val('SELECT MAX(id) FROM impersonations');
+    account_delete($m['user_id']);
+    $row = q_one('SELECT * FROM impersonations WHERE id = ?', [$rowId]);
+    same([$m['user_id'], 'Gone Later', $m['email'], (int) $admin['id'], (string) $admin['email']], [(int) $row['user_id'], $row['user_name'], $row['user_email'], (int) $row['admin_id'], $row['admin_email']]);
+    same($m['user_id'], (int) q_val("SELECT on_behalf_of FROM audit_log WHERE action = 'profile_update' ORDER BY id DESC LIMIT 1"), 'on_behalf_of kept');
+});
+
+test('B2 review: the return page falls back to /admin when the admin can no longer open it', function (): void {
+    rec_mailer();
+    $admin = imp_admin(['impersonate', 'members']);
+    $m = fixture_full_member();
+    impersonation_start($admin, $m['user_id'], '', false, false);
+    q("DELETE FROM admin_permissions WHERE user_id = ? AND permission = 'members'", [$admin['id']]);
+    same('/admin', impersonation_end('returned'), 'members permission removed meanwhile');
+    same('/admin', impersonation_return_path('/admin/groups/3/edit', current_user()));
+    same('/admin', impersonation_return_path('https://evil.example/', current_user()));
+    // Impersonate permission removed (guard): also lands on a page the admin can open.
+    $admin2 = imp_admin(['impersonate']);
+    $m2 = fixture_full_member();
+    impersonation_start($admin2, $m2['user_id'], '', false, false);
+    $_SESSION['imp']['return_to'] = '/admin/groups/9/edit';
+    q("DELETE FROM admin_permissions WHERE user_id = ? AND permission = 'impersonate'", [$admin2['id']]);
+    same('redirect:/admin', imp_guard('GET', '/account'));
 });

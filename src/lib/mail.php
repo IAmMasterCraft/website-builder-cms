@@ -196,10 +196,11 @@ function mail_requeue_direct(int $id, Message $m, Throwable $e): void
 /**
  * Templates still sent to an address that bounced: the person asked for
  * them just now on the site (a working address proves itself by the link
- * being used). Automated mail (welcome, birthday, replies, job news…) is
- * skipped for bounced addresses.
+ * being used), or must reach them whatever happened before (the notice that
+ * an admin viewed their account, B2). Automated mail (welcome, birthday,
+ * replies, job news…) is skipped for bounced addresses.
  */
-const MAIL_BOUNCE_BYPASS_TEMPLATES = ['verify_email', 'password_reset', 'email_change', 'admin_invite', 'signup_existing', 'event_registration', 'contact_copy', 'contact_reply'];
+const MAIL_BOUNCE_BYPASS_TEMPLATES = ['verify_email', 'password_reset', 'email_change', 'admin_invite', 'signup_existing', 'event_registration', 'contact_copy', 'contact_reply', 'impersonation_notice'];
 
 /**
  * Send a transactional email built from an editable template

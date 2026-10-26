@@ -54,12 +54,19 @@ $r = (new Browser($base))->get('/help');
 check('B3: /help shows the member guide in the site theme (public by default)', $r['status'] === 200 && str_contains($r['body'], 'class="md"') && str_contains($r['body'], 'id="joining"') && str_contains($r['body'], 'class="page-hero"') && str_contains($r['body'], 'src="/help/images/'));
 check('B3: /help links only to itself and keeps the strict CSP', !str_contains($r['body'], '/admin/help') && !str_contains($r['headers'], 'unsafe-inline'));
 check('B3: /help images are public while the guide is public', (new Browser($base))->get('/help/images/member-card.webp')['status'] === 200);
+check('B3 review: /help never serves admin screenshots (staff route still does)', (new Browser($base))->get('/help/images/admin-members.webp')['status'] === 404
+    && $memberB->get('/help/images/admin-health-paths.webp')['status'] === 404 && $admin->get('/help/images/admin-audit.webp')['status'] === 404
+    && $admin->get('/admin/help/images/admin-audit.webp')['status'] === 200);
 check('B3: the footer links to /help', str_contains($r['body'], '<a href="/help">Help</a>'));
 $r = $admin->submit('/admin/settings', '/admin/settings', ['site_name' => 'Smoke Test Society', 'timezone' => 'Europe/London', 'support_panel' => '1', 'help_member_guide' => 'members', 'impersonation_notify' => '1']);
+check('B3 review: changing the support settings is audited', str_contains((string) q_val("SELECT summary FROM audit_log WHERE action = 'update' AND item_type = 'settings' ORDER BY id DESC LIMIT 1"), 'member guide: members'));
 check('B3: super admin makes the member guide members-only', $r['status'] === 303 && setting_fresh('help.member_guide') === 'members' && setting_fresh('impersonation.notify') === true);
 $v = (new Browser($base))->get('/help');
 check('B3: members-only guide sends visitors to log in, members can read it', $v['status'] === 303 && str_starts_with($v['location'], '/login') && $memberB->get('/help')['status'] === 200
     && (new Browser($base))->get('/help/images/member-card.webp')['status'] === 303);
+$admin->submit('/admin/settings', '/admin/settings', ['site_name' => 'Smoke Test Society', 'timezone' => 'Europe/London', 'support_panel' => '1', 'help_member_guide' => 'public', 'impersonation_notify' => '1']);
+$admin->submit('/admin/settings', '/admin/settings', ['site_name' => 'Smoke Test Society', 'timezone' => 'Europe/London', 'support_panel' => '1', 'help_member_guide' => 'public']);
+check('B3 review: switching the member notice off is audited', str_contains((string) q_val("SELECT summary FROM audit_log WHERE action = 'update' AND item_type = 'settings' ORDER BY id DESC LIMIT 1"), 'notice when an admin views an account: off'));
 $admin->submit('/admin/settings', '/admin/settings', ['site_name' => 'Smoke Test Society', 'timezone' => 'Europe/London', 'support_panel' => '1', 'help_member_guide' => 'public', 'impersonation_notify' => '1']);
 $admin->submit('/admin/settings', '/admin/settings', ['site_name' => 'Smoke Test Society', 'timezone' => 'Europe/London']);
 check('B3: a settings form without the support panel leaves those settings alone', setting_fresh('help.member_guide') === 'public' && setting_fresh('impersonation.notify') === true);
@@ -75,11 +82,20 @@ check('B2: the Users & roles form lists the impersonate permission (10 keys)', s
 status_is($admin, '/admin/impersonate/' . $impUid, 200, 'Log in as this member');
 $staffId = (int) q_val("SELECT id FROM users WHERE role = 'super_admin' ORDER BY id LIMIT 1");
 $r = $admin->get('/admin/impersonate/' . $staffId);
-check('B2: staff accounts cannot be impersonated (no start button)', $r['status'] === 422 && str_contains($r['body'], 'Staff accounts cannot') && !str_contains($r['body'], 'action="/admin/impersonate/'));
+// Another staff account (not the viewer, whose own email is in the profile menu).
+$otherStaff = create_user('quiet.staffer@example.test', 'quiet-staffer-pass', 'admin', 'Quiet Staffer', 'active', ['radio']);
+$refusal = $admin->get('/admin/impersonate/' . $otherStaff);
+check('B2: staff accounts cannot be impersonated (generic refusal, no start button)', $r['status'] === 422 && str_contains($r['body'], 'cannot be viewed as a member') && !str_contains($r['body'], 'action="/admin/impersonate/'));
+check('B2 review: the refusal shows nothing about the account', $refusal['status'] === 422 && !str_contains($refusal['body'], 'quiet.staffer@example.test') && !str_contains($refusal['body'], 'Quiet Staffer') && !str_contains($refusal['body'], 'badge active'));
+check('B2 review: the refusal for an unknown id is a 404', $admin->get('/admin/impersonate/987654')['status'] === 404);
 $r = $admin->submit('/admin/impersonate/' . $impUid, '/admin/impersonate/' . $staffId, []);
 check('B2: posting a staff account is refused and nothing changes', $r['status'] === 303 && $admin->get('/admin')['status'] === 200 && (int) q_val('SELECT COUNT(*) FROM impersonations WHERE user_id = ?', [$staffId]) === 0);
 check('B2: start without a CSRF token is refused (419)', $admin->post('/admin/impersonate/' . $impUid, ['reason' => 'x'])['status'] === 419);
 $noImp = login_as($base, 'matrix-members@example.test', 'matrix-password-1');
+$impOnly = login_as($base, 'matrix-impersonate@example.test', 'matrix-password-1');
+$r = $impOnly->get('/admin/impersonate/' . $impUid);
+check('B2 review: without the members permission the confirm page hides the email', $r['status'] === 200 && str_contains($r['body'], 'Log in as Imani View') && !str_contains($r['body'], 'imani.view@example.test'));
+check('B2 review: with the members permission the email is shown', str_contains($admin->get('/admin/impersonate/' . $impUid)['body'], 'imani.view@example.test'));
 check('B2: an admin without the permission gets 403', $noImp->get('/admin/impersonate/' . $impUid)['status'] === 403 && !str_contains($noImp->get('/admin/members/' . $impMid)['body'], '/admin/impersonate/'));
 
 $supporter = login_as($base, 'matrix-impersonate@example.test', 'matrix-password-1');
@@ -97,7 +113,7 @@ check('B2: the banner is on other pages too (event list, card print)', str_conta
 $notice = newest_mail_to('imani.view@example.test', $mailsBefore);
 check('B2: the member is emailed a short notice', $notice !== null && str_contains($notice, 'administrator') && str_contains($notice, 'viewed your account'));
 $audit = q_one("SELECT * FROM audit_log WHERE action = 'impersonate_start' ORDER BY id DESC LIMIT 1");
-check('B2: the start is audited (admin, member, reason, IP)', (int) $audit['user_id'] === $supporterId && (int) $audit['item_id'] === $impUid && str_contains($audit['summary'], 'Smoke: cannot find card') && $audit['ip'] !== '');
+check('B2: the start is audited (admin, member, reason, IP)', (int) $audit['user_id'] === $supporterId && $audit['item_type'] === 'member' && (int) $audit['item_id'] === $impMid && str_contains($audit['summary'], 'member notice: sent') && str_contains($audit['summary'], 'Smoke: cannot find card') && $audit['ip'] !== '');
 $t = meta_csrf($supporter, '/account');
 $blocked = [];
 foreach ([['GET', '/admin'], ['GET', '/admin/members'], ['GET', '/account/privacy/export'], ['GET', '/account/jobs/new'],

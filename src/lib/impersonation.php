@@ -45,17 +45,22 @@ function impersonation_target(int $userId): ?array
     }
     $u['number'] = '';
     $u['admin_url'] = null;
+    // Audit item: the same convention as other member/group entries (members.id / groups_orgs.id).
+    $u['item_type'] = 'account';
+    $u['item_id'] = $userId;
     $u['first_name'] = (string) $u['display_name'];
     if ($u['role'] === 'member' && ($m = member_for_user($userId)) !== null) {
         $u['name'] = member_full_name($m);
         $u['first_name'] = (string) $m['first_name'];
         $u['number'] = (string) ($m['member_number'] ?? '');
         $u['admin_url'] = '/admin/members/' . (int) $m['id'];
+        [$u['item_type'], $u['item_id']] = ['member', (int) $m['id']];
     } elseif ($u['role'] === 'group' && ($g = q_one('SELECT id, name, group_number, contact_person FROM groups_orgs WHERE user_id = ?', [$userId])) !== null) {
         $u['name'] = (string) $g['name'];
         $u['first_name'] = (string) ($g['contact_person'] ?: $g['name']);
         $u['number'] = (string) ($g['group_number'] ?? '');
         $u['admin_url'] = '/admin/groups/' . (int) $g['id'] . '/edit';
+        [$u['item_type'], $u['item_id']] = ['group', (int) $g['id']];
     } else {
         $u['name'] = (string) $u['display_name'];
     }
@@ -65,11 +70,9 @@ function impersonation_target(int $userId): ?array
 /** Why this account can never be impersonated (null = it can). */
 function impersonation_refusal(?array $target): ?string
 {
-    if ($target === null) {
-        return 'There is no account with this number.';
-    }
-    if (!in_array($target['role'], ['member', 'group'], true)) {
-        return 'Staff accounts cannot be viewed as a member. Only member and group accounts can.';
+    // One generic message: it must not tell whether an id is staff or unused.
+    if ($target === null || !in_array($target['role'], ['member', 'group'], true)) {
+        return 'This account cannot be viewed as a member. Only member and group accounts can.';
     }
     return null;
 }
@@ -108,16 +111,24 @@ function impersonation_start(array $admin, int $targetUserId, string $reason, bo
     $now = time();
     $rowId = db_insert('impersonations', [
         'admin_id' => $admin['id'],
+        'admin_name' => mb_substr((string) $admin['display_name'], 0, 120),
+        'admin_email' => (string) $admin['email'],
         'user_id' => $target['id'],
+        'user_name' => mb_substr((string) $target['name'], 0, 200),
+        'user_email' => (string) $target['email'],
         'reason' => $reason,
         'allow_changes' => $allowChanges ? 1 : 0,
         'ip' => client_ip(),
         'started_at' => gmdate('Y-m-d H:i:s', $now),
         'expires_at' => gmdate('Y-m-d H:i:s', $now + IMPERSONATION_SECONDS),
     ]);
-    audit('impersonate_start', $target['role'], (int) $target['id'], mb_substr(
+    // Notice to the member first (still as the admin): a mail failure can
+    // never break the switch half-way, and the outcome goes into the record.
+    $notified = impersonation_notify($admin, $target, $now);
+    q('UPDATE impersonations SET notified = ? WHERE id = ?', [$notified, $rowId]);
+    audit('impersonate_start', $target['item_type'], (int) $target['item_id'], mb_substr(
         'Viewing as ' . $target['name'] . ($target['number'] !== '' ? ' (' . $target['number'] . ')' : '')
-        . ($allowChanges ? '; changes allowed' : '; read only') . ($reason !== '' ? '; reason: ' . $reason : ''),
+        . ($allowChanges ? '; changes allowed' : '; read only') . '; member notice: ' . $notified . ($reason !== '' ? '; reason: ' . $reason : ''),
         0,
         250
     ));
@@ -130,6 +141,8 @@ function impersonation_start(array $admin, int $targetUserId, string $reason, bo
         'admin_id' => (int) $admin['id'],
         'admin_sv' => (int) ($_SESSION['sv'] ?? -1),
         'member_id' => (int) $target['id'],
+        'item_type' => (string) $target['item_type'],
+        'item_id' => (int) $target['item_id'],
         'started' => $now,
         'expires' => $now + IMPERSONATION_SECONDS,
         'allow_changes' => $allowChanges,
@@ -141,14 +154,46 @@ function impersonation_start(array $admin, int $targetUserId, string $reason, bo
     $_SESSION['sv'] = (int) $target['session_version'];
     unset($_SESSION['csrf']);
     current_user(true);
-    if ((bool) setting('impersonation.notify', true)) {
-        send_template_mail((string) $target['email'], (string) $target['first_name'], 'impersonation_notice', [
+    return $target;
+}
+
+/**
+ * Email the member that an admin viewed the account (setting
+ * impersonation.notify, default on). Returns what happened: sent | off |
+ * skipped (no valid address) | failed (logged; queued for retry when the
+ * transport failed). Never throws.
+ */
+function impersonation_notify(array $admin, array $target, int $now): string
+{
+    if (!(bool) setting('impersonation.notify', true)) {
+        return 'off';
+    }
+    if (!filter_var((string) $target['email'], FILTER_VALIDATE_EMAIL)) {
+        return 'skipped';
+    }
+    try {
+        $ok = send_template_mail((string) $target['email'], (string) $target['first_name'], 'impersonation_notice', [
             'date' => fmt_datetime(gmdate('Y-m-d H:i:s', $now)),
             'admin_name' => (string) $admin['display_name'],
             'account_url' => base_url('/account'),
         ]);
+        return $ok ? 'sent' : 'failed';
+    } catch (Throwable $e) {
+        error_log('Impersonation notice not sent: ' . $e->getMessage());
+        return 'failed';
     }
-    return $target;
+}
+
+/**
+ * Where to go after the impersonation: the stored admin page, unless the
+ * admin can no longer open it (permissions changed meanwhile).
+ */
+function impersonation_return_path(string $to, ?array $admin): string
+{
+    if (preg_match('#^/admin/(members|groups)(/|$)#', $to) && !user_can($admin, 'members')) {
+        return '/admin'; // members and groups are both under the members permission
+    }
+    return str_starts_with($to, '/admin') ? $to : '/admin';
 }
 
 /**
@@ -173,7 +218,7 @@ function impersonation_end(string $reason, bool $restore = true): string
         'member_unavailable' => 'the account changed or was removed',
     ];
     $summary = 'Stopped viewing as ' . $imp['name'] . ($imp['number'] !== '' ? ' (' . $imp['number'] . ')' : '') . ' after ' . $minutes . ' min: ' . ($labels[$reason] ?? $reason);
-    audit_as($imp['admin_id'], null, 'impersonate_end', 'member', $imp['member_id'], $summary);
+    audit_as($imp['admin_id'], null, 'impersonate_end', (string) ($imp['item_type'] ?? 'account'), (int) ($imp['item_id'] ?? $imp['member_id']), $summary);
     if (!$restore || !$adminValid) {
         logout_user();
         if (session_status() !== PHP_SESSION_ACTIVE && PHP_SAPI !== 'cli') {
@@ -187,8 +232,7 @@ function impersonation_end(string $reason, bool $restore = true): string
     unset($_SESSION['imp'], $_SESSION['csrf'], $_SESSION['old']);
     $_SESSION['user_id'] = (int) $imp['admin_id'];
     $_SESSION['sv'] = (int) $imp['admin_sv'];
-    current_user(true);
-    return (string) $imp['return_to'];
+    return impersonation_return_path((string) $imp['return_to'], current_user(true));
 }
 
 /** POST routes that work while impersonating only when the admin ticked "allow changes". */
@@ -240,7 +284,7 @@ function impersonation_guard(string $method, string $path): void
     if (!user_can($adminUser, 'impersonate')) {
         $to = impersonation_end('permission_removed');
         flash('Viewing as a member ended: your account no longer has that permission.', 'info');
-        redirect(str_starts_with($to, '/admin/members') ? '/admin' : $to);
+        redirect($to); // impersonation_end() already falls back to /admin for pages the admin cannot open
     }
     $current = current_user();
     if ($current === null || $current['id'] !== $imp['member_id'] || !in_array($current['role'], ['member', 'group'], true)) {

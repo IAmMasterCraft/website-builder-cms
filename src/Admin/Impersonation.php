@@ -10,17 +10,22 @@ final class Impersonation
     {
         $admin = require_permission('impersonate');
         $target = impersonation_target((int) $p['id']);
-        $refusal = impersonation_refusal($target);
         if ($target === null) {
             abort(404);
         }
+        if (impersonation_refusal($target) !== null) {
+            // Generic refusal: nothing about the account (it may be staff) is shown.
+            render('admin/impersonate_refused', ['title' => 'Log in as a member'], 'admin', 422);
+            return;
+        }
         $old = take_old_input();
         render('admin/impersonate', [
-            'title' => 'Log in as ' . $target['name'], 'target' => $target, 'refusal' => $refusal,
-            'warnings' => $refusal === null ? impersonation_warnings($target) : [],
+            'title' => 'Log in as ' . $target['name'], 'target' => $target,
+            'warnings' => impersonation_warnings($target),
             'values' => $old['values'], 'errors' => $old['errors'], 'notify' => (bool) setting('impersonation.notify', true),
+            // Groups are managed under the members permission too.
             'can_members' => user_can($admin, 'members'),
-        ], 'admin', $refusal !== null ? 422 : 200);
+        ], 'admin');
     }
 
     public static function start(array $p): void

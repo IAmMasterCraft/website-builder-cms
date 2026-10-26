@@ -1,4 +1,4 @@
-<?php /** @var array $target @var ?string $refusal @var list<string> $warnings @var array $values @var array $errors @var bool $notify @var bool $can_members */
+<?php /** @var array $target @var list<string> $warnings @var array $values @var array $errors @var bool $notify @var bool $can_members */
 $isGroup = $target['role'] === 'group';
 $back = $target['admin_url'] !== null && $can_members ? $target['admin_url'] : '/admin';
 ?>
@@ -6,13 +6,9 @@ $back = $target['admin_url'] !== null && $can_members ? $target['admin_url'] : '
   <div>
     <?php if ($target['admin_url'] !== null && $can_members): ?><p class="crumbs"><a href="<?= e($isGroup ? '/admin/groups' : '/admin/members') ?>"><?= $isGroup ? 'Groups' : 'Members' ?></a> / <a href="<?= e($target['admin_url']) ?>"><?= e($target['name']) ?></a> /</p><?php endif ?>
     <h1>Log in as <?= e($target['name']) ?></h1>
-    <p><?= $target['number'] !== '' ? '<span class="tabular">' . e($target['number']) . '</span> · ' : '' ?><span class="badge <?= e($target['status']) ?>"><?= e($target['status']) ?></span> · <?= e($target['email']) ?></p>
+    <p><?= $target['number'] !== '' ? '<span class="tabular">' . e($target['number']) . '</span> · ' : '' ?><span class="badge <?= e($target['status']) ?>"><?= e($target['status']) ?></span><?= $can_members ? ' · ' . e($target['email']) : '' ?></p>
   </div>
 </div>
-<?php if ($refusal !== null): ?>
-  <div class="flash error" role="alert"><?= icon('alert') ?><span><?= e($refusal) ?></span></div>
-  <p><a class="btn" href="<?= e($back) ?>">Back</a></p>
-<?php else: ?>
 <div class="form-layout">
   <form class="panel" method="post" action="/admin/impersonate/<?= (int) $target['id'] ?>" novalidate>
     <?= csrf_field() ?>
@@ -37,4 +33,3 @@ $back = $target['admin_url'] !== null && $can_members ? $target['admin_url'] : '
     </div>
   </form>
 </div>
-<?php endif ?>

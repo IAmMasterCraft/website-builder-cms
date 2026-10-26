@@ -786,7 +786,8 @@ Addendum A6 added `tests/design_test.php` (6 tests) and
 section types and 5 themes.
 
 Addendum B (2026-10-26): `bin/check` = lint + **329 unit/DB tests** +
-**548 smoke checks**, all green. New: `tests/impersonation_test.php` (16:
+**548 smoke checks**, all green; after the Addendum B security review
+fixes **337 unit/DB tests** and **555 smoke checks**, all green. New: `tests/impersonation_test.php` (16:
 10th permission key, staff refused, session switch with the admin kept
 apart, audit entries and the impersonations row, notice email on/off,
 nested refused, confirmation for suspended/unverified, every restricted
@@ -1336,6 +1337,46 @@ already ran before any DNS lookup). Migration `017_review_fixes`
   dropped, other sessions ended). Audited (`profile_name`,
   `email_change_request`, `email_change_cancel`, `password_change`). Docs:
   first-login, users-roles, how-do-i; screenshot `docs/images/admin-profile.webp`.
+
+## Addendum B security review fixes (2026-10-26)
+
+A fresh-context review of Addendum B found no critical/high issues. Each
+finding was confirmed in the code and fixed with regression tests
+(`tests/impersonation_test.php`, `tests/help_test.php`,
+`tests/smoke_addendum_b.php`). Migration `019_impersonation_evidence`.
+
+- MEDIUM public docs images: `/help/images/{name}` served every docs image,
+  including admin screenshots (members list, audit log, backups, health
+  paths, email settings). Now only names referenced by the public guides
+  (`help_public_images()`, parsed from member-guide.md, cached per file
+  mtime) are served there; everything else is 404. `/admin/help/images`
+  (staff) is unchanged.
+- LOW confirm page disclosure: refusals (staff, unknown) now use one
+  generic message (`impersonation_refusal()`) and a separate template
+  (`admin/impersonate_refused`, 422) that shows nothing about the account;
+  unknown ids are 404. The email address on the confirmation screen only
+  shows to admins who also have the members permission (which also covers
+  groups).
+- LOW notice email: `impersonation_notify()` runs before the session switch,
+  never throws (try/catch, logged), and returns sent / off / skipped (no
+  valid address) / failed; stored in `impersonations.notified` and the
+  `impersonate_start` summary ("member notice: …").
+  `impersonation_notice` joined `MAIL_BOUNCE_BYPASS_TEMPLATES`. Changes to
+  the support settings (member guide access, the notice switch) are named
+  in the settings audit entry.
+- LOW audit consistency and evidence: impersonate_start/end use
+  `member` + members.id or `group` + groups_orgs.id (`account` + user id
+  when there is neither), like other member/group entries. The foreign
+  keys on `audit_log.on_behalf_of` and `impersonations.admin_id/user_id`
+  were dropped so the ids survive account deletion, and impersonation rows
+  store snapshots `admin_name/admin_email/user_name/user_email` (kept on
+  purpose as evidence after a member is removed).
+- LOW return path: `impersonation_return_path()` sends the admin to the
+  member/group page only while they can open it (members permission),
+  otherwise to `/admin`; used for every restoring end (return, expiry,
+  permission removed, member gone).
+- VERY LOW `bin/docs-html`: refuses an output folder that is a symbolic
+  link (before emptying anything).
 
 ## Known gaps / next steps
 

@@ -60,8 +60,9 @@ can open `/help`:
   people who are thinking about joining.
 - **Logged-in members only**: visitors are asked to log in first.
 
-Only the member guide is shown on the public site. The website manager
-guide, the installation guides and the deliverability guide are only in the
+Only the member guide is shown on the public site, with only its own
+screenshots. The website manager guide (and its screenshots of the admin
+area), the installation guides and the deliverability guide are only in the
 admin area (and on GitHub).
 
 ## A documentation website (optional)

@@ -140,16 +140,25 @@ final class Settings
         setting_set('social', $social);
         setting_set('analytics', ['provider' => $provider, 'site_id' => $provider === '' ? '' : $siteId, 'banner' => $banner]);
         // B2/B3 (only when the form had the panel, so older forms leave these alone)
+        $supportChanges = [];
         if (input('support_panel') === '1') {
-            setting_set('help.member_guide', input('help_member_guide') === 'members' ? 'members' : 'public');
-            setting_set('impersonation.notify', input('impersonation_notify') === '1');
+            $guide = input('help_member_guide') === 'members' ? 'members' : 'public';
+            $notify = input('impersonation_notify') === '1';
+            if ($guide !== help_member_guide_access()) {
+                $supportChanges[] = 'member guide: ' . $guide;
+            }
+            if ($notify !== (bool) setting('impersonation.notify', true)) {
+                $supportChanges[] = 'notice when an admin views an account: ' . ($notify ? 'on' : 'off');
+            }
+            setting_set('help.member_guide', $guide);
+            setting_set('impersonation.notify', $notify);
         }
         if ($logoId !== null) {
             setting_set('site.logo_media_id', $logoId);
         } elseif (input('logo_remove') === '1') {
             setting_set('site.logo_media_id', null);
         }
-        audit('update', 'settings', null, 'site settings' . ($provider !== '' ? ' (analytics: ' . $provider . ')' : ''));
+        audit('update', 'settings', null, 'site settings' . ($provider !== '' ? ' (analytics: ' . $provider . ')' : '') . ($supportChanges ? '; ' . implode('; ', $supportChanges) : ''));
         // Radio repeats keep their local time: a new time zone can make slots clash.
         $clashes = $v['timezone'] !== $oldTimezone ? radio_schedule_conflicts(new \DateTimeZone($v['timezone'])) : [];
         if ($clashes !== []) {

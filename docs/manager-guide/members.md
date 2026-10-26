@@ -139,20 +139,27 @@ profile, member card, events, the job board, notices and downloads.
 
 - It **ends automatically after 30 minutes**. Start again if you need more
   time.
-- Only member and group accounts can be viewed. Admin accounts never can.
+- Only member and group accounts can be viewed. Admin accounts never can
+  (the screen then only says the account cannot be viewed). The member's
+  email address is shown on the confirmation screen only to admins who
+  also have the *Members and groups* permission.
 - You cannot view a second member at the same time: return to admin first.
 - **Log out** while viewing as a member logs you out completely.
 - If your own admin session ends in the meantime (your password was changed
   elsewhere, you were suspended, or a super admin removed your access), the
   member view ends too and you are logged out. If only the permission was
-  removed, you go back to the admin area.
+  removed, you go back to the admin area (to the member's page if you can
+  still open it, otherwise to the overview).
 - The **start**, the **end** (with how many minutes it lasted) and **every
   change** you make are in the [audit log](audit-log.md) under your name,
   marked *as* the member.
 - The member gets a short email saying an administrator viewed their
   account. A super admin can switch this off under **Site settings → Help
   and member support**; the wording is the email template **An administrator
-  viewed your account** (see [Email templates](email-templates.md)).
+  viewed your account** (see [Email templates](email-templates.md)). It is
+  sent even to an address that bounced before, and the audit log records
+  whether it was sent (*sent*, *off*, or *failed*, in which case Gather
+  retries it like other emails).
 
 ## ID cards
 

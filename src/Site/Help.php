@@ -32,6 +32,10 @@ final class Help
     public static function image(array $p): void
     {
         self::allowed();
+        // Only the screenshots the member guide uses; admin screenshots are for staff (/admin/help/images).
+        if (!in_array((string) $p['name'], help_public_images(), true)) {
+            abort(404);
+        }
         \Admin\Help::sendImage((string) $p['name'], help_member_guide_access() === 'public');
     }
 }
