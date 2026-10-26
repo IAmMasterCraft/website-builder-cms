@@ -3,7 +3,7 @@
 Gather's code lives in a Git repository on GitHub:
 
 ```
-https://github.com/YOUR-ACCOUNT/gather
+https://github.com/IAmMasterCraft/website-builder-cms
 ```
 
 (Replace `YOUR-ACCOUNT` with the real account name once the repository is
@@ -22,7 +22,7 @@ one that suits your hosting and how comfortable you are with the command line.
 
 A release package contains only what the server needs: no tests, developer
 tools or documentation. Download it from the repository's **Releases** page
-(`https://github.com/YOUR-ACCOUNT/gather/releases`), or build it yourself (see
+(`https://github.com/IAmMasterCraft/website-builder-cms/releases`), or build it yourself (see
 [Building a package yourself](#building-a-package-yourself)).
 
 There are three versions of each release:
@@ -50,7 +50,7 @@ reads the guides from it.
 ## C. Clone with Git
 
 ```bash
-git clone https://github.com/YOUR-ACCOUNT/gather.git gather
+git clone https://github.com/IAmMasterCraft/website-builder-cms.git gather
 ```
 
 The clone is ready to run: the folders Gather writes to (`storage/…`,
