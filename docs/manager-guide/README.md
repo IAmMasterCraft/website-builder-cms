@@ -16,7 +16,9 @@ Everyone who manages the site is an **admin**. There are two kinds:
   other admins, backups and system health. There is always at least one.
 - **Admins** see only the areas a super admin gave them. The eight areas are
   content; pages and menus; members and groups; communications; radio;
-  events; jobs; gallery and media.
+  events; jobs; gallery and media. Two extra permissions add abilities on
+  top: *essential membership notices* and *log in as a member* (see
+  [Users and roles](users-roles.md)).
 
 If a page in this guide is missing from your menu, you do not have that
 permission. Ask a super admin. Pages marked *(super admin)* are only for
@@ -24,9 +26,13 @@ super admins.
 
 ## Contents
 
+Every guide is also in the admin area: click **Help centre** at the bottom
+of the menu, or the **Help** button next to a screen's title.
+
 **Getting started**
 - [First login and the dashboard](first-login.md)
 - [How do I…?](how-do-i.md)
+- [The help centre](help-centre.md) (these guides inside the admin area)
 
 **Your site's look and structure**
 - [Site settings](settings.md) *(super admin)*

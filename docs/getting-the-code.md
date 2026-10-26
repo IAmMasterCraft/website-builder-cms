@@ -42,9 +42,10 @@ On the repository page, click the green **Code** button, then **Download
 ZIP**. You get `gather-main.zip`, which holds a folder called `gather-main/`.
 Rename the folder to `gather` if you like; the name does not matter.
 
-This ZIP also contains the `docs/`, `tests/` and `dev-tools/` folders. They are
+This ZIP also contains the `tests/` and `dev-tools/` folders. They are
 harmless on a server (they are never served to visitors), but a release
-package is smaller.
+package is smaller. The `docs/` folder is in both: the admin help centre
+reads the guides from it.
 
 ## C. Clone with Git
 
@@ -138,6 +139,7 @@ bin/package v1.2.0             # build from a tag or commit instead of HEAD
 ```
 
 `bin/package` archives the **committed** code only (commit first), leaves out
-`config.php`, everything under `storage/` and `public/uploads/`, tests,
-developer tools and `docs/`, and refuses to finish if a private file slipped
-in. It keeps macOS metadata (`._*` files) out of the archives.
+`config.php`, everything under `storage/` and `public/uploads/`, tests and
+developer tools, and refuses to finish if a private file slipped in. The
+`docs/` folder is included (the admin help centre and `/help` read it; it is
+never served directly). It keeps macOS metadata (`._*` files) out of the archives.

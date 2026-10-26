@@ -32,6 +32,7 @@ marked **Default** or **Edited**.
 | Reply from the inbox | You reply to a message in the [Inbox](inbox.md) |
 | Admin invitation | A super admin invites a new admin |
 | Deletion request (to super admins) | A member asks for their account to be deleted |
+| An administrator viewed your account | An admin used [Log in as this member](members.md#log-in-as-a-member) (only while **Site settings → Help and member support** has the notice switched on) |
 
 ## Editing a template
 

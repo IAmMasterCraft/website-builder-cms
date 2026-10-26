@@ -6,6 +6,9 @@ runs on ordinary PHP hosting. You do not need a special server or a monthly
 platform fee.
 
 These guides are written for three kinds of reader. Pick the part you need.
+You can read them here, inside the admin area once Gather is installed
+(**Help centre**), or as a small website built with `php bin/docs-html`
+(see [Publishing the documentation as a website](docs-website.md)).
 
 ## For the person who installs the site
 
@@ -21,6 +24,7 @@ Start with the requirements, then follow the guide for your kind of hosting.
 | [Install on Plesk](install-plesk.md) | Short notes for Plesk |
 | [Local development](local-development.md) | Running Gather on your own computer with PHP's built-in server |
 | [Email deliverability](email-deliverability.md) | SMTP, SPF/DKIM/DMARC, the bounce mailbox, provider webhooks, suppression list |
+| [Publishing the documentation as a website](docs-website.md) | `bin/docs-html`: these guides as a static website for GitHub Pages or any web host |
 
 Files at the top of the code that also help: [`nginx.conf.example`](../nginx.conf.example)
 (Nginx server block), `config.example.php` (settings file), and the root
@@ -33,11 +37,15 @@ of the admin area in plain language. It starts with
 [How do I…?](manager-guide/how-do-i.md), a list of everyday tasks with links
 to the right page.
 
+You do not have to come back here to read it: every guide is built into the
+admin area as a searchable [help centre](manager-guide/help-centre.md), and
+each admin screen has a **Help** button that opens its page.
+
 ## For members
 
 The [Member guide](member-guide.md) explains joining, verifying your email,
 your dashboard, your member card, email preferences, the job board and
-deleting your account. You can link to it from your own site.
+deleting your account. Your site shows it at `/help`, in your theme.
 
 ## Screenshots
 

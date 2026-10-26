@@ -4,14 +4,21 @@ A self-hosted community website builder and CMS in plain PHP 8.2+ (no
 framework, no Composer at runtime) for charities, diaspora unions, clubs and
 alumni bodies: a page builder with 29 section types, news and events with
 registration, galleries, membership with digital ID cards, newsletters with
-bounce handling, a job board and an online radio station. It runs on ordinary
-shared hosting (cPanel, Plesk), a VPS or aaPanel.
+bounce handling, a job board and an online radio station. Admins work in a
+grouped, collapsible sidebar, can view the site as a member to help them
+(time-limited and audited), and have the whole manual built in as a
+searchable help centre. It runs on ordinary shared hosting (cPanel, Plesk),
+a VPS or aaPanel.
 
 **Documentation: [docs/](docs/README.md)**: installation guides for each kind
 of hosting, a [website manager guide](docs/manager-guide/README.md) with a
 [How do I…?](docs/manager-guide/how-do-i.md) index, a
 [member guide](docs/member-guide.md) and
-[email deliverability](docs/email-deliverability.md).
+[email deliverability](docs/email-deliverability.md). The same guides are in
+the admin area (**Help centre**, `/admin/help`, with search and a **Help**
+button on each screen), the member guide is on the site at `/help`, and
+`php bin/docs-html` builds them into a static website for GitHub Pages
+([how](docs/docs-website.md)).
 
 Built clean-room from a written specification (no code, text or assets from
 other products). Developer notes: [BUILD-NOTES.md](BUILD-NOTES.md).
@@ -71,7 +78,8 @@ The tests drop and recreate every table in the test database.
 | `php bin/backup [--uploads]` | Write a database backup (and optionally an uploads zip) into `storage/backups` |
 | `php bin/restore <file.sql.gz> [--yes]` | Replace every table with a Gather backup (asks for the database name) |
 | `bin/check` | Lint, secrets check, tests and smoke test |
-| `bin/package [--zip [--flat]] [ref]` | Build `dist/gather-<date>-<commit>.tar.gz` (and `.zip`, or a `-flat.zip` without the top folder) for upload: no config, storage, tests, dev tools or docs |
+| `bin/package [--zip [--flat]] [ref]` | Build `dist/gather-<date>-<commit>.tar.gz` (and `.zip`, or a `-flat.zip` without the top folder) for upload: no config, storage, tests or dev tools (`docs/` is included for the help centre) |
+| `php bin/docs-html [folder]` | Build the documentation website from `docs/` into `dist/docs-site/` (relative links, images, `.nojekyll`); see [docs/docs-website.md](docs/docs-website.md) |
 
 ## Layout
 
@@ -88,7 +96,8 @@ vendor/phpmailer/  PHPMailer 6.9.3 (LGPL 2.1, unmodified src/ files + LICENSE), 
 demo-assets/       original demo radio media (synthesised music, speech, generated video) + the dev script that made them
 migrations/        numbered SQL files
 storage/           originals/, variants/ (private), mail/, logs/, cache/, backups/  (not web-reachable)
-bin/               migrate, make-admin, demo, cron, backup, restore, check, package
+docs/              Markdown guides (shown in the admin help centre and at /help; never served directly), images/ screenshots
+bin/               migrate, make-admin, demo, cron, backup, restore, check, package, docs-html
 dev-tools/         dev only (never deployed): axe-core + Lighthouse (npm install here), audit.mjs, touch-reorder.mjs
 tests/             run.php (runner), *_test.php, smoke.php
 ```

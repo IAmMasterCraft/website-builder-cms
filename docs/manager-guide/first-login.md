@@ -17,6 +17,8 @@ with a link to choose their password. The link works for 72 hours.
 email with a link that works for one hour. After 10 wrong passwords in a
 row, the login is locked for 15 minutes.
 
+## Your own profile
+
 **Your own name, email and password**: click your name at the top right,
 then **My profile** (`/admin/profile`). Every admin can use it, whatever
 their permissions:
@@ -38,10 +40,33 @@ All three changes are recorded in the [audit log](audit-log.md).
 
 ![The admin dashboard](../images/admin-overview.webp)
 
-**The menu on the left** lists every area you may manage, grouped as
-*Site*, *Content*, *Members*, *Communications*, *Radio* and *System*. The
-icon at the top left (next to the site name) folds the menu into a narrow
-strip of icons, and your browser remembers your choice.
+**The menu on the left** lists every area you may manage, in groups:
+*Site*, *Content*, *Members*, *Community*, *Communications*, *Radio* and
+*System*. You only see the groups and screens you have permission for.
+
+- Click a group's name to open or close it. The arrow next to the name
+  points down when the group is open.
+- The group of the page you are on opens by itself and is highlighted (bold,
+  with a coloured bar); the page itself is highlighted inside it.
+- **Expand all** / **Collapse all** at the top opens or closes every group.
+- Your browser remembers which groups you opened, so the menu looks the same
+  next time. (It is remembered per browser: another computer starts with
+  only the current group open.)
+- **Help centre** at the bottom opens these guides inside the admin area
+  (see [The help centre](help-centre.md)).
+
+The icon at the top left (next to the site name) folds the menu into a
+narrow strip with one icon per group; the group you are in is highlighted.
+Point at an icon (or move to it with the Tab key, or click it) to see that
+group's screens in a small panel next to it; press Escape to close the
+panel. Your browser remembers whether the menu is folded. The page builder
+and the Design screen always use the narrow menu, to leave room for the
+preview.
+
+![The menu folded to icons, showing the Members group](../images/admin-sidebar-icons.webp)
+
+**The Help button** next to the title of most screens opens the guide page
+for that screen.
 
 **The top bar** has:
 
@@ -51,9 +76,11 @@ strip of icons, and your browser remembers your choice.
   messages, reported comments, jobs awaiting approval).
 - **The moon/sun**: switches the admin area between light and dark.
 - **Your name**: shows your email and role, **My profile** (change your
-  name, email or password) and the **Log out** button.
+  name, email or password, see [Your own profile](#your-own-profile)) and
+  the **Log out** button.
 
-On a phone, the menu opens from the button at the top left.
+On a phone, the menu opens from the button at the top left, with the same
+groups. Tap outside it or press Escape to close it.
 
 ![The dashboard on a phone](../images/admin-overview-mobile.webp)
 

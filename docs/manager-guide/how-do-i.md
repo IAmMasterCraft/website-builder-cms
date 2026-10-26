@@ -1,7 +1,8 @@
 # How do I…?
 
 Everyday tasks, with where to find them. "Admin → X" means: log in, then
-click **X** in the menu on the left.
+click **X** in the menu on the left (open its group first if it is folded,
+for example **Radio** for Library, Playlists and Schedule).
 
 ## The website
 
@@ -53,6 +54,7 @@ click **X** in the menu on the left.
 | …change member number format or card validity? | Admin → **Membership settings** |
 | …approve a job post? | Admin → **Jobs**. See [Job board](jobs.md) |
 | …deal with a reported comment? | Admin → **Comments**. See [Comments and reports](comments.md) |
+| …see exactly what a member sees, to help them? | The member → **Log in as this member**. See [Log in as a member](members.md#log-in-as-a-member) |
 
 ## Communications
 
@@ -80,10 +82,15 @@ click **X** in the menu on the left.
 
 | How do I… | Where |
 |---|---|
-| …change my own password, email or name? | Your name at the top right → **My profile**. See [First login](first-login.md#logging-in) |
+| …change my own password, email or name? | Your name at the top right → **My profile**. See [First login](first-login.md#your-own-profile) |
 | …add another admin? | Admin → **Users and roles** → **New admin**. See [Users and roles](users-roles.md) |
 | …see who changed something? | Admin → **Audit log**. See [Audit log](audit-log.md) |
 | …make a backup? | Admin → **Backups**. See [Backups and restore](backups.md) |
 | …check the site is healthy? | Admin → **System health**. See [System health](system-health.md) |
 | …update to a new version? | See [Updating the site](updating.md) |
 | …fix a problem? | See [Troubleshooting](troubleshooting.md) |
+| …find help for the screen I am on? | Click **Help** next to the screen's title, or **Help centre** at the bottom of the menu. See [The help centre](help-centre.md) |
+| …search all the guides? | **Help centre** → **Search the help** |
+| …tidy up the menu on the left? | Click a group's name to fold it, or **Collapse all**. The folded/unfolded state is remembered. See [Finding your way around](first-login.md#finding-your-way-around) |
+| …let only members read the member guide? | Admin → **Site settings** → **Help and member support** |
+| …publish these guides as a website? | See [Publishing the documentation as a website](../docs-website.md) |

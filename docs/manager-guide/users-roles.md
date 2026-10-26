@@ -26,10 +26,19 @@ and last login. Search and filter by status (**Active** / **Suspended**).
 | **Jobs** | The job board queue and settings |
 | **Gallery and media** | Albums and the media library |
 | **Essential membership notices** | Nothing on its own. Together with Communications: mark a campaign as an essential notice (sent even to members who switched news emails off) and send or schedule it |
+| **Log in as a member** | View the site as a member or group account to help them (**Log in as this member** on a member's page). Nothing else on its own: give it together with **Members and groups** so the admin can find the member. See [Log in as a member](members.md#log-in-as-a-member) |
 
 Only super admins can reach Design, Site settings, Membership settings,
 Custom fields, Email settings, Users and roles, the Audit log, Backups and
-System health.
+System health. Every admin can open the [help centre](help-centre.md) and
+their own **My profile**.
+
+The menu on the left only shows what an admin may open: a group (such as
+*Radio*) disappears completely when they have none of its screens.
+
+Existing admins do not get the two extra permissions (**Essential
+membership notices**, **Log in as a member**) automatically when the site is
+updated: tick them for the people who need them.
 
 ## Adding an admin
 
@@ -62,7 +71,7 @@ Click **Edit** next to an admin:
 You cannot change your own role or status: ask another super admin. That is
 why it is wise to have **at least two super admins**. Your own name, login
 email and password are changed on **My profile** (your name at the top
-right → **My profile**); see [First login](first-login.md#logging-in).
+right → **My profile**); see [First login](first-login.md#your-own-profile).
 
 Two-step login (2FA) is not available in this version. Make sure every admin
 uses a strong, unique password.

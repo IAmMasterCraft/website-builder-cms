@@ -34,6 +34,9 @@ a limit per network address), so you should rarely see fake sign-ups.
 - **Export CSV** / **Import CSV**: see below.
 - Tick members and click **Print selected cards**, or **Print all filtered
   cards**: see [Printing cards](#printing-cards).
+- **Log in as** (at the end of a row, with the *Log in as a member*
+  permission): see the site as that member. See
+  [Log in as a member](#log-in-as-a-member).
 
 ## A member's page
 
@@ -64,6 +67,10 @@ Click **Save member** after changes.
 - **Suspend** / **Reactivate**: a suspended member cannot log in.
 - **Email a password link**: sends a link to set a new password.
 
+**Log in as this member** (top right, only with the *Log in as a member*
+permission): see the site as this member sees it, to help with a question.
+See [Log in as a member](#log-in-as-a-member).
+
 **ID card**: **View / print card** (top right), the **card code** and its
 **check page**, and **Regenerate card code**. Do that if a card was lost:
 the old card's QR code stops working.
@@ -83,6 +90,69 @@ Super admins get an email. The member's page shows a notice with the date,
 and the list's status filter **Deletion requested** finds them. Check
 there is no reason to keep the data, then use **Remove member**. UK GDPR
 expects you to act within one month.
+
+## Log in as a member
+
+When a member says "I can't find my card" or "the page looks wrong", you can
+look at the site through their eyes instead of guessing. You need the
+**Log in as a member** permission (super admins always have it; see
+[Users and roles](users-roles.md#roles-and-permissions)).
+
+**Admin → Members** → the member → **Log in as this member** (or **Log in
+as** in the member's row of the list). For a group account: **Admin →
+Groups** → the group → **Log in as this group**.
+
+![Starting to view the site as a member](../images/admin-impersonate.webp)
+
+1. Read the summary of what you can and cannot do.
+2. Optionally type a **Reason** (for example "Cannot find her card"). It is
+   saved in the audit log.
+3. Tick **Allow changes** only if you need to edit the member's profile or
+   photo, or register them for (or cancel) an event on their behalf. Leave
+   it unticked to look without touching anything.
+4. For a **suspended** account, or one that has **not verified its email
+   yet**, Gather shows a warning; tick **I understand, view this account
+   anyway** to continue.
+5. Click **Log in as this member**. You land on the member's dashboard.
+
+While you view the site as the member, a black and yellow bar at the bottom
+of every page says **You are viewing as** *name (member number)*, whether
+changes are allowed, and when it ends. Click **Return to admin** in that bar
+when you are done: you go back to the member's page in the admin area.
+
+![Viewing the site as a member, with the bar at the bottom](../images/member-impersonation.webp)
+
+**What you can do**: everything a member can see, such as the dashboard,
+profile, member card, events, the job board, notices and downloads.
+
+**What is blocked** (you get a message explaining why):
+
+- changing the member's password or email address, deleting the account or
+  asking for it to be deleted, downloading their data;
+- email preferences, the news opt-in and unsubscribing;
+- liking, commenting, reporting and posting or editing jobs as the member;
+- the whole admin area, until you click **Return to admin**;
+- profile and photo changes and event registrations, unless you ticked
+  **Allow changes**.
+
+**Safety rules**:
+
+- It **ends automatically after 30 minutes**. Start again if you need more
+  time.
+- Only member and group accounts can be viewed. Admin accounts never can.
+- You cannot view a second member at the same time: return to admin first.
+- **Log out** while viewing as a member logs you out completely.
+- If your own admin session ends in the meantime (your password was changed
+  elsewhere, you were suspended, or a super admin removed your access), the
+  member view ends too and you are logged out. If only the permission was
+  removed, you go back to the admin area.
+- The **start**, the **end** (with how many minutes it lasted) and **every
+  change** you make are in the [audit log](audit-log.md) under your name,
+  marked *as* the member.
+- The member gets a short email saying an administrator viewed their
+  account. A super admin can switch this off under **Site settings → Help
+  and member support**; the wording is the email template **An administrator
+  viewed your account** (see [Email templates](email-templates.md)).
 
 ## ID cards
 

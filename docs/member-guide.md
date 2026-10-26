@@ -192,7 +192,19 @@ administrator looks at them.
 
 ![Your data](images/member-privacy.webp)
 
+## When an administrator looks at your account
+
+To help with a question ("I can't find my card"), an administrator can view
+the site as you see it, for up to 30 minutes. They cannot see or change your
+password or email address, delete your account, download your data or
+change your email choices, and they cannot like, comment or post as you.
+Everything they do is recorded. You normally get an email saying an
+administrator viewed your account; if you did not expect it, contact the
+organisation.
+
 ## Help
 
-Use the **Contact** page of your organisation's site, or reply to any email
-you received from it.
+This guide is on your organisation's website at `/help` (the **Help** link
+in the footer and in **My account**). For anything else, use the
+**Contact** page of your organisation's site, or reply to any email you
+received from it.

@@ -20,7 +20,9 @@ mkdirSync(outDir, { recursive: true });
 
 // [file name, url, options]  who: admin|member|null; vp: d (1280) | m (375);
 // h: capture height (page is cut there; default one screen); click/wait: selectors;
-// follow: open the first link matching a selector; vh: window height; scrollTo: selector.
+// follow: open the first link matching a selector; vh: window height; scrollTo: selector;
+// hover: selector to point at before the shot; ctx: separate browser context (state such as the
+// folded sidebar stays there); who 'imp': an admin viewing the site as the first member (B2).
 const D = 'd', M = 'm';
 const shots = [
   // Public site and members
@@ -115,18 +117,23 @@ const shots = [
   ['admin-backups', '/admin/backups', { vp: D, who: 'admin', h: 1300 }],
   ['admin-health', '/admin/health', { vp: D, who: 'admin', h: 1500 }],
   ['admin-health-paths', '/admin/health', { vp: D, who: 'admin', vh: 1000, scrollTo: 'h2:text-is("Server and paths")' }],
+  // Addendum B: sidebar groups, log in as a member, help centre
+  ['admin-impersonate', '/admin/members', { vp: D, who: 'admin', follow: 'a[href^="/admin/impersonate/"]' }],
+  ['admin-help', '/admin/help/manager-guide/members', { vp: D, who: 'admin' }],
+  ['admin-sidebar-icons', '/admin/members', { vp: D, who: 'admin', ctx: 'icons', vh: 640, click: '[data-sidebar-toggle]', hover: '.nav-group[data-group="members"] .nav-group-toggle' }],
+  ['member-impersonation', '/account', { vp: D, who: 'imp' }],
 ];
 
 const browser = await chromium.launch({ executablePath: chrome, headless: true });
 const contexts = {};
-async function context(who, vp) {
-  const key = `${who}-${vp}`;
+async function context(who, vp, extra = '') {
+  const key = `${who}-${vp}-${extra}`;
   if (contexts[key]) return contexts[key];
   const viewport = vp === M ? { width: 375, height: 812 } : { width: 1280, height: 800 };
   // (per-shot window heights are set below with setViewportSize)
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, colorScheme: 'light', reducedMotion: who === 'admin' ? 'no-preference' : 'reduce', hasTouch: vp === M, isMobile: vp === M });
-  await ctx.addInitScript(() => { try { localStorage.setItem('gather-admin-theme', 'light'); } catch { /* ignore */ } });
-  const cred = who === 'admin' ? adminLogin : who === 'member' ? memberLogin : '';
+  await ctx.addInitScript(() => { try { localStorage.setItem('gather-admin-theme', 'light'); localStorage.removeItem('gather-admin-nav'); } catch { /* ignore */ } });
+  const cred = who === 'admin' || who === 'imp' ? adminLogin : who === 'member' ? memberLogin : '';
   if (cred) {
     const [email, pass] = cred.split(':');
     const p = await ctx.newPage();
@@ -134,6 +141,14 @@ async function context(who, vp) {
     await p.fill('input[name=email]', email);
     await p.fill('input[name=password]', pass);
     await Promise.all([p.waitForNavigation(), p.click('form[action="/login"] button[type=submit]')]);
+    if (who === 'imp') {
+      // Start viewing the site as the first member in the list (read only).
+      await p.goto(base + '/admin/members');
+      const href = await p.getAttribute('a[href^="/admin/impersonate/"]', 'href');
+      await p.goto(base + href);
+      await p.fill('#imp-reason', 'Member asked where to find her card');
+      await Promise.all([p.waitForNavigation(), p.click('form[action^="/admin/impersonate/"] button[type=submit]')]);
+    }
     await p.close();
   }
   contexts[key] = ctx;
@@ -142,7 +157,7 @@ async function context(who, vp) {
 
 for (const [name, url, o] of shots) {
   if (filters.length && !filters.some((f) => name.includes(f))) continue;
-  const ctx = await context(o.who || 'guest', o.vp || D);
+  const ctx = await context(o.who || 'guest', o.vp || D, o.ctx || '');
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -160,6 +175,10 @@ for (const [name, url, o] of shots) {
   if (o.click) {
     const el = await page.$(o.click);
     if (el) { await el.click(); await page.waitForTimeout(900); } else { errors.push('click target not found: ' + o.click); }
+  }
+  if (o.hover) {
+    const el = await page.$(o.hover);
+    if (el) { await el.hover(); await page.waitForTimeout(500); } else { errors.push('hover target not found: ' + o.hover); }
   }
   if (o.scrollTo) {
     const el = await page.$(o.scrollTo);

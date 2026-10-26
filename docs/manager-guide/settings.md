@@ -59,6 +59,17 @@ never tracked.
 Web addresses of your Facebook, X, Instagram, YouTube and LinkedIn pages.
 Filled-in ones appear as icons in the top bar and footer.
 
+## Help and member support
+
+- **Member guide at /help**: who can read the [member guide](../member-guide.md)
+  on your website. **Everyone (public)** (the default) or **Logged-in
+  members only**. See [The help centre](help-centre.md#the-member-guide-on-your-website).
+- **Email the member when an admin views their account**: when an admin
+  uses [Log in as this member](members.md#log-in-as-a-member), the member
+  gets a short notice by email. On by default, and recommended: it keeps
+  members informed and discourages misuse. Change the wording under
+  **Email templates → An administrator viewed your account**.
+
 ## Logo
 
 Upload a logo (PNG or WebP with a transparent background works best). Tick

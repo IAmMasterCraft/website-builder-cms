@@ -24,6 +24,23 @@ the action, the item, details, and the network (IP) address.
 
 **Export CSV** downloads the filtered list as a spreadsheet.
 
+## Viewing the site as a member
+
+When an admin uses [Log in as this member](members.md#log-in-as-a-member),
+the log shows:
+
+- **impersonate_start**: who started, which member (with their number),
+  the reason typed, and whether changes were allowed;
+- every change made during the visit (for example **profile_update**,
+  **photo**, **register**, **cancel**), under the admin's name with a
+  yellow **as** *member's name* label (the CSV export has an **On behalf
+  of** column);
+- **impersonate_end**: how many minutes it lasted and how it ended
+  (returned to admin, ended automatically after 30 minutes, logged out, or
+  ended because the admin's session or permission was removed).
+
+Filter **Action** by *impersonate_start* to see every such visit.
+
 ## What it is for
 
 - Finding out who changed a page, or when a member was removed.
