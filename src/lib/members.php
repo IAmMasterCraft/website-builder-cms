@@ -200,8 +200,8 @@ function member_issue_number(string $scope, ?DateTimeImmutable $now = null): str
     $prefix = $scope === 'group' ? $s['group_prefix'] : $s['prefix'];
     $year = (int) ($now ?? new DateTimeImmutable('now', site_tz()))->setTimezone(site_tz())->format('Y');
     $period = preg_match('/\{YY(YY)?\}/', $format) ? (string) $year : 'all';
-    q('INSERT IGNORE INTO number_sequences (scope, period, last_value) VALUES (?, ?, 0)', [$scope, $period]);
-    $seq = (int) q_val('SELECT last_value FROM number_sequences WHERE scope = ? AND period = ? FOR UPDATE', [$scope, $period]);
+    q('INSERT IGNORE INTO number_sequences (scope, period, `last_value`) VALUES (?, ?, 0)', [$scope, $period]);
+    $seq = (int) q_val('SELECT `last_value` FROM number_sequences WHERE scope = ? AND period = ? FOR UPDATE', [$scope, $period]);
     for ($i = 0; $i < 1000; $i++) {
         $seq++;
         $number = member_number_build($format, $prefix, $year, $seq);
@@ -210,7 +210,7 @@ function member_issue_number(string $scope, ?DateTimeImmutable $now = null): str
             || q_val('SELECT id FROM members WHERE member_number = ?', [$number]) !== null
             || q_val('SELECT id FROM groups_orgs WHERE group_number = ?', [$number]) !== null;
         if (!$taken) {
-            q('UPDATE number_sequences SET last_value = ? WHERE scope = ? AND period = ?', [$seq, $scope, $period]);
+            q('UPDATE number_sequences SET `last_value` = ? WHERE scope = ? AND period = ?', [$seq, $scope, $period]);
             q('INSERT INTO issued_numbers (number, scope) VALUES (?, ?)', [$number, $scope]);
             return $number;
         }

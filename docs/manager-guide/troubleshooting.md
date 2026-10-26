@@ -15,6 +15,7 @@ and `storage/logs/cron.log`.
 | "Something went wrong on our side" | A server error. Technical: `storage/logs/php-error.log`. |
 | Every page except the home page says "not found" | Technical: the document root or `.htaccess` (see the install guide's troubleshooting). |
 | "This site is not configured correctly: the secret key…" | `app_key` in `config.php` is missing or too short. Technical: generate one (see [Install on a VPS](../install-vps.md#10-install)). |
+| The installer says "creating the tables failed" or "unfinished Gather installation" | Technical: read `storage/logs/php-error.log`, fix the cause, then submit the database step again with **Remove the unfinished installation** ticked. Gather needs MySQL 8.0+ or MariaDB 10.6+. |
 | The site keeps sending you to `/install` | `config.php` is missing or the installation was not finished. Technical. |
 | A page shows old content | You saved but did not **Publish** in the page builder; or your browser shows an old copy (reload). |
 | A page says you must log in | Its **Visibility** is **Members only** (or **Hidden**). |

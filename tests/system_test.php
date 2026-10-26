@@ -379,3 +379,61 @@ test('bin/package --zip (and --flat) builds matching archives without private fi
         }
     }
 });
+
+test('schema identifiers avoid MySQL 8 reserved words, or are quoted everywhere they are used', function (): void {
+    // MariaDB (local dev) accepts words that MySQL 8.0/8.4 reserves, e.g. last_value
+    // became a window function in MySQL 8.0 and broke installs on MySQL hosts.
+    $reserved = array_flip(explode(' ', 'ACCESSIBLE ADD ALL ALTER ANALYZE AND AS ASC ASENSITIVE BEFORE BETWEEN BIGINT BINARY BLOB BOTH BY CALL CASCADE CASE CHANGE CHAR CHARACTER CHECK COLLATE COLUMN CONDITION CONSTRAINT CONTINUE CONVERT CREATE CROSS CUBE CUME_DIST CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP CURRENT_USER CURSOR DATABASE DATABASES DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND DEC DECIMAL DECLARE DEFAULT DELAYED DELETE DENSE_RANK DESC DESCRIBE DETERMINISTIC DISTINCT DISTINCTROW DIV DOUBLE DROP DUAL EACH ELSE ELSEIF EMPTY ENCLOSED ESCAPED EXCEPT EXISTS EXIT EXPLAIN FALSE FETCH FIRST_VALUE FLOAT FLOAT4 FLOAT8 FOR FORCE FOREIGN FROM FULLTEXT FUNCTION GENERATED GET GRANT GROUP GROUPING GROUPS HAVING HIGH_PRIORITY HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND IF IGNORE IN INDEX INFILE INNER INOUT INSENSITIVE INSERT INT INT1 INT2 INT3 INT4 INT8 INTEGER INTERSECT INTERVAL INTO IO_AFTER_GTIDS IO_BEFORE_GTIDS IS ITERATE JOIN JSON_TABLE KEY KEYS KILL LAG LAST_VALUE LATERAL LEAD LEADING LEAVE LEFT LIKE LIMIT LINEAR LINES LOAD LOCALTIME LOCALTIMESTAMP LOCK LONG LONGBLOB LONGTEXT LOOP LOW_PRIORITY MANUAL MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT MATCH MAXVALUE MEDIUMBLOB MEDIUMINT MEDIUMTEXT MIDDLEINT MINUTE_MICROSECOND MINUTE_SECOND MOD MODIFIES NATURAL NOT NO_WRITE_TO_BINLOG NTH_VALUE NTILE NULL NUMERIC OF ON OPTIMIZE OPTIMIZER_COSTS OPTION OPTIONALLY OR ORDER OUT OUTER OUTFILE OVER PARALLEL PARTITION PERCENT_RANK PRECISION PRIMARY PROCEDURE PURGE QUALIFY RANGE RANK READ READS READ_WRITE REAL RECURSIVE REFERENCES REGEXP RELEASE RENAME REPEAT REPLACE REQUIRE RESIGNAL RESTRICT RETURN REVOKE RIGHT RLIKE ROW ROWS ROW_NUMBER SCHEMA SCHEMAS SECOND_MICROSECOND SELECT SENSITIVE SEPARATOR SET SHOW SIGNAL SMALLINT SPATIAL SPECIFIC SQL SQLEXCEPTION SQLSTATE SQLWARNING SQL_BIG_RESULT SQL_CALC_FOUND_ROWS SQL_SMALL_RESULT SSL STARTING STORED STRAIGHT_JOIN SYSTEM TABLE TABLESAMPLE TERMINATED THEN TINYBLOB TINYINT TINYTEXT TO TRAILING TRIGGER TRUE UNDO UNION UNIQUE UNLOCK UNSIGNED UPDATE USAGE USE USING UTC_DATE UTC_TIME UTC_TIMESTAMP VALUES VARBINARY VARCHAR VARCHARACTER VARYING VIRTUAL WHEN WHERE WHILE WINDOW WITH WRITE XOR YEAR_MONTH ZEROFILL'));
+    $skip = ['PRIMARY', 'KEY', 'UNIQUE', 'INDEX', 'CONSTRAINT', 'FOREIGN', 'FULLTEXT', 'CHECK'];
+    $unquoted = [];
+    $quotedReserved = [];
+    foreach (glob(BASE . '/migrations/*.sql') ?: [] as $file) {
+        $sql = (string) file_get_contents($file);
+        $name = basename($file);
+        preg_match_all('/CREATE TABLE(?: IF NOT EXISTS)?\s+(`?)(\w+)`?\s*\((.*?)\)\s*ENGINE/s', $sql, $tables, PREG_SET_ORDER);
+        foreach ($tables as $t) {
+            $defs = [[$t[1], $t[2]]];
+            foreach (explode("\n", $t[3]) as $line) {
+                if (preg_match('/^\s*(`?)(\w+)`?\s+[A-Z]/', $line, $m) && !in_array(strtoupper($m[2]), $skip, true)) {
+                    $defs[] = [$m[1], $m[2]];
+                }
+            }
+            foreach ($defs as [$tick, $ident]) {
+                if (isset($reserved[strtoupper($ident)])) {
+                    if ($tick === '') {
+                        $unquoted[] = "$name: $ident";
+                    } else {
+                        $quotedReserved[$ident] = true;
+                    }
+                }
+            }
+        }
+        preg_match_all('/\bADD(?: COLUMN)?\s+(`?)(\w+)`?\s+(?!KEY\b|INDEX\b|UNIQUE\b|CONSTRAINT\b|PRIMARY\b|FOREIGN\b|FULLTEXT\b)[A-Z]/', $sql, $adds, PREG_SET_ORDER);
+        foreach ($adds as $a) {
+            if (isset($reserved[strtoupper($a[2])])) {
+                if ($a[1] === '') {
+                    $unquoted[] = "$name: $a[2]";
+                } else {
+                    $quotedReserved[$a[2]] = true;
+                }
+            }
+        }
+    }
+    same([], $unquoted, 'reserved words used as unquoted table/column names');
+    // A reserved column must be backticked in every SQL string in the code too.
+    $bare = [];
+    $files = array_merge(glob(BASE . '/src/*/*.php') ?: [], glob(BASE . '/src/*/*/*.php') ?: [], glob(BASE . '/tests/*.php') ?: []);
+    foreach (array_keys($quotedReserved) as $ident) {
+        foreach ($files as $file) {
+            foreach (file($file) ?: [] as $i => $line) {
+                if (str_contains($line, $ident) && preg_match('/(?<![`\w])' . preg_quote($ident, '/') . '(?![`\w])/', $line) && !str_contains($line, "same([], \$unquoted")) {
+                    if ($file === __FILE__) {
+                        continue;
+                    }
+                    $bare[] = basename($file) . ':' . ($i + 1);
+                }
+            }
+        }
+    }
+    same([], $bare, 'reserved column names used without backticks');
+});

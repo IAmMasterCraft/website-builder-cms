@@ -169,8 +169,22 @@ $r = $admin->submit('/install', '/install/database', ['base_url' => 'javascript:
 check('installer validates the site address (S9)', $r['status'] === 422 && str_contains($r['body'], 'site address') && !is_file($configPath));
 $r = $admin->submit('/install', '/install/database', ['db_pass' => 'wrong-password'] + $dbFields);
 check('installer reports a bad database password without the driver message (S9)', $r['status'] === 422 && str_contains($r['body'], 'Could not connect') && !str_contains($r['body'], 'Access denied') && !str_contains($r['body'], 'SQLSTATE'));
+// An earlier attempt that failed half-way (e.g. a SQL error on one host) leaves
+// some tables and no accounts: the installer offers to clear them, nothing else.
+$scratch = db_connect($db);
+$scratch->exec('CREATE TABLE users (id INT PRIMARY KEY) ENGINE=InnoDB');
+$scratch->exec('CREATE TABLE schema_migrations (version VARCHAR(190) PRIMARY KEY) ENGINE=InnoDB');
+$scratch->exec('CREATE TABLE not_gather_keep_me (id INT PRIMARY KEY) ENGINE=InnoDB');
 $r = $admin->submit('/install', '/install/database', $dbFields);
-check('installer writes config.php and runs migrations', $r['status'] === 303 && $r['location'] === '/install/admin' && is_file($configPath));
+check('installer spots an unfinished installation and asks before clearing it', $r['status'] === 422 && str_contains($r['body'], 'unfinished Gather installation') && str_contains($r['body'], 'name="reset_unfinished"') && !is_file($configPath));
+$scratch->exec('INSERT INTO users (id) VALUES (1)');
+$r = $admin->submit('/install', '/install/database', ['reset_unfinished' => '1'] + $dbFields);
+check('installer never clears a database that has accounts', $r['status'] === 422 && str_contains($r['body'], 'already contains a Gather installation') && !is_file($configPath));
+$scratch->exec('DELETE FROM users');
+$r = $admin->submit('/install', '/install/database', ['reset_unfinished' => '1'] + $dbFields);
+check('installer clears the unfinished installation, writes config.php and runs migrations', $r['status'] === 303 && $r['location'] === '/install/admin' && is_file($configPath));
+check('clearing an unfinished installation leaves other tables alone', (int) $scratch->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'not_gather_keep_me'")->fetchColumn() === 1);
+$scratch->exec('DROP TABLE not_gather_keep_me');
 $other = new Browser($base);
 check('another session cannot continue the install', $other->get('/install/admin')['status'] === 403);
 $r = $admin->submit('/install/admin', '/install/admin', ['site_name' => 'Smoke Test Society', 'name' => 'Sam Smoke', 'email' => 'sam@example.test', 'password' => 'short']);

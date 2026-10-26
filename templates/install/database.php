@@ -18,5 +18,10 @@
     <?= view('install/_field', ['name' => 'db_user', 'label' => 'User', 'old' => $old, 'errors' => $errors, 'auto' => 'off']) ?>
     <?= view('install/_field', ['name' => 'db_pass', 'label' => 'Password', 'type' => 'password', 'old' => [], 'errors' => $errors, 'auto' => 'off']) ?>
   </div>
+  <?php if (!empty($unfinished)): ?>
+  <div class="field">
+    <label class="check-line"><input type="checkbox" name="reset_unfinished" value="1"> <span>Remove the unfinished installation (deletes only Gather's own tables in this database; possible only while no accounts exist)</span></label>
+  </div>
+  <?php endif ?>
   <div class="form-actions"><button class="btn accent" type="submit">Connect and create tables</button></div>
 </form>

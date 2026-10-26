@@ -28,7 +28,7 @@ CREATE TABLE user_tokens (
 CREATE TABLE number_sequences (
   scope VARCHAR(10) NOT NULL,
   period VARCHAR(10) NOT NULL,
-  last_value INT UNSIGNED NOT NULL DEFAULT 0,
+  `last_value` INT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (scope, period)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

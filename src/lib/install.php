@@ -109,6 +109,51 @@ function install_new_config(array $db, string $baseUrl): array
     ];
 }
 
+/** @return list<string> tables the migrations create, plus the migrations log */
+function install_schema_tables(): array
+{
+    $tables = ['schema_migrations'];
+    foreach (migration_files() as $file) {
+        preg_match_all('/CREATE TABLE(?: IF NOT EXISTS)?\s+`?(\w+)`?/i', (string) file_get_contents(BASE . '/migrations/' . $file), $m);
+        array_push($tables, ...$m[1]);
+    }
+    return array_values(array_unique($tables));
+}
+
+/**
+ * What the chosen database holds: 'empty' (no Gather tables), 'unfinished'
+ * (Gather tables from an earlier attempt but no accounts yet) or 'installed'.
+ */
+function install_db_state(PDO $pdo): string
+{
+    $present = $pdo->query('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()')->fetchAll(PDO::FETCH_COLUMN);
+    $ours = array_intersect(array_map('strtolower', array_map('strval', $present)), install_schema_tables());
+    if ($ours === []) {
+        return 'empty';
+    }
+    if (in_array('users', $ours, true) && (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() > 0) {
+        return 'installed';
+    }
+    return 'unfinished';
+}
+
+/** Drop the tables an unfinished install left behind (only Gather's own tables, only while no accounts exist). */
+function install_reset_unfinished(PDO $pdo): void
+{
+    if (install_db_state($pdo) !== 'unfinished') {
+        throw new RuntimeException('Only an unfinished installation with no accounts can be reset.');
+    }
+    $present = array_map('strtolower', array_map('strval', $pdo->query('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()')->fetchAll(PDO::FETCH_COLUMN)));
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+        foreach (array_intersect(install_schema_tables(), $present) as $table) {
+            $pdo->exec('DROP TABLE ' . db_ident($table));
+        }
+    } finally {
+        $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+    }
+}
+
 /** Mark the install finished: drops the token and locks the wizard. */
 function install_lock(): void
 {

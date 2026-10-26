@@ -105,7 +105,7 @@ test('member numbers are sequential, per year, and never reused', function (): v
     same('SEQ-26-0002', $issue('2026-12-31 23:00'));
     same('SEQ-27-0001', $issue('2027-01-01 09:00'), 'sequence restarts with the year');
     // Someone resets the counter: issued numbers are still skipped.
-    q("UPDATE number_sequences SET last_value = 0 WHERE scope = 'member' AND period = '2026'");
+    q("UPDATE number_sequences SET `last_value` = 0 WHERE scope = 'member' AND period = '2026'");
     same('SEQ-26-0003', $issue('2026-06-01'));
     // Delete a member who holds a number: it stays retired.
     $r = fixture_signup('retire-' . bin2hex(random_bytes(3)) . '@example.test');
@@ -113,7 +113,7 @@ test('member numbers are sequential, per year, and never reused', function (): v
     $number = (string) member_for_user($r['user_id'])['member_number'];
     same('SEQ-26-0004', $number);
     account_delete($r['user_id']);
-    q("UPDATE number_sequences SET last_value = 3 WHERE scope = 'member' AND period = '2026'");
+    q("UPDATE number_sequences SET `last_value` = 3 WHERE scope = 'member' AND period = '2026'");
     same('SEQ-26-0005', $issue('2026-08-01'), 'a deleted member\'s number is never handed out again');
     // Groups use their own prefix and counter.
     reset_member_settings(['prefix' => 'SEQ', 'group_prefix' => 'GRS']);

@@ -367,6 +367,7 @@ Without Terminal, use a temporary cron job:
 | Every page except the home page is "not found" | `.htaccess` files missing (hidden files were not uploaded or moved), or the host disabled `.htaccess` overrides |
 | "500 Internal Server Error" | cPanel → **Metrics → Errors** for the reason; then `gather/storage/logs/php-error.log` |
 | Installer says the folder is not writable | The Gather folder must be writable by your account (permissions `755` for folders); your host may run PHP as a different user, so ask them |
+| Installer says the database holds an "unfinished Gather installation" | An earlier attempt stopped while creating the tables. Fix the cause shown in the error log, submit again and tick **Remove the unfinished installation** (it deletes only Gather's own tables, and only while no accounts exist) |
 | `/install` asks for a token although you made one | The file must be `storage/install-token` (no extension) with at least 16 characters |
 | Emails do not arrive | **Email settings → Send a test email**; **Delivery log**; cPanel → **Email Deliverability**; your host may block outgoing SMTP to outside providers |
 | Cron never runs | **Cron Jobs**: the command must start with a PHP path, and your host's cron email (top of the Cron Jobs page) may show the error |

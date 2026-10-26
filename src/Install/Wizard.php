@@ -98,12 +98,36 @@ final class Wizard
                 $errors['form'] = 'Could not connect to the database. Check the host, port, database name, user and password, and that the database exists.';
             }
         }
-        if (!$errors && $pdo !== null && (int) $pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'users'")->fetchColumn() > 0) {
-            $errors['form'] = 'This database already contains a Gather installation. Use an empty database.';
+        $unfinished = false;
+        if (!$errors && $pdo !== null) {
+            $state = install_db_state($pdo);
+            if ($state === 'installed') {
+                $errors['form'] = 'This database already contains a Gather installation. Use an empty database.';
+            } elseif ($state === 'unfinished') {
+                if (($_POST['reset_unfinished'] ?? '') === '1') {
+                    install_reset_unfinished($pdo);
+                    error_log('Installer: removed the tables of an unfinished installation, from ' . client_ip());
+                } else {
+                    $unfinished = true;
+                    $errors['form'] = 'This database holds an unfinished Gather installation from an earlier attempt (no accounts were created). Tick "Remove the unfinished installation" below to clear its tables and start again.';
+                }
+            }
         }
         if ($errors) {
             unset($input['db_pass']);
-            self::page('database', 'database', ['errors' => $errors, 'old' => $input, 'checks' => self::checks()], 422);
+            self::page('database', 'database', ['errors' => $errors, 'old' => $input, 'checks' => self::checks(), 'unfinished' => $unfinished], 422);
+            return;
+        }
+        // Create the tables before writing config.php: if this fails, the
+        // installer is still open and the next attempt can reset the database.
+        db($pdo);
+        try {
+            migrate($pdo);
+        } catch (\PDOException $e) {
+            error_log('Installer: creating the tables failed: ' . $e->getMessage());
+            unset($input['db_pass']);
+            $code = (string) $e->getCode();
+            self::page('database', 'database', ['errors' => ['form' => 'The database connected, but creating the tables failed' . ($code !== '' ? ' (SQLSTATE ' . $code . ')' : '') . '. The details are in the PHP error log. If you fix the cause, submit again and tick "Remove the unfinished installation".'], 'old' => $input, 'checks' => self::checks(), 'unfinished' => true], 500);
             return;
         }
         $config = install_new_config($db, (string) $baseUrl);
@@ -113,8 +137,6 @@ final class Wizard
             self::page('database', 'database', ['errors' => ['form' => $e->getMessage()], 'old' => $input, 'checks' => self::checks()], 500);
             return;
         }
-        db($pdo);
-        migrate($pdo);
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_regenerate_id(true);
         }
