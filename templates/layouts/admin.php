@@ -2,16 +2,8 @@
 /** @var array $chrome @var string $content @var string $title */
 $c = $chrome;
 $u = $c['user'];
-// Highlight only the most specific matching link (e.g. /admin/radio/playlists, not /admin/radio too).
-$activeHref = '';
-foreach ($c['nav'] as $links) {
-    foreach ($links as [$href]) {
-        $match = $href === '/admin' ? $c['path'] === '/admin' : ($c['path'] === $href || str_starts_with($c['path'], $href . '/'));
-        if ($match && strlen($href) > strlen($activeHref)) {
-            $activeHref = $href;
-        }
-    }
-}
+// B1: the most specific matching link is current; its group is the "active parent".
+[$activeHref, $activeGroup] = $c['nav_active'];
 ?>
 <!doctype html>
 <html lang="en">
@@ -33,15 +25,26 @@ foreach ($c['nav'] as $links) {
     <div class="sidebar-head">
       <a class="logo" href="/admin"><span class="logo-mark" aria-hidden="true">G</span><span class="logo-text">Gather</span></a>
     </div>
-    <nav>
-      <?php foreach ($c['nav'] as $section => $links): ?>
-        <p class="nav-section"><?= e($section) ?></p>
-        <ul>
-          <?php foreach ($links as [$href, $label, $iconName]): $active = $href === $activeHref; ?>
-            <li><a href="<?= e($href) ?>"<?= $active ? ' aria-current="page"' : '' ?>><?= icon($iconName) ?><span><?= e($label) ?></span></a></li>
-          <?php endforeach ?>
-        </ul>
-      <?php endforeach ?>
+    <nav class="side-nav" aria-label="Admin sections">
+      <div class="nav-tools" data-nav-tools hidden>
+        <button type="button" class="nav-all" data-nav-all aria-controls="<?= e(implode(' ', array_map(static fn (array $g): string => 'nav-g-' . $g['key'], $c['nav']))) ?>"><?= icon('chevron-down', 'icon when-collapsed') ?><?= icon('chevron-up', 'icon when-expanded') ?><span data-nav-all-label>Expand all</span></button>
+      </div>
+      <ul class="nav-groups">
+        <?php foreach ($c['nav'] as $g): $isActive = $g['key'] === $activeGroup; $gid = 'nav-g-' . $g['key']; ?>
+          <li class="nav-group<?= $isActive ? ' is-active-parent' : '' ?>" data-group="<?= e($g['key']) ?>">
+            <p class="nav-section" id="<?= e($gid) ?>-label"><?= e($g['label']) ?></p>
+            <button type="button" class="nav-group-toggle" aria-expanded="<?= $isActive ? 'true' : 'false' ?>" aria-controls="<?= e($gid) ?>"><?= icon($g['icon'], 'icon group-icon') ?><span class="nav-group-label"><?= e($g['label']) ?><?= $isActive ? '<span class="sr-only"> (current section)</span>' : '' ?></span><?= icon('chevron-down', 'icon chev') ?></button>
+            <ul class="nav-items" id="<?= e($gid) ?>" aria-labelledby="<?= e($gid) ?>-label" data-label="<?= e($g['label']) ?>">
+              <?php foreach ($g['links'] as [$href, $label, $iconName]): $active = $href === $activeHref; ?>
+                <li><a href="<?= e($href) ?>"<?= $active ? ' aria-current="page"' : '' ?>><?= icon($iconName) ?><span><?= e($label) ?></span></a></li>
+              <?php endforeach ?>
+            </ul>
+          </li>
+        <?php endforeach ?>
+      </ul>
+      <ul class="nav-extra">
+        <li><a href="/admin/help"<?= str_starts_with($c['path'], '/admin/help') ? ' aria-current="page"' : '' ?>><?= icon('book-open') ?><span>Help centre</span></a></li>
+      </ul>
     </nav>
   </aside>
   <div class="main-col">

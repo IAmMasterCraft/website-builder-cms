@@ -10,13 +10,122 @@ function store(key, value) {
   try { localStorage.setItem(key, value); } catch { /* storage blocked */ }
 }
 
-// Sidebar: collapse on desktop, slide-over on mobile.
+// Sidebar groups (B1): each group header is a button that opens/closes its
+// links; the open state is remembered per browser (the group of the current
+// page always opens). In icon mode (folded sidebar, builder, design) a
+// group's links appear in a flyout on hover, focus or click.
+const desktop = window.matchMedia('(min-width: 64rem)');
+const navGroups = [...document.querySelectorAll('.nav-group')];
+const NAV_KEY = 'gather-admin-nav';
+const iconMode = () => desktop.matches && (root.classList.contains('sidebar-collapsed') || document.body.classList.contains('builder-mode') || document.body.classList.contains('design-mode'));
+const navState = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(NAV_KEY) ?? '{}');
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch { return {}; }
+})();
+const toggleOf = (group) => group.querySelector('.nav-group-toggle');
+const allButton = document.querySelector('[data-nav-all]');
+
+function syncNavAria() {
+  navGroups.forEach((g) => {
+    const open = iconMode() ? g.classList.contains('flyout-open') : g.classList.contains('is-open');
+    toggleOf(g)?.setAttribute('aria-expanded', String(open));
+  });
+  if (allButton) {
+    const allOpen = navGroups.every((g) => g.classList.contains('is-open'));
+    allButton.dataset.state = allOpen ? 'expanded' : 'collapsed';
+    const label = allButton.querySelector('[data-nav-all-label]');
+    if (label) label.textContent = allOpen ? 'Collapse all' : 'Expand all';
+  }
+}
+function setGroupOpen(group, open, remember) {
+  group.classList.toggle('is-open', open);
+  group.classList.toggle('is-closed', !open);
+  if (remember) {
+    navState[group.dataset.group] = open;
+    store(NAV_KEY, JSON.stringify(navState));
+  }
+}
+function closeFlyout(group) {
+  group.classList.remove('flyout-open');
+  if (iconMode()) toggleOf(group)?.setAttribute('aria-expanded', 'false');
+}
+// Keep a flyout inside the window (groups near the bottom open upwards).
+function placeFlyout(group) {
+  const list = group.querySelector('.nav-items');
+  if (!list) return;
+  list.style.top = '';
+  const r = list.getBoundingClientRect();
+  if (r.height > 0 && r.bottom > window.innerHeight - 8) {
+    list.style.top = `${Math.max(8 - r.top, window.innerHeight - 8 - r.bottom)}px`;
+  }
+}
+function showFlyout(group) {
+  if (!iconMode()) return;
+  navGroups.forEach((g) => { if (g !== group) closeFlyout(g); });
+  group.classList.remove('flyout-closed');
+  group.classList.add('flyout-open');
+  toggleOf(group)?.setAttribute('aria-expanded', 'true');
+  placeFlyout(group);
+}
+
+navGroups.forEach((group) => {
+  setGroupOpen(group, group.classList.contains('is-active-parent') || navState[group.dataset.group] === true, false);
+  const btn = toggleOf(group);
+  btn?.addEventListener('click', () => {
+    if (iconMode()) {
+      if (group.classList.contains('flyout-open') && !group.classList.contains('flyout-closed')) {
+        group.classList.add('flyout-closed');
+        closeFlyout(group);
+      } else {
+        showFlyout(group);
+      }
+      return;
+    }
+    setGroupOpen(group, !group.classList.contains('is-open'), true);
+    syncNavAria();
+  });
+  group.addEventListener('mouseenter', () => showFlyout(group));
+  group.addEventListener('mouseleave', () => { if (iconMode() && !group.contains(document.activeElement)) closeFlyout(group); });
+  group.addEventListener('focusin', () => { if (!group.classList.contains('flyout-closed')) showFlyout(group); });
+  group.addEventListener('focusout', (e) => {
+    if (!(e.relatedTarget instanceof Node) || !group.contains(e.relatedTarget)) {
+      group.classList.remove('flyout-closed');
+      closeFlyout(group);
+    }
+  });
+  group.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && iconMode() && group.classList.contains('flyout-open')) {
+      e.stopPropagation();
+      group.classList.add('flyout-closed');
+      closeFlyout(group);
+      btn?.focus();
+    }
+  });
+});
+if (allButton && navGroups.length > 1) {
+  allButton.closest('[data-nav-tools]')?.removeAttribute('hidden');
+  allButton.addEventListener('click', () => {
+    const open = !navGroups.every((g) => g.classList.contains('is-open'));
+    navGroups.forEach((g) => setGroupOpen(g, open, true));
+    syncNavAria();
+  });
+}
+syncNavAria();
+desktop.addEventListener('change', () => { navGroups.forEach((g) => g.classList.remove('flyout-open', 'flyout-closed')); syncNavAria(); });
+
+// Sidebar: collapse to icons on desktop, slide-over on mobile.
+const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+if (sidebarToggle && desktop.matches && root.classList.contains('sidebar-collapsed')) sidebarToggle.setAttribute('aria-expanded', 'false');
 document.querySelector('[data-sidebar-toggle]')?.addEventListener('click', (e) => {
   const btn = e.currentTarget;
-  if (window.matchMedia('(min-width: 64rem)').matches) {
+  if (desktop.matches) {
     const collapsed = root.classList.toggle('sidebar-collapsed');
     store('gather-admin-sidebar', collapsed ? 'collapsed' : 'open');
     btn.setAttribute('aria-expanded', String(!collapsed));
+    navGroups.forEach((g) => g.classList.remove('flyout-open', 'flyout-closed'));
+    syncNavAria();
   } else {
     const open = document.body.classList.toggle('sidebar-open');
     btn.setAttribute('aria-expanded', String(open));

@@ -65,19 +65,25 @@ function footer_cta_settings(): array
     ];
 }
 
-/** Admin sidebar: sections visible to the current user. */
+/**
+ * Admin sidebar (B1): groups of links visible to the current user. Each
+ * group has a key (for remembering its open state), a label and an icon
+ * (shown alone when the sidebar is folded to icons). Links the user may
+ * not open are left out; empty groups disappear.
+ * @return list<array{key:string,label:string,icon:string,links:list<array{0:string,1:string,2:string}>}>
+ */
 function admin_nav(?array $user): array
 {
-    $sections = [
-        'Site' => [
+    $groups = [
+        ['site', 'Site', 'globe', [
             ['/admin', 'Overview', 'home', null],
             ['/admin/pages', 'Pages', 'file', 'pages_menus'],
             ['/admin/templates', 'Templates', 'layout-template', 'pages_menus'],
             ['/admin/menus', 'Menus', 'menu', 'pages_menus'],
             ['/admin/layout', 'Header and footer', 'panels', 'pages_menus'],
             ['/admin/media', 'Media library', 'image', 'gallery_media'],
-        ],
-        'Content' => [
+        ]],
+        ['content', 'Content', 'layers', [
             ['/admin/posts', 'Posts', 'pen', 'content'],
             ['/admin/categories', 'Categories', 'tag', 'content'],
             ['/admin/events', 'Events', 'calendar', 'events'],
@@ -88,46 +94,76 @@ function admin_nav(?array $user): array
             ['/admin/awards', 'Awards', 'award', 'content'],
             ['/admin/faqs', 'FAQ', 'help', 'content'],
             ['/admin/branches', 'Branches', 'pin', 'content'],
-            ['/admin/groups', 'Groups', 'building', 'members'],
-        ],
-        'Members' => [
+        ]],
+        ['members', 'Members', 'id-card', [
             ['/admin/members', 'Members', 'users', 'members'],
+            ['/admin/groups', 'Groups', 'building', 'members'],
+            ['/admin/custom-fields', 'Custom fields', 'text-input', 'super_admin'],
+            ['/admin/settings/membership', 'Membership settings', 'settings', 'super_admin'],
+        ]],
+        ['community', 'Community', 'heart-handshake', [
             ['/admin/jobs', 'Jobs', 'briefcase', 'jobs'],
             ['/admin/comments', 'Comments', 'message', 'content'],
-            ['/admin/custom-fields', 'Custom fields', 'text-input', 'super_admin'],
-        ],
-        'Communications' => [
-            ['/admin/campaigns', 'Campaigns', 'mail', 'communications'],
+        ]],
+        ['communications', 'Communications', 'mail', [
+            ['/admin/campaigns', 'Campaigns', 'send', 'communications'],
             ['/admin/notices', 'Notices', 'bell', 'communications'],
             ['/admin/inbox', 'Inbox', 'inbox', 'communications'],
             ['/admin/email-templates', 'Email templates', 'file', 'communications'],
-            ['/admin/email-log', 'Delivery log', 'send', 'communications'],
+            ['/admin/email-log', 'Delivery log', 'activity', 'communications'],
             ['/admin/email-suppressions', 'Suppression list', 'mail-x', 'communications'],
-        ],
-        'Radio' => [
-            ['/admin/radio', 'Library', 'radio', 'radio'],
+            ['/admin/settings/email', 'Email settings', 'settings', 'super_admin'],
+        ]],
+        ['radio', 'Radio', 'radio', [
+            ['/admin/radio', 'Library', 'music', 'radio'],
             ['/admin/radio/playlists', 'Playlists', 'list-music', 'radio'],
-            ['/admin/radio/schedule', 'Schedule', 'calendar', 'radio'],
-        ],
-        'System' => [
+            ['/admin/radio/schedule', 'Schedule', 'calendar-days', 'radio'],
+        ]],
+        ['system', 'System', 'settings', [
             ['/admin/design', 'Design', 'palette', 'super_admin'],
             ['/admin/settings', 'Site settings', 'settings', 'super_admin'],
-            ['/admin/settings/membership', 'Membership settings', 'id-card', 'super_admin'],
-            ['/admin/settings/email', 'Email settings', 'mail', 'super_admin'],
             ['/admin/users', 'Users and roles', 'shield', 'super_admin'],
             ['/admin/audit', 'Audit log', 'history', 'super_admin'],
             ['/admin/backups', 'Backups', 'hard-drive', 'super_admin'],
             ['/admin/health', 'System health', 'activity', 'super_admin'],
-        ],
+        ]],
     ];
     $out = [];
-    foreach ($sections as $title => $links) {
-        $visible = array_values(array_filter($links, static fn (array $l): bool => $l[3] === null || user_can($user, $l[3])));
+    foreach ($groups as [$key, $label, $groupIcon, $links]) {
+        $visible = [];
+        foreach ($links as [$href, $text, $icon, $perm]) {
+            if ($perm === null || user_can($user, $perm)) {
+                $visible[] = [$href, $text, $icon];
+            }
+        }
         if ($visible !== []) {
-            $out[$title] = $visible;
+            $out[] = ['key' => $key, 'label' => $label, 'icon' => $groupIcon, 'links' => $visible];
         }
     }
     return $out;
+}
+
+/** The most specific sidebar link for a path ('' when none matches), and its group key. */
+function admin_nav_active(array $nav, string $path): array
+{
+    // Screens without their own link highlight the link they belong to.
+    foreach (['/admin/impersonate' => '/admin/members'] as $prefix => $owner) {
+        if (str_starts_with($path, $prefix . '/')) {
+            $path = $owner;
+        }
+    }
+    $href = '';
+    $group = '';
+    foreach ($nav as $g) {
+        foreach ($g['links'] as [$h]) {
+            $match = $h === '/admin' ? $path === '/admin' : ($path === $h || str_starts_with($path, $h . '/') || str_starts_with($path, $h . '.'));
+            if ($match && strlen($h) > strlen($href)) {
+                $href = $h;
+                $group = $g['key'];
+            }
+        }
+    }
+    return [$href, $group];
 }
 
 function admin_chrome(): array
@@ -139,7 +175,8 @@ function admin_chrome(): array
     return [
         'site_name' => (string) setting('site.name', 'Gather'),
         'user' => $user,
-        'nav' => admin_nav($user),
+        'nav' => $nav = admin_nav($user),
+        'nav_active' => admin_nav_active($nav, request_path()),
         'path' => request_path(),
         'flash' => flash(),
         'notifications' => $unread + $pendingComments + $pendingJobs,
