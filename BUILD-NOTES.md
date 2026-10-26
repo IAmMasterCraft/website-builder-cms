@@ -644,7 +644,8 @@ uses Bold).
   only, static caching with fallback to PHP for `/theme.css` etc., 330 MB
   body, ACME location). Not run through `nginx -t` (no nginx here).
 - `bin/package --zip` (matching zip) and `--zip --flat` (no top folder, for
-  extracting into `public_html`); `docs/` no longer shipped. Test builds all
+  extracting into `public_html`); `docs/` no longer shipped (shipped again
+  since Addendum B3: the help centre reads it). Test builds all
   three and compares their file lists.
 - Install token page explains the file-manager route (no terminal).
 - UI fixes found while documenting: admin `.fields`/`.field`/`.media-field`
@@ -659,9 +660,119 @@ uses Bold).
   email-settings shots from a neutral copy at `/Users/Shared/gather` so no home
   path shows; the OS user name is replaced in shots). DEPLOY.md is now a
   pointer to `docs/`.
-- Known gap: admins have no profile page to change their own password; the
+- Known gap (fixed since: `/admin/profile`, see the second review): admins had no profile page to change their own password; the
   docs point to "Forgotten your password?" or a super admin's "Send password
   link".
+
+**Addendum B: admin navigation, log in as member, docs on the web, 2026-10-26**
+- B1 sidebar groups (`admin_nav()` now returns groups with key, label, icon
+  and links; `admin_nav_active()` picks the most specific link and its
+  group): Site, Content, Members (members, groups, custom fields,
+  membership settings), Community (jobs, comments), Communications (now
+  also email settings), Radio, System; Help centre pinned below. Without
+  JS each group is a plain label over an always-open list; with JS
+  (`html.js`, set before paint) the label is hidden and a
+  `<button aria-expanded aria-controls>` toggles the list. The current
+  page's group is the active parent (bold, accent bar, "(current
+  section)" for screen readers) and always opens; other groups follow
+  `localStorage['gather-admin-nav']` (`{key: bool}`, try/catch), applied
+  before paint through `data-nav-open` on `<html>` + one CSS rule per
+  group key, so there is no flash. Expand all / Collapse all (JS only).
+  Icon mode (folded sidebar, builder, design at >= 64rem): one icon per
+  group, the active one highlighted; hover, focus or click shows a
+  flyout of the group's links (labelled by `data-label`, kept inside the
+  window, Escape closes and returns focus; `aria-expanded` follows the
+  flyout). Groups without permitted links disappear. 375 px: the same
+  groups in the off-canvas sidebar.
+- B2 log in as a member (`src/lib/impersonation.php`, migration
+  `018_impersonation`): permission key `impersonate` (10 keys; super
+  admins always; existing admins are not granted it). Entry points:
+  member page, "Log in as" row action in the members list, group edit
+  screen ("Log in as this group" when the group has a login). GET
+  `/admin/impersonate/{userId}` = confirmation (reason, "allow changes",
+  "I understand" tick required for suspended and unverified accounts);
+  staff accounts get a 422 refusal page without a form. POST starts:
+  `impersonations` row (admin, user, reason, allow_changes, IP, start,
+  expiry), audit `impersonate_start` (written as the admin before the
+  switch), `session_regenerate_id(true)`, `$_SESSION['imp']` holds the
+  admin id, the admin's session version, expiry (start + 1800 s, hard,
+  never extended), return path and display name/number; the session user
+  becomes the member (with the member's session version), CSRF token
+  renewed, optional notice email (template `impersonation_notice`,
+  setting `impersonation.notify`, default on). `current_user()` accepts
+  a suspended member only while it is the impersonated account.
+  `impersonation_guard()` runs in `public/index.php` before routing for
+  every request: admin row missing / not staff / suspended / session
+  version changed -> both sessions end (logged out, `/login`);
+  expired -> back to the admin (flash); permission removed -> back to
+  `/admin`; member gone or their own session version changed -> back to
+  the admin. Then the rules: `/admin*`, data export, job post/edit
+  forms, email-change confirmation and join/reset pages are 403 even for
+  GET; every POST is 403 (default deny: password, email, deletion,
+  preferences/consent/unsubscribe, likes, comments, reports, jobs,
+  contact form, notice read marks, login) except `/impersonation/stop`,
+  `/logout` and, with "allow changes", `/account/profile`,
+  `/account/photo`, event register and registration cancel. The 403
+  pages say why and to use "Return to admin". `audit()` records the
+  admin as actor and the member in the new `audit_log.on_behalf_of`
+  while impersonating (audit screen shows "as Name", CSV column "On
+  behalf of"); member profile/photo saves now always write an audit
+  entry, event registrations do while impersonating. Stop (POST + CSRF)
+  regenerates the id, restores the admin's `user_id`/`sv`, audits
+  `impersonate_end` with minutes and reason, and returns to the member's
+  admin page (or `/admin` without the members permission). Logging out
+  while impersonating ends both. Banner partial
+  (`partials/impersonation_banner.php`) in the site and print layouts:
+  fixed bottom bar, near-black with yellow (theme-independent),
+  read-only/changes allowed and end time, hidden in print.
+- B3 help centre: `Core\Markdown` (small CommonMark-like renderer:
+  ATX headings with GitHub-style unique ids, paragraphs, nested tight/loose
+  lists, fenced code, tables with alignment, blockquotes and `[!NOTE]`
+  notes, rules, inline code, links, autolinks, images, emphasis; no raw
+  HTML: every text fragment is escaped, links only http(s)/mailto/relative/
+  #anchor (anything else, or a resolver refusal, renders as text), images
+  only via the caller's resolver),
+  `src/lib/help.php` (manifest of every guide in reading order with
+  sections, link/image rewriting per mode admin/public/static, cache in
+  `storage/cache/help/` keyed by file mtime/size + `HELP_RENDER_VERSION`,
+  stale copies removed; search over h1-h3 sections, every term must
+  match, heading hits weigh more, snippets returned as text parts and
+  escaped in the template; contextual help map from admin paths to guide
+  pages/anchors; static export). Routes: `/admin/help`,
+  `/admin/help/search`, `/admin/help/images/{name}`,
+  `/admin/help/{slug}` (staff only), `/help` and `/help/images/{name}`
+  (setting `help.member_guide`: public (default) or members). Image names
+  are allow-listed (`[a-z0-9][a-z0-9_-]*.(webp|png|jpe?g|gif)`, no SVG)
+  and realpath-checked inside `docs/images`; served with `send_file()`.
+  `help_link_insert()` (called by `render()` for admin pages with status
+  < 400) puts a "Help" pill after the first `<h1>` of a `.page-head`; a
+  unit test checks every admin GET route maps to an existing guide and
+  anchor. Doc headings never take ids the layouts use (`main`,
+  `sidebar`...). `/help` and Help links in the footer and account menu;
+  `help` and `impersonation` are reserved page slugs. Site settings
+  panel "Help and member support" (only saved when the form carries
+  `support_panel`, so older forms leave the values alone).
+- `bin/docs-html [folder]` -> `dist/docs-site/` (refuses folders outside
+  `dist/`, empties it first): one HTML page per guide from
+  `templates/help/static_page.php` with relative links, `docs.css`
+  (light/dark), copied images, `.nojekyll`. `docs/docs-website.md`
+  explains GitHub Pages via a `gh-pages` branch (worktree) or an Actions
+  workflow (shown in the doc, not shipped active).
+- Packaging: `docs/` ships again (help centre needs it) with
+  `docs/.htaccess` (`Require all denied`); package test expects the docs
+  and `bin/docs-html`; `dev-tools/htaccess-check.sh` probes
+  `/docs/README.md`, a docs image, `templates/help/docs.css` and
+  `bin/docs-html` as private paths.
+- Docs: new `manager-guide/help-centre.md` and `docs-website.md`; first
+  login (menu groups, folding, flyouts, own profile section), members
+  ("Log in as a member"), users and roles (10 permissions), settings,
+  audit log, email templates, how do I, member guide, both indexes and
+  README. All screenshots that show the admin sidebar regenerated (89
+  WebP, 5.1 MB; health and email-settings shots again from a neutral
+  copy at `/Users/Shared/gather`, removed afterwards); new
+  `admin-help`, `admin-impersonate`, `admin-sidebar-icons`,
+  `member-impersonation`. `doc-shots.mjs` gained `hover`, `ctx` and an
+  `imp` viewer.
 
 ## Tests
 
@@ -673,6 +784,53 @@ essential-notice tests) and 10 smoke checks.
 Addendum A6 added `tests/design_test.php` (6 tests) and
 `tests/smoke_design.php` (45 checks); builder/smoke counts updated for 29
 section types and 5 themes.
+
+Addendum B (2026-10-26): `bin/check` = lint + **329 unit/DB tests** +
+**548 smoke checks**, all green. New: `tests/impersonation_test.php` (16:
+10th permission key, staff refused, session switch with the admin kept
+apart, audit entries and the impersonations row, notice email on/off,
+nested refused, confirmation for suspended/unverified, every restricted
+route 403 read-only and the allow-changes set, on-behalf-of audit,
+return, 30-minute expiry, revoked/suspended/demoted admin logs everyone
+out, permission or member removed, logout ends both, banner), 
+`tests/help_test.php` (14: Markdown escaping, unsafe link schemes,
+resolver-only images, unique GitHub ids and reserved ids, lists/tables/
+notes/emphasis, manifest = docs files, every link/anchor/image in docs/
+resolves, per-mode link rewriting, image name allow-list, cache reuse and
+rebuild, search, a help page for every admin GET route, static export
+with every relative link checked, B1 nav groups by permission and active
+group), `tests/smoke_addendum_b.php` (54 checks through php -S: sidebar
+markup and permission filtering, help pages/search/escaping/images/
+refused paths/contextual links, member vs visitor access and the
+members-only setting, impersonation start with session-id change, banner,
+notice email, audit, 14 restricted routes 403 with nothing changed,
+stop 419 without token then 303 with another new session id, allow-changes
+profile edit logged on behalf, revoked admin session, logout, group
+entry point). The permission matrix (now 10 keys + none) and the CSRF
+enumeration cover the new routes automatically; the audit-coverage test
+exempts `Admin\Impersonation::start` (its audit entry is written by
+`impersonation_start()`). Package test: `docs/` and `bin/docs-html` must
+ship. `dev-tools/htaccess-check.sh`: all Apache checks pass, incl. the
+docs paths.
+
+Addendum B visual and accessibility checks (headless Chrome, Bold theme on
+the dev site): 1440 and 375 px screenshots of the members list, member
+page, confirmation screen, help centre page and search, all groups
+expanded / collapsed, icon mode with hover, keyboard focus (Tab into the
+flyout, Escape closes it, focus back on the icon, aria-expanded false) and
+the builder flyout, the off-canvas sidebar, impersonated dashboard, home
+(with the open mobile menu, banner stays on top), card, 403 page and
+"Return to admin", `/help` and its search; no horizontal overflow, no
+console errors; without JavaScript every group list is open and no toggle
+shows. axe-core 4.11 (WCAG 2.0/2.1/2.2 A+AA + best practice):
+`dev-tools/audit.mjs` on 52 page runs (public `/`, `/help`, `/help?q=`,
+`/events`, member pages, 17 admin screens incl. members, member page,
+both confirmation states, help index/guides/search with and without
+results, settings, audit, users, group edit, radio, builder, design; 1366
+and 375 px, admin dark mode) plus 31 runs of interactive states (all
+groups expanded/collapsed, icon mode, hover and keyboard flyouts, off-
+canvas, six pages while impersonating at 1440 light/dark and 375 px):
+**0 violations of any impact**.
 
 A6 visual, accessibility and performance checks (2026-10-25, Bold theme
 on the dev site, headless Chrome via the suite's playwright-core):
@@ -971,6 +1129,28 @@ playwright-core; tools in `dev-tools/`, never deployed):
   opting in again. SES requires a topic ARN allow-list before the endpoint
   is enabled.
 
+- Addendum B1: "use the current grouping as the base" -> the six old
+  groups plus Community (jobs, comments, split from Members); Groups,
+  Custom fields and Membership settings moved to Members, Email settings
+  to Communications, so each topic is in one place. The active group
+  always opens on page load, even if the user folded it earlier (spec:
+  "expanded automatically"); remembered states apply to the other groups.
+- Addendum B2: `impersonate` stands alone (the spec names only that key);
+  the docs recommend giving it with Members so the admin can find people.
+  Event *registration* is treated like registration cancel (allowed only
+  with "allow changes"), and the contact form and notice read marks are
+  blocked too (read-only community actions). The notice email is sent at
+  the start. "Never extends the admin's own session lifetime": Gather has
+  no absolute session lifetime (idle limit 8 h via the session GC); the
+  30-minute limit is hard (from the start, never refreshed), the admin's
+  session version is checked on every request, and the admin's session
+  continues unchanged afterwards. Unverified accounts need the same
+  confirmation tick as suspended ones (the spec allows them "for support"
+  but also says "unless the admin confirms").
+- Addendum B3: `/help` shows the member guide only (manager and install
+  guides stay staff-only in the app and public on GitHub/the static
+  site). Links from a guide to files outside `docs/` render as text.
+
 ## Code review fixes (2026-10-24)
 
 Two reviews (security-reviewer, plain-php-reviewer) after phase 7. Every
@@ -1220,6 +1400,16 @@ already ran before any DNS lookup). Migration `017_review_fixes`
   ahead when the demo is loaded during the autumn clock change (existing
   local-time behaviour). Lighthouse was run on the PHP built-in server
   (now gzipping like Apache), not on a real host.
+
+- Addendum B gaps: expiry is enforced on the next request (no client-side
+  countdown or automatic redirect at minute 30; the banner shows the end
+  time). While impersonating, a blocked POST answers 403 before its CSRF
+  check (still refused either way). The Markdown renderer covers what the
+  docs use (no setext headings, reference-style links, footnotes or raw
+  HTML by design); help search is plain substring matching with
+  heading weighting (no stemming or fuzzy matching); the static docs site
+  has no search box. Sidebar group state is per browser (localStorage), not
+  per account. Not checked with a real screen reader.
 
 ## Acceptance check (spec §14), final status
 
