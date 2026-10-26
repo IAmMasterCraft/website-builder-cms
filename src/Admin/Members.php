@@ -42,7 +42,7 @@ final class Members
         media_preload(array_column($rows, 'photo_media_id'));
         $s = member_settings();
         render('admin/members_index', [
-            'title' => 'Members', 'rows' => $rows, 'filters' => $f, 'total' => $total, 'page' => $page, 'per' => self::PER,
+            'title' => 'Members', 'rows' => $rows, 'can_impersonate' => user_can(current_user(), 'impersonate'), 'filters' => $f, 'total' => $total, 'page' => $page, 'per' => self::PER,
             'settings' => $s, 'fields' => array_values(array_filter(custom_fields('member'), static fn (array $cf): bool => $cf['type'] !== 'date')),
             'counts' => [
                 'active' => (int) q_val("SELECT COUNT(*) FROM members m JOIN users u ON u.id = m.user_id WHERE u.status = 'active' AND u.role = 'member'"),
@@ -121,7 +121,7 @@ final class Members
             $values['cf_' . $f['field_key']] = $cv[(int) $f['id']] ?? '';
         }
         render('admin/member_edit', [
-            'title' => member_full_name($m), 'm' => $m, 'values' => $old['values'] + $values, 'errors' => $old['errors'],
+            'title' => member_full_name($m), 'm' => $m, 'can_impersonate' => user_can(current_user(), 'impersonate'), 'values' => $old['values'] + $values, 'errors' => $old['errors'],
             'settings' => member_settings(), 'fields' => custom_fields('member'),
             'photo' => media_find($m['photo_media_id'] ? (int) $m['photo_media_id'] : null),
             'notes' => q_all('SELECT n.*, u.display_name AS author FROM member_notes n LEFT JOIN users u ON u.id = n.author_id WHERE n.member_id = ? ORDER BY n.created_at DESC, n.id DESC', [$m['id']]),

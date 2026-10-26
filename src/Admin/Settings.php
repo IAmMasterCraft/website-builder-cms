@@ -37,6 +37,7 @@ final class Settings
         }
         $a = (array) setting('analytics', []);
         $current += ['analytics_provider' => (string) ($a['provider'] ?? ''), 'analytics_id' => (string) ($a['site_id'] ?? ''), 'cookie_banner' => (string) ($a['banner'] ?? '')];
+        $current += ['help_member_guide' => help_member_guide_access(), 'impersonation_notify' => (bool) setting('impersonation.notify', true) ? '1' : ''];
         render('admin/settings', [
             'title' => 'Site settings', 'values' => $values + $current, 'errors' => $errors,
             'logo' => media_find((int) setting('site.logo_media_id', 0) ?: null),
@@ -99,6 +100,7 @@ final class Settings
         $siteId = input('analytics_id');
         $banner = input('cookie_banner');
         $v += ['analytics_provider' => $provider, 'analytics_id' => $siteId, 'cookie_banner' => $banner];
+        $v += ['help_member_guide' => input('help_member_guide'), 'impersonation_notify' => input('impersonation_notify')];
         if ($provider !== '') {
             $def = analytics_providers()[$provider] ?? null;
             if ($def === null) {
@@ -137,6 +139,11 @@ final class Settings
         setting_set('org.charity_number', $v['charity_number']);
         setting_set('social', $social);
         setting_set('analytics', ['provider' => $provider, 'site_id' => $provider === '' ? '' : $siteId, 'banner' => $banner]);
+        // B2/B3 (only when the form had the panel, so older forms leave these alone)
+        if (input('support_panel') === '1') {
+            setting_set('help.member_guide', input('help_member_guide') === 'members' ? 'members' : 'public');
+            setting_set('impersonation.notify', input('impersonation_notify') === '1');
+        }
         if ($logoId !== null) {
             setting_set('site.logo_media_id', $logoId);
         } elseif (input('logo_remove') === '1') {

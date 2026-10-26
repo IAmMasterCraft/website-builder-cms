@@ -173,6 +173,14 @@ function email_template_defs(): array
             'button' => ['label' => 'Open the admin', 'url' => 'admin_url'],
             'extra_vars' => ['admin_url'],
         ],
+        'impersonation_notice' => [
+            'label' => 'An administrator viewed your account', 'group' => 'Membership',
+            'description' => 'Sent to a member or group when an admin uses “Log in as this member” (only while the site setting “Email the member when an admin views their account” is on).',
+            'placeholders' => ['first_name' => 'First name (or contact person)', 'date' => 'Date and time the admin started', 'admin_name' => 'Name of the admin', 'account_url' => 'Link to the account'],
+            'subject' => 'An administrator viewed your {site_name} account',
+            'body' => "Hello {first_name},\n\nThis is a short notice that an administrator of {site_name} viewed your account on {date}, usually to help with a question or check that something works.\n\nThey could see your account pages as you see them. They could not see or change your password.\n\nIf you were not expecting this, please contact us.",
+            'button' => ['label' => 'Go to my account', 'url' => 'account_url'],
+        ],
         'job_pending' => [
             'label' => 'Job awaiting approval (to admins)', 'group' => 'Admin',
             'description' => 'Sent to job moderators when a member posts a job that needs approval.',

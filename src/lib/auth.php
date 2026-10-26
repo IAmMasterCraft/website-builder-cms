@@ -11,7 +11,7 @@ const LOGIN_MAX_FAILURES_IP = 50;
 const LOGIN_MAX_FAILURES_EMAIL = 30;
 const LOGIN_LOCK_SECONDS = 900;
 
-/** Admin permission keys (§2, plus essential_notices from the second security review) => label. */
+/** Admin permission keys (§2, plus essential_notices from the second security review and impersonate from Addendum B2) => label. */
 function admin_permissions(): array
 {
     return [
@@ -25,6 +25,8 @@ function admin_permissions(): array
         'gallery_media'  => 'Gallery and media',
         // Review 2: a flag on top of Communications, no area of its own.
         'essential_notices' => 'Essential membership notices (with Communications: mark campaigns as essential and send them)',
+        // Addendum B2: view the site as a member or group account (support).
+        'impersonate' => 'Log in as a member (view the site as a member or group account for support)',
     ];
 }
 
@@ -64,7 +66,11 @@ function current_user(bool $refresh = false): ?array
     // A session whose version is older than the account's was ended by a
     // password reset/change, suspension, verification or email change.
     $version = isset($_SESSION['sv']) && is_int($_SESSION['sv']) ? $_SESSION['sv'] : null;
-    if ($user === null || $user['status'] === 'suspended' || $version !== (int) $user['session_version']) {
+    // B2: an admin may view a suspended member's account (after confirming);
+    // impersonation_guard() keeps that session tied to the admin's own.
+    $imp = $_SESSION['imp'] ?? null;
+    $viewedByAdmin = is_array($imp) && ($imp['member_id'] ?? null) === $id;
+    if ($user === null || ($user['status'] === 'suspended' && !$viewedByAdmin) || $version !== (int) $user['session_version']) {
         unset($_SESSION['user_id'], $_SESSION['sv']);
         return null;
     }
@@ -294,12 +300,27 @@ function complete_password_reset(string $token, string $password): bool
     return true;
 }
 
+/**
+ * Write an audit entry for the current user. While an admin views the site
+ * as a member (B2), the admin is recorded as the actor and the member in
+ * on_behalf_of, so every change made "as" the member is traceable.
+ */
 function audit(string $action, string $itemType = '', ?int $itemId = null, string $summary = ''): void
 {
-    $user = current_user();
+    $imp = impersonation();
+    if ($imp !== null) {
+        audit_as($imp['admin_id'], $imp['member_id'], $action, $itemType, $itemId, $summary);
+        return;
+    }
+    audit_as(current_user()['id'] ?? null, null, $action, $itemType, $itemId, $summary);
+}
+
+/** Audit entry with an explicit actor (and optionally the account acted for). */
+function audit_as(?int $userId, ?int $onBehalfOf, string $action, string $itemType = '', ?int $itemId = null, string $summary = ''): void
+{
     q(
-        'INSERT INTO audit_log (user_id, action, item_type, item_id, summary, ip) VALUES (?, ?, ?, ?, ?, ?)',
-        [$user['id'] ?? null, $action, $itemType, $itemId, mb_substr($summary, 0, 250), client_ip()]
+        'INSERT INTO audit_log (user_id, on_behalf_of, action, item_type, item_id, summary, ip) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$userId, $onBehalfOf, $action, $itemType, $itemId, mb_substr($summary, 0, 250), client_ip()]
     );
 }
 

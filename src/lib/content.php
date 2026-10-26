@@ -20,7 +20,7 @@ const RESERVED_SLUGS = [
     'admin', 'account', 'api', 'news', 'blog', 'projects', 'events', 'gallery', 'downloads', 'leaders',
     'awards', 'faq', 'branches', 'groups', 'radio', 'jobs', 'join', 'login', 'logout', 'forgot-password',
     'reset', 'verify', 'search', 'install', 'media', 'uploads', 'assets', 'theme', 'feed', 'sitemap',
-    'robots', 'feed.xml', 'events.ics', 'sitemap.xml', 'robots.txt', 'favicon.ico',
+    'robots', 'feed.xml', 'events.ics', 'sitemap.xml', 'robots.txt', 'favicon.ico', 'help', 'impersonation',
 ];
 
 /** The common fields every "full" content type has. */

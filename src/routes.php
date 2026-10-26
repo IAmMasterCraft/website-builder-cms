@@ -89,6 +89,11 @@ function app_routes(): Router
     $r->post('/comments/{id:\d+}/delete', [Site\Engagement::class, 'delete']);
     $r->post('/comments/{id:\d+}/report', [Site\Engagement::class, 'report']);
 
+    // B2: "Return to admin" from the impersonation banner; B3: member guide
+    $r->post('/impersonation/stop', [Site\Impersonation::class, 'stop']);
+    $r->get('/help', [Site\Help::class, 'show']);
+    $r->get('/help/images/{name:[a-z0-9][a-z0-9_-]*\.(?:webp|png|jpe?g|gif)}', [Site\Help::class, 'image']);
+
     // Radio (§6)
     $r->get('/radio', [Site\Radio::class, 'page']);
     $r->get('/api/radio/now-playing', [Site\Radio::class, 'nowPlaying']);
@@ -286,6 +291,17 @@ function app_routes(): Router
     $r->get('/admin/backups/files/' . $backup, [Admin\Backups::class, 'file']);
     $r->post('/admin/backups/files/' . $backup . '/delete', [Admin\Backups::class, 'delete']);
     $r->get('/admin/health', [Admin\Health::class, 'index']);
+
+    // Addendum B2: log in as a member (impersonation)
+    $r->get('/admin/impersonate/{id:\d+}', [Admin\Impersonation::class, 'confirm']);
+    $r->post('/admin/impersonate/{id:\d+}', [Admin\Impersonation::class, 'start']);
+
+    // Addendum B3: help centre (docs/ rendered in the admin)
+    $docImage = '{name:[a-z0-9][a-z0-9_-]*\.(?:webp|png|jpe?g|gif)}';
+    $r->get('/admin/help', [Admin\Help::class, 'index']);
+    $r->get('/admin/help/search', [Admin\Help::class, 'search']);
+    $r->get('/admin/help/images/' . $docImage, [Admin\Help::class, 'image']);
+    $r->get('/admin/help/{slug:[a-z0-9-]+(?:/[a-z0-9-]+)?}', [Admin\Help::class, 'page']);
 
     // Generic content CRUD (type key validated against the registry)
     $type = '{type:[a-z-]+}';

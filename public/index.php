@@ -58,6 +58,9 @@ try {
                 header('Content-Security-Policy: ' . csp_header_value($analytics));
             }
         }
+        // B2: the one central check while an admin views the site as a member
+        // (expiry, revoked admin session, restricted actions).
+        impersonation_guard($method, $path);
         $match = app_routes()->match($method, $path);
     }
     [$class, $action] = $match['handler'];

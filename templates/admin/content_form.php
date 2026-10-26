@@ -17,6 +17,7 @@ $fieldData = ['values' => $values, 'errors' => $errors, 'options' => $options, '
     <?php if ($row && $key === 'leader-groups'): ?><a class="btn ghost" href="/admin/leaders/new?group=<?= (int) $row['id'] ?>"><?= icon('plus') ?> Add leader</a><?php endif ?>
     <?php if ($row && $key === 'pages'): ?><a class="btn accent" href="/admin/pages/<?= (int) $row['id'] ?>/builder"><?= icon('layers') ?> <?= $isBuilderPage ? 'Open page builder' : 'Build with sections' ?></a><?php endif ?>
     <?php if ($public_url): ?><a class="btn ghost" href="<?= e($public_url) ?>" target="_blank" rel="noopener"><?= icon('eye') ?> View</a><?php endif ?>
+    <?php if (!empty($impersonate_user)): ?><a class="btn ghost" href="/admin/impersonate/<?= (int) $impersonate_user ?>"><?= icon('eye') ?> Log in as this group</a><?php endif ?>
   </div>
 </div>
 <?php if ($errors): ?><div class="flash error" role="alert"><?= icon('alert') ?><span>Please fix the <?= e(pluralise(count($errors), 'problem')) ?> below.</span></div><?php endif ?>

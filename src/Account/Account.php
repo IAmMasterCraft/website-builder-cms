@@ -129,6 +129,8 @@ final class Account
             custom_values_save('member_field_values', 'member_id', (int) $member['id'], $custom);
             q('UPDATE users SET display_name = ? WHERE id = ?', [mb_substr($profile['first_name'] . ' ' . $profile['last_name'], 0, 120), $user['id']]);
         });
+        // While an admin views the account (B2), audit() records the admin acting on behalf of the member.
+        audit('profile_update', 'member', (int) $member['id'], 'profile details');
         flash('Profile saved.');
         redirect('/account/profile');
     }
@@ -180,6 +182,7 @@ final class Account
         db_update('groups_orgs', (int) $group['id'], $data);
         custom_values_save('group_field_values', 'group_id', (int) $group['id'], $custom);
         q('UPDATE users SET display_name = ? WHERE id = ?', [mb_substr($g['name'], 0, 120), $user['id']]);
+        audit('profile_update', 'group', (int) $group['id'], 'group profile');
         flash('Group profile saved.');
         redirect('/account/profile');
     }
@@ -212,6 +215,7 @@ final class Account
                 q('DELETE FROM media WHERE id = ?', [$old['id']]);
             }
         }
+        audit('photo', 'member', (int) $member['id'], 'profile photo replaced');
         flash('Photo updated. Your member card now shows the new photo.');
         redirect('/account/profile');
     }

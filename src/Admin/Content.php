@@ -118,6 +118,8 @@ final class Content
             'errors' => $errors,
             'row' => $row,
             'public_url' => $row ? self::publicUrl($type, $row) : null,
+            // B2: a group with a login account can be viewed as that account.
+            'impersonate_user' => $row && $type['key'] === 'groups' && !empty($row['user_id']) && user_can(current_user(), 'impersonate') ? (int) $row['user_id'] : null,
         ], 'admin', $status);
     }
 

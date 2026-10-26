@@ -207,6 +207,9 @@ final class Events
             flash($errors['form'] ?? 'Please check the registration form.', 'error');
             redirect($back);
         }
+        if (is_impersonating()) {
+            audit('register', 'registration', (int) $id, (string) $event['title']); // B2: made by the admin on behalf of the member
+        }
         $ticket = $input['ticket_id'] !== '' ? q_one('SELECT name, price_label FROM event_tickets WHERE id = ?', [(int) $input['ticket_id']]) : null;
         $where = trim(implode(', ', array_filter([(string) $event['venue_name'], (string) $event['venue_address']])));
         // Guests type any address: confirmations to one address are limited per day.

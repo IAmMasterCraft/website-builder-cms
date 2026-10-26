@@ -33,9 +33,10 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
 <meta name="analytics" content="<?= e(json_attr(['provider' => $c['analytics']['provider'], 'id' => $c['analytics']['id'], 'script' => $c['analytics']['script'], 'consent' => $c['analytics']['cookies']])) ?>">
 <?php endif ?>
 </head>
-<?php $overlay = (bool) page_flag('overlay_header') && !$c['flash']; $bodyClasses = trim(($body_class ?? '') . ($c['topbar'] ? ' has-topbar' : '') . ($overlay ? ' has-overlay-header' : '')); ?>
+<?php $overlay = (bool) page_flag('overlay_header') && !$c['flash']; $bodyClasses = trim(($body_class ?? '') . ($c['topbar'] ? ' has-topbar' : '') . ($overlay ? ' has-overlay-header' : '') . (is_impersonating() ? ' is-impersonating' : '')); ?>
 <body class="<?= e($bodyClasses) ?>">
 <a class="skip-link" href="#main">Skip to content</a>
+<?= view('partials/impersonation_banner') ?>
 <?php if ($c['topbar']): ?>
 <div class="topbar" role="region" aria-label="Contact details and account links">
   <div class="container">
@@ -178,6 +179,7 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
         <li><a href="/feed.xml">RSS</a></li>
         <li><a href="/sitemap.xml">Sitemap</a></li>
         <li><a href="/search">Search</a></li>
+        <?php if (help_member_guide_access() === 'public' || $c['user'] !== null): ?><li><a href="/help">Help</a></li><?php endif ?>
         <?php if ($c['analytics'] !== null && $c['analytics']['cookies']): ?><li><button type="button" class="link-button" data-cookie-settings hidden>Cookie settings</button></li><?php endif ?>
         <li><a class="to-top" href="#main" data-to-top>Back to top <?= icon('arrow-up') ?></a></li>
       </ul>

@@ -1431,8 +1431,58 @@ details.report[open] summary { margin-bottom: var(--s-3); }
   .rp-dot { animation: none; }
 }
 @media print {
-  .topbar, .site-header, .site-footer, .share, .skip-link, .hero-ui, .scroll-cue { display: none !important; }
+  .topbar, .site-header, .site-footer, .share, .skip-link, .hero-ui, .scroll-cue, .imp-banner { display: none !important; }
+  body.is-impersonating { padding-bottom: 0; }
   .reveal-ready [data-reveal] { opacity: 1; transform: none; }
 }
+
+/* ---- B2: "viewing as a member" banner -----------------------------------------
+   Fixed to the bottom of every page, above everything (mobile menu, cookie
+   banner); fixed high-contrast colours independent of the theme. */
+.imp-banner { position: fixed; inset: auto 0 0 0; z-index: 1000; background: #111317; color: #fff; border-top: 4px solid #ffd43b; box-shadow: 0 -8px 24px rgb(0 0 0 / 0.25); font: 500 0.95rem/1.4 var(--font-body); }
+.imp-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; max-width: 80rem; margin-inline: auto; padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px)); }
+.imp-banner p { display: flex; align-items: flex-start; gap: 0.5rem; margin: 0; color: #fff; }
+.imp-banner p .icon { flex: none; width: 20px; height: 20px; margin-top: 1px; color: #ffd43b; }
+.imp-banner strong { color: #ffd43b; font-weight: 700; }
+.imp-meta { color: #d6dae0; white-space: nowrap; }
+.imp-banner form { margin: 0; }
+.imp-return { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 44px; padding: 0.45rem 1rem; border: 0; border-radius: 6px; background: #ffd43b; color: #111317; font: 700 0.95rem/1 var(--font-body); cursor: pointer; }
+.imp-return:hover { background: #ffe066; }
+.imp-return:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.imp-return .icon { width: 18px; height: 18px; }
+body.is-impersonating { padding-bottom: 6.5rem; }
+@media (min-width: 48rem) { body.is-impersonating { padding-bottom: 4.5rem; } }
+body.is-impersonating .cookie-banner { bottom: 4.5rem; }
+
+/* ---- B3: member guide (/help) ----------------------------------------------- */
+.help-page { display: grid; gap: var(--s-6, 2.5rem); padding-block: var(--section-y-compact) var(--section-y, 5rem); }
+@media (min-width: 64rem) { .help-page { grid-template-columns: 15rem minmax(0, 1fr); align-items: start; } .help-aside { position: sticky; top: calc(var(--header-h, 4.5rem) + 1rem); } }
+.help-aside h2 { font-size: var(--step-0); margin-bottom: var(--s-2, 0.5rem); }
+.help-aside ul { list-style: none; margin: 0 0 var(--s-4, 1.5rem); padding: 0; display: grid; gap: 0.15rem; }
+.help-aside a { display: block; padding: 0.35rem 0.6rem; border-radius: 8px; color: var(--c-ink-soft, var(--c-ink)); text-decoration: none; }
+.help-aside a:hover { background: var(--c-surface-2); color: var(--c-ink); }
+.help-search { display: flex; gap: 0.5rem; margin-bottom: var(--s-4, 1.5rem); }
+.help-search input { flex: 1; min-width: 0; }
+.help-search-results h2 { font-size: var(--step-2); }
+@media (max-width: 63.99rem) { .help-aside nav ul { display: block; columns: 2 10rem; column-gap: var(--s-4); } .help-aside nav li { break-inside: avoid; } }
+.help-results { list-style: none; padding: 0; margin: 0 0 var(--s-5, 2rem); display: grid; gap: var(--s-3, 1rem); }
+.help-results mark { background: color-mix(in srgb, var(--c-highlight, #ffd43b) 45%, transparent); color: inherit; padding: 0 0.1em; border-radius: 3px; }
+.md { max-width: 46rem; }
+.md h1 { font-size: var(--step-4); }
+.md h2 { font-size: var(--step-2); margin-top: var(--s-6, 2.5rem); }
+.md h3 { font-size: var(--step-1); margin-top: var(--s-5, 2rem); }
+.md :is(h1, h2, h3) { scroll-margin-top: calc(var(--header-h, 4.5rem) + 1rem); }
+.md p, .md li { line-height: 1.65; }
+.md ul, .md ol { padding-left: 1.4rem; margin: 0 0 var(--s-3, 1rem); }
+.md li + li { margin-top: 0.3rem; }
+.md img { border-radius: 12px; box-shadow: var(--shadow-2, 0 4px 16px rgb(0 0 0 / 0.12)); margin-block: var(--s-3, 1rem); }
+.md code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; padding: 0.1em 0.35em; border-radius: 5px; background: var(--c-surface-2); overflow-wrap: anywhere; }
+.md pre { overflow-x: auto; padding: 1rem; border-radius: 10px; background: #15181d; color: #f1f3f5; }
+.md pre code { background: none; padding: 0; color: inherit; overflow-wrap: normal; }
+.md-table { overflow-x: auto; margin-block: var(--s-3, 1rem); }
+.md table { border-collapse: collapse; width: 100%; font-size: 0.95em; }
+.md th, .md td { text-align: left; vertical-align: top; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--c-line, rgb(0 0 0 / 0.12)); }
+.md .md-note { margin-block: var(--s-3, 1rem); padding: 0.8rem 1rem; border-left: 4px solid var(--c-accent); border-radius: 8px; background: var(--c-surface-2); }
+.md .md-note-title { font-weight: 700; margin-bottom: 0.25rem; }
 
 } /* @layer site */

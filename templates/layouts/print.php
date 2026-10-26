@@ -13,7 +13,8 @@
 <link rel="stylesheet" href="<?= e(asset('assets/css/card.css')) ?>">
 <script type="module" src="<?= e(asset('assets/js/card.js')) ?>"></script>
 </head>
-<body class="print-body">
+<body class="print-body<?= is_impersonating() ? ' is-impersonating' : '' ?>">
+<?= view('partials/impersonation_banner') ?>
 <?= $content ?>
 </body>
 </html>

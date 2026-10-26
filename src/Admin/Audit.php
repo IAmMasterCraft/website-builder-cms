@@ -66,7 +66,7 @@ final class Audit
         $f = self::filters();
         [$where, $params] = self::where($f);
         $pg = paging(50);
-        $rows = q_all("SELECT a.*, u.display_name, u.email FROM audit_log a LEFT JOIN users u ON u.id = a.user_id $where ORDER BY a.id DESC LIMIT {$pg['per']} OFFSET {$pg['offset']}", $params);
+        $rows = q_all("SELECT a.*, u.display_name, u.email, ob.display_name AS on_behalf_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN users ob ON ob.id = a.on_behalf_of $where ORDER BY a.id DESC LIMIT {$pg['per']} OFFSET {$pg['offset']}", $params);
         $total = (int) q_val("SELECT COUNT(*) FROM audit_log a $where", $params);
         render('admin/audit', [
             'title' => 'Audit log', 'rows' => $rows, 'total' => $total, 'filters' => $f, 'page' => $pg['page'], 'per' => $pg['per'],
@@ -84,11 +84,11 @@ final class Audit
         header('Content-Disposition: attachment; filename="audit-log-' . gmdate('Ymd') . '.csv"');
         header('Cache-Control: no-store');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['When (UTC)', 'Who', 'Email', 'Action', 'Item type', 'Item id', 'Summary', 'IP'], ',', '"', '');
-        $stmt = q("SELECT a.*, u.display_name, u.email FROM audit_log a LEFT JOIN users u ON u.id = a.user_id $where ORDER BY a.id DESC LIMIT 50000", $params);
+        fputcsv($out, ['When (UTC)', 'Who', 'Email', 'On behalf of', 'Action', 'Item type', 'Item id', 'Summary', 'IP'], ',', '"', '');
+        $stmt = q("SELECT a.*, u.display_name, u.email, ob.display_name AS on_behalf_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN users ob ON ob.id = a.on_behalf_of $where ORDER BY a.id DESC LIMIT 50000", $params);
         while ($r = $stmt->fetch()) {
             fputcsv($out, array_map(static fn ($v): string => csv_safe((string) $v), [
-                $r['created_at'], $r['display_name'] ?? 'System', $r['email'] ?? '', $r['action'], $r['item_type'], $r['item_id'] ?? '', $r['summary'], $r['ip'],
+                $r['created_at'], $r['display_name'] ?? 'System', $r['email'] ?? '', $r['on_behalf_of'] !== null ? ($r['on_behalf_name'] ?? '#' . $r['on_behalf_of']) : '', $r['action'], $r['item_type'], $r['item_id'] ?? '', $r['summary'], $r['ip'],
             ]), ',', '"', '');
         }
         fclose($out);

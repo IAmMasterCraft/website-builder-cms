@@ -31,9 +31,9 @@ $pages = (int) ceil($total / $per);
   <form method="get" action="/admin/members/cards" target="_blank">
     <div class="table-wrap">
       <table class="data">
-        <thead><tr><th scope="col"><span class="sr-only">Select</span></th><th scope="col">Member</th><th scope="col">Number</th><th scope="col">Status</th><th scope="col">Type</th><th scope="col">Region</th><th scope="col">Joined</th></tr></thead>
+        <thead><tr><th scope="col"><span class="sr-only">Select</span></th><th scope="col">Member</th><th scope="col">Number</th><th scope="col">Status</th><th scope="col">Type</th><th scope="col">Region</th><th scope="col">Joined</th><?php if ($can_impersonate): ?><th scope="col"><span class="sr-only">Actions</span></th><?php endif ?></tr></thead>
         <tbody>
-        <?php if (!$rows): ?><tr><td colspan="7" class="empty-row">No members found.</td></tr><?php endif ?>
+        <?php if (!$rows): ?><tr><td colspan="<?= $can_impersonate ? 8 : 7 ?>" class="empty-row">No members found.</td></tr><?php endif ?>
         <?php foreach ($rows as $m): $photo = media_find($m['photo_media_id'] ? (int) $m['photo_media_id'] : null); ?>
           <tr>
             <td><?php if ($m['member_number'] && $m['status'] === 'active'): ?><input type="checkbox" name="ids[]" value="<?= (int) $m['id'] ?>" aria-label="Select <?= e(member_full_name($m)) ?> for printing"><?php endif ?></td>
@@ -43,6 +43,7 @@ $pages = (int) ceil($total / $per);
             <td><?= e($m['membership_type']) ?></td>
             <td><?= e($m['region'] ?? '—') ?></td>
             <td class="tabular"><?= e(fmt_date((string) $m['joined'])) ?></td>
+            <?php if ($can_impersonate): ?><td class="actions-cell"><a class="btn small ghost" href="/admin/impersonate/<?= (int) $m['user_id'] ?>"><?= icon('eye') ?><span>Log in as</span><span class="sr-only"> <?= e(member_full_name($m)) ?></span></a></td><?php endif ?>
           </tr>
         <?php endforeach ?>
         </tbody>

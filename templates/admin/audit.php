@@ -26,7 +26,7 @@ $pages = (int) ceil($total / $per);
     <?php foreach ($rows as $r): ?>
       <tr>
         <td class="tabular nowrap"><?= e(fmt_datetime((string) $r['created_at'])) ?></td>
-        <td><?php if ($r['user_id'] !== null): ?><a href="<?= e(url_with('/admin/audit', $query, ['user' => (string) $r['user_id'], 'page' => null])) ?>"><?= e($r['display_name'] ?? ('#' . $r['user_id'])) ?></a><?php else: ?><span class="muted">System</span><?php endif ?></td>
+        <td><?php if ($r['user_id'] !== null): ?><a href="<?= e(url_with('/admin/audit', $query, ['user' => (string) $r['user_id'], 'page' => null])) ?>"><?= e($r['display_name'] ?? ('#' . $r['user_id'])) ?></a><?php else: ?><span class="muted">System</span><?php endif ?><?php if ($r['on_behalf_of'] !== null): ?><br><span class="badge warn">as <?= e($r['on_behalf_name'] ?? ('#' . $r['on_behalf_of'])) ?></span><?php endif ?></td>
         <td><span class="badge"><?= e($r['action']) ?></span></td>
         <td><?= e($r['item_type']) ?><?= $r['item_id'] !== null ? ' <span class="muted tabular">#' . (int) $r['item_id'] . '</span>' : '' ?></td>
         <td class="small-text"><?= e($r['summary']) ?></td>

@@ -57,7 +57,11 @@ final class Auth
     public static function logout(array $p): void
     {
         csrf_check();
-        logout_user();
+        if (is_impersonating()) {
+            impersonation_end('logout', false); // B2: logging out ends both the member view and the admin session
+        } else {
+            logout_user();
+        }
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
         }

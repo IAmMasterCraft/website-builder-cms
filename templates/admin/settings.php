@@ -40,6 +40,13 @@ $f = static function (string $k, string $label, string $type = 'text', string $h
         <?= $f('analytics_id', 'Site ID', 'text', 'Plausible: your domain (example.org). Fathom: the site ID (ABCDEFGH). Google Analytics 4: the measurement ID (G-…).') ?>
         <?= $f('cookie_banner', 'Cookie banner text', 'textarea', 'Shown with “Accept analytics” and “No thanks” buttons when the provider sets cookies. Leave empty for the default wording.') ?>
       </div></section>
+      <section class="panel"><div class="panel-head"><h2>Help and member support</h2></div><div class="panel-body fields">
+        <input type="hidden" name="support_panel" value="1">
+        <div class="field"><label for="s-help_member_guide">Member guide at /help</label><select id="s-help_member_guide" name="help_member_guide" aria-describedby="s-help_member_guide-hint"><option value="public"<?= $v('help_member_guide') !== 'members' ? ' selected' : '' ?>>Everyone (public)</option><option value="members"<?= $v('help_member_guide') === 'members' ? ' selected' : '' ?>>Logged-in members only</option></select>
+          <p class="hint" id="s-help_member_guide-hint">The member guide explains joining, the dashboard, the member card and email preferences. Staff always have the full help centre under Admin → Help centre.</p></div>
+        <div class="field"><label class="check"><input type="checkbox" name="impersonation_notify" value="1"<?= $v('impersonation_notify') === '1' ? ' checked' : '' ?> aria-describedby="s-impersonation_notify-hint"> Email the member when an admin views their account</label>
+          <p class="hint" id="s-impersonation_notify-hint">Sent when someone uses “Log in as this member”. The wording is the email template “An administrator viewed your account”. Recommended: on.</p></div>
+      </div></section>
       <section class="panel"><div class="panel-head"><h2>Social links</h2></div><div class="panel-body fields">
         <div class="field-row"><?php foreach (\Admin\Settings::SOCIAL as $k => $l): ?><?= $f('social_' . $k, $l, 'url') ?><?php endforeach ?></div>
       </div></section>
