@@ -174,6 +174,7 @@ function admin_chrome(): array
     $pendingJobs = (int) q_val("SELECT COUNT(*) FROM jobs WHERE status = 'pending'");
     return [
         'site_name' => (string) setting('site.name', 'Gather'),
+        'tile_url' => favicon_tile_url(), // C2: the site's icon tile next to its name
         'user' => $user,
         'nav' => $nav = admin_nav($user),
         'nav_active' => admin_nav_active($nav, request_path()),

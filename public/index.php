@@ -44,10 +44,12 @@ $method = request_method();
 
 try {
     if (!app_installed()) {
-        if (!str_starts_with($path, '/install')) {
+        // C1: the installer shows the default site icon too.
+        $isIcon = (bool) preg_match('#^/(favicon\.ico|apple-touch-icon\.png|site\.webmanifest|icons/[a-f0-9]{16}/)#', $path);
+        if (!$isIcon && !str_starts_with($path, '/install')) {
             redirect('/install');
         }
-        $match = install_routes()->match($method, $path);
+        $match = $isIcon ? app_routes()->match($method, $path) : install_routes()->match($method, $path);
     } else {
         if (str_starts_with($path, '/install')) {
             throw new HttpException(404);

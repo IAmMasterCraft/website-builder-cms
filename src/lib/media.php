@@ -529,6 +529,9 @@ function media_references(int $id): array
     if ((int) setting('site.logo_media_id', 0) === $id) {
         $add('Site logo', 'Settings', '/admin/settings', 'public');
     }
+    if ((int) setting('site.favicon_media_id', 0) === $id) {
+        $add('Site icon (favicon)', 'Settings', '/admin/settings', 'public');
+    }
     foreach (['card.background_media_id' => 'Member card background', 'card.signature_media_id' => 'Member card signature'] as $key => $label) {
         if ((int) setting($key, 0) === $id) {
             $add($label, 'Membership settings', '/admin/settings/membership', 'members');

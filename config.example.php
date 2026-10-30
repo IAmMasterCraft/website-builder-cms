@@ -27,7 +27,7 @@ return [
         // 'file' writes every email to storage/mail/*.eml (development).
         'driver'     => 'file',
         'from_email' => 'no-reply@example.org',
-        'from_name'  => 'Gather',
+        'from_name'  => '', // empty = the site name from Settings
         // Only if the bounce mailbox server is on this machine or your private network:
         // allows a loopback/private address as the mailbox host (refused otherwise).
         // 'allow_internal_mailbox_host' => true,

@@ -11,7 +11,7 @@ $f = static function (string $k, string $label, string $type = 'text', string $h
         . ($err ? '<p class="error" id="s-' . e($k) . '-err">' . e($err) . '</p>' : '') . '</div>';
 };
 ?>
-<div class="page-head"><div><h1>Site settings</h1><p>Identity, contact details, donations and logo.</p></div></div>
+<div class="page-head"><div><h1>Site settings</h1><p>Identity, contact details, donations, logo and site icon.</p></div></div>
 <?php if ($errors): ?><div class="flash error" role="alert"><?= icon('alert') ?><span>Please fix the highlighted fields.</span></div><?php endif ?>
 <form method="post" action="/admin/settings" enctype="multipart/form-data" novalidate>
   <?= csrf_field() ?>
@@ -58,6 +58,17 @@ $f = static function (string $k, string $label, string $type = 'text', string $h
           <label for="s-logo" class="hint">Upload a logo (PNG or WebP with transparency works best)</label><input type="file" id="s-logo" name="logo_upload" accept="<?= e(media_accept('image')) ?>">
           <?php if (isset($errors['logo'])): ?><p class="error"><?= e($errors['logo']) ?></p><?php endif ?>
           <?php if ($logo): ?><label class="check"><input type="checkbox" name="logo_remove" value="1"> Remove logo</label><?php endif ?>
+        </div>
+      </div></section>
+      <section class="panel" id="site-icon"><div class="panel-head"><h2>Site icon (favicon)</h2></div><div class="panel-body fields">
+        <div class="field media-field"><span class="label">Icon in browser tabs, bookmarks and home screens</span>
+          <div class="icon-previews">
+            <?php if ($icon_tile !== null): ?><img src="<?= e($icon_tile) ?>" alt="Current site icon" width="96" height="96"><img src="<?= e($icon_tile) ?>" alt="" width="32" height="32"><img src="<?= e($icon_tile) ?>" alt="" width="16" height="16"><?php endif ?>
+          </div>
+          <p class="hint" id="s-favicon-state"><?= $favicon ? 'Made from your uploaded image.' : 'Made from the first letter of the site name on your accent colour (like the logo tile in the header). It updates when the name or colours change.' ?></p>
+          <label for="s-favicon" class="hint">Upload a square PNG, JPEG or WebP image, at least 512 × 512 pixels</label><input type="file" id="s-favicon" name="favicon_upload" accept="image/png,image/jpeg,image/webp" aria-describedby="s-favicon-state<?= isset($errors['favicon']) ? ' s-favicon-err' : '' ?>">
+          <?php if (isset($errors['favicon'])): ?><p class="error" id="s-favicon-err"><?= e($errors['favicon']) ?></p><?php endif ?>
+          <?php if ($favicon): ?><label class="check"><input type="checkbox" name="favicon_remove" value="1"> Use the letter tile instead</label><?php endif ?>
         </div>
       </div></section>
       <section class="panel"><div class="panel-head"><h2>More settings</h2></div><div class="panel-body">

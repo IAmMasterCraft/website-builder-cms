@@ -41,6 +41,8 @@ final class Settings
         render('admin/settings', [
             'title' => 'Site settings', 'values' => $values + $current, 'errors' => $errors,
             'logo' => media_find((int) setting('site.logo_media_id', 0) ?: null),
+            'favicon' => media_find((int) setting('site.favicon_media_id', 0) ?: null),
+            'icon_tile' => favicon_tile_url(),
         ], 'admin', $status);
     }
 
@@ -122,9 +124,32 @@ final class Settings
                 $errors['logo'] = $e->getMessage();
             }
         }
+        // C1: site icon, generated into favicon.ico, PNGs and the manifest on the next page view.
+        $faviconId = null;
+        $file = $_FILES['favicon_upload'] ?? null;
+        if (is_array($file) && ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            try {
+                $u = media_upload_from_files($file);
+                if (($problem = favicon_upload_problem($u['tmp'], $u['name'], $u['size'])) !== null) {
+                    $errors['favicon'] = $problem;
+                } elseif (!$errors) {
+                    $faviconId = media_store($u['tmp'], $u['name'], $u['size'], (int) $user['id'], true, ['kind' => 'image', 'folder' => 'site', 'alt' => $v['site_name'] . ' icon', 'title' => 'Site icon']);
+                }
+            } catch (UploadException $e) {
+                $errors['favicon'] = $e->getMessage();
+            }
+        }
         if ($errors) {
             self::form($v, $errors, 422);
             return;
+        }
+        $iconChange = '';
+        if ($faviconId !== null) {
+            setting_set('site.favicon_media_id', $faviconId);
+            $iconChange = '; site icon uploaded';
+        } elseif (input('favicon_remove') === '1' && setting('site.favicon_media_id') !== null) {
+            setting_set('site.favicon_media_id', null);
+            $iconChange = '; site icon: letter tile';
         }
         setting_set('site.name', $v['site_name']);
         setting_set('site.tagline', $v['tagline']);
@@ -158,7 +183,7 @@ final class Settings
         } elseif (input('logo_remove') === '1') {
             setting_set('site.logo_media_id', null);
         }
-        audit('update', 'settings', null, 'site settings' . ($provider !== '' ? ' (analytics: ' . $provider . ')' : '') . ($supportChanges ? '; ' . implode('; ', $supportChanges) : ''));
+        audit('update', 'settings', null, 'site settings' . $iconChange . ($provider !== '' ? ' (analytics: ' . $provider . ')' : '') . ($supportChanges ? '; ' . implode('; ', $supportChanges) : ''));
         // Radio repeats keep their local time: a new time zone can make slots clash.
         $clashes = $v['timezone'] !== $oldTimezone ? radio_schedule_conflicts(new \DateTimeZone($v['timezone'])) : [];
         if ($clashes !== []) {

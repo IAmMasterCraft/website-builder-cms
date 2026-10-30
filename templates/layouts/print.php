@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title ?? 'Print') ?> · <?= e(setting('site.name')) ?></title>
 <meta name="robots" content="noindex">
-<link rel="icon" href="<?= e(asset('assets/img/favicon.svg')) ?>" type="image/svg+xml">
+<?= favicon_head_tags() ?>
 <link rel="stylesheet" href="<?= e(theme_css_url($theme)) ?>">
 <link rel="stylesheet" href="<?= e(asset('assets/css/site.css')) ?>">
 <link rel="stylesheet" href="<?= e(asset('assets/css/card.css')) ?>">

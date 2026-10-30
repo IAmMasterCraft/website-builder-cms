@@ -39,11 +39,25 @@ function mail_driver(): string
 function mail_from(): array
 {
     $email = (string) setting('mail.from_email', '');
-    $name = (string) setting('mail.from_name', '');
     return [
         $email !== '' ? $email : (string) config('mail.from_email', 'no-reply@localhost'),
-        $name !== '' ? $name : (string) config('mail.from_name', (string) setting('site.name')),
+        mail_from_name((string) setting('mail.from_name', ''), (string) config('mail.from_name', ''), (string) setting('site.name')),
     ];
+}
+
+/**
+ * Sender name (C2): Email settings, else config.php, else the site name.
+ * "Gather" in config.php (written by older installers) counts as unset, so
+ * emails carry the organisation's name rather than the product's.
+ */
+function mail_from_name(string $setting, string $config, string $siteName): string
+{
+    $setting = trim($setting);
+    $config = trim($config);
+    if ($setting !== '') {
+        return $setting;
+    }
+    return $config !== '' && $config !== 'Gather' ? $config : $siteName;
 }
 
 /** Build a transport from the current settings. */

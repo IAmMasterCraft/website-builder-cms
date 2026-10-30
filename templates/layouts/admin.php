@@ -13,7 +13,7 @@ $u = $c['user'];
 <title><?= e(($title ?? '') !== '' ? $title . ' · ' : '') ?>Admin · <?= e($c['site_name']) ?></title>
 <meta name="robots" content="noindex">
 <meta name="csrf" content="<?= e(csrf_token()) ?>">
-<link rel="icon" href="<?= e(asset('assets/img/favicon.svg')) ?>" type="image/svg+xml">
+<?= favicon_head_tags() ?>
 <link rel="stylesheet" href="<?= e(asset('assets/css/admin.css')) ?>">
 <script src="<?= e(asset('assets/js/admin-boot.js')) ?>"></script>
 <script type="module" src="<?= e(asset('assets/js/admin.js')) ?>"></script>
@@ -23,7 +23,7 @@ $u = $c['user'];
 <div class="shell">
   <aside class="sidebar" id="sidebar" aria-label="Admin navigation">
     <div class="sidebar-head">
-      <a class="logo" href="/admin"><span class="logo-mark" aria-hidden="true">G</span><span class="logo-text">Gather</span></a>
+      <a class="logo" href="/admin" title="<?= e($c['site_name']) ?> admin"><?php if ($c['tile_url'] !== null): ?><img class="logo-mark logo-img" src="<?= e($c['tile_url']) ?>" alt="" width="34" height="34"><?php else: ?><span class="logo-mark" aria-hidden="true"><?= e(mb_strtoupper(mb_substr($c['site_name'], 0, 1))) ?></span><?php endif ?><span class="logo-text"><?= e($c['site_name']) ?></span></a>
     </div>
     <nav class="side-nav" aria-label="Admin sections">
       <div class="nav-tools" data-nav-tools hidden>
@@ -73,6 +73,7 @@ $u = $c['user'];
       <?php if ($c['flash']): ?><div class="flash <?= e($c['flash']['type']) ?>" role="status"><?= icon($c['flash']['type'] === 'error' ? 'alert' : 'check') ?><span><?= e($c['flash']['message']) ?></span></div><?php endif ?>
       <?= $content ?>
     </main>
+    <footer class="admin-footer"><p>Powered by <a href="/admin/help">Gather</a></p></footer>
   </div>
 </div>
 </body>

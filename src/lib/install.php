@@ -105,7 +105,7 @@ function install_new_config(array $db, string $baseUrl): array
         'app_key' => bin2hex(random_bytes(32)),
         'base_url' => $baseUrl,
         'db' => $db,
-        'mail' => ['driver' => 'file', 'from_email' => 'no-reply@' . (parse_url($baseUrl, PHP_URL_HOST) ?: 'localhost'), 'from_name' => 'Gather'],
+        'mail' => ['driver' => 'file', 'from_email' => 'no-reply@' . (parse_url($baseUrl, PHP_URL_HOST) ?: 'localhost'), 'from_name' => ''],
     ];
 }
 

@@ -790,3 +790,14 @@ img { object-position: var(--fx, 50%) var(--fy, 50%); }
 .md .md-note-warning, .md .md-note-caution { border-left-color: var(--warn); background: var(--warn-soft); }
 .md .md-note-title { margin-bottom: 0.25rem; font-weight: 700; }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
+
+/* C2: the organisation's name and icon tile in the sidebar; product credit in the footer */
+.logo { min-width: 0; }
+.logo-mark { flex: none; }
+.logo-img { display: block; object-fit: cover; background: none; padding: 0; }
+.logo-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-footer { margin-top: auto; padding: 1rem 1rem 1.5rem; max-width: 82rem; width: 100%; }
+.admin-footer p { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.admin-footer a { color: inherit; }
+.icon-previews { display: flex; align-items: flex-end; gap: 0.75rem; min-height: 1rem; }
+.icon-previews img { display: block; }

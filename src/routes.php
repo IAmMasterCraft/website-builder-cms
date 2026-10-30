@@ -15,6 +15,10 @@ function app_routes(): Router
     $r->get('/sitemap.xml', [Site\Feeds::class, 'sitemap']);
     $r->get('/robots.txt', [Site\Feeds::class, 'robots']);
     $r->get('/theme.css', [Site\Feeds::class, 'themeCss']);
+    $r->get('/favicon.ico', [Site\Icons::class, 'root']);
+    $r->get('/apple-touch-icon.png', [Site\Icons::class, 'root']);
+    $r->get('/icons/{sig:[a-f0-9]{16}}/{file:[a-z0-9.-]+}', [Site\Icons::class, 'file']);
+    $r->get('/site.webmanifest', [Site\Icons::class, 'manifest']);
     $r->get('/theme-preview/{key:[a-z0-9-]+}.png', [Site\Feeds::class, 'themePreview']);
 
     // Media (protected originals and private variants)

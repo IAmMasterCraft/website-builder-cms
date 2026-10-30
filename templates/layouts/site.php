@@ -20,7 +20,7 @@ $initial = mb_strtoupper(mb_substr($c['site_name'], 0, 1));
 <?php if (!empty($noindex)): ?><meta name="robots" content="noindex"><?php endif ?>
 <meta name="theme-color" content="<?= e(design_effective()['brand']) ?>">
 <meta name="csrf" content="<?= e(csrf_token()) ?>">
-<link rel="icon" href="<?= e(asset('assets/img/favicon.svg')) ?>" type="image/svg+xml">
+<?= favicon_head_tags() ?>
 <link rel="alternate" type="application/rss+xml" title="<?= e($c['site_name']) ?> news" href="/feed.xml">
 <?php foreach (design_preload_fonts() as $font): ?><link rel="preload" href="<?= e($font) ?>" as="font" type="font/woff2" crossorigin>
 <?php endforeach ?><?php foreach (head_preloads() as $tag): ?><?= $tag ?>
