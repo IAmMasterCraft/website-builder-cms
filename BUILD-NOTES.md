@@ -774,7 +774,7 @@ uses Bold).
   `member-impersonation`. `doc-shots.mjs` gained `hover`, `ctx` and an
   `imp` viewer.
 
-**Addendum C (C1, C2, C4), 2026-10-30** (C3 direct messages: not built here)
+**Addendum C (C1, C2, C4), 2026-10-30** (C3 direct messages: see below)
 - C1 site icons (`src/lib/favicon.php`, `Site\Icons`): Site settings →
   "Site icon (favicon)" upload (PNG/JPEG/WebP, at least 512 × 512; stored
   as public media in folder `site`, setting `site.favicon_media_id`, counted
@@ -893,6 +893,126 @@ uses Bold).
 - Demo: origin block on; demo members get residence locations. Dev site:
   origin on, Amara Okafor has origin Nigeria → Ekiti → Ado-Ekiti.
 
+**Addendum C3: direct messages, 2026-10-30**
+- Migration `022_messages.sql` (new tables only plus one column; nothing
+  existing changes): `conversations` (kind `direct|group|announcement|team`,
+  title, `pair_key` unique: `d:<low>:<high>` keeps one 1-to-1 per pair,
+  `t:<member>` one Team inbox thread per member; `last_message_id/at`;
+  Team inbox shared `team_read_message_id` / `team_notified_message_id`),
+  `conversation_participants` (PK conversation+user, `part_role`
+  owner|member, `last_read_message_id`, `last_read_at`,
+  `notified_message_id`, `muted`, `left_at`), `messages` (plain-text `body`,
+  `note_kind` for "Ada added Ben" lines, `attachment_media_id`, `edited_at`,
+  `deleted_at` + `deleted_by` sender|moderator|account|retention,
+  `updated_at` for polling edits; `sender_id` SET NULL on account deletion),
+  `message_blocks`, `message_reports` (unique message+reporter, resolved_at/
+  by, outcome kept|removed), `users.message_emails` (default 1). No reserved
+  words; every GROUP BY lists its non-aggregated columns (checked under
+  ONLY_FULL_GROUP_BY).
+- `src/lib/messages.php` (`msg_*`; note PHP's sysvmsg extension owns
+  `msg_send()`, so sending is `msg_post()`): rules in `msg_can_message()`
+  (staff → anyone active; members/groups → members and groups when
+  `messages.member_to_member` is on and the sender was verified ≥ 24 h ago,
+  listed admins `messages.team_admins`, the Team inbox
+  `messages.team_inbox`; blocks both ways; recipient must be active),
+  `msg_recipient_search()` (members see only people they may message; no
+  directory without a search term, only the listed admins), `msg_start()`
+  (1 recipient → direct, reused; more or a title → group, name required, ≤ 20
+  incl. sender; staff announcements ≤ 5,000, optional "everyone" = all
+  active members and groups minus people who blocked the admin; team
+  threads; 10 new conversations/day and 30 messages/10 min for members,
+  staff unlimited; a race on the pair key falls back to the row the other
+  request made), `msg_post()`, `msg_edit()` (own, 15 min), `msg_delete_own()`
+  / `msg_blank()` ("Message deleted", attachment deleted),
+  leave/add/remove people (owner or staff; owner role passes to the
+  longest-standing member; returning/new people start with nothing unread),
+  mute, block/unblock (staff cannot be blocked; a blocked direct
+  conversation is hidden from the blocker: list, thread 404, badge),
+  reports (participants, not own, once, 10/day), report context (the message
+  ± 5), resolve keep/remove, digests, retention, export, account purge.
+- Text: `msg_body_parts()` splits into text/link/br (http, https, www.;
+  trailing punctuation and unbalanced brackets stay outside), rendered by
+  `msg_body_html()` with `e()` and by JS with textContent; links get
+  `rel="nofollow noopener noreferrer ugc"`. Bodies ≤ 4,000 characters,
+  control characters stripped.
+- Attachments: one image (JPG/PNG/WebP/GIF) or PDF ≤ 5 MB per message,
+  `media_store()` as **private** media in folder `messages`.
+  `media_can_view()` defers to `msg_attachment_can_view()`: uploader,
+  active participants, Team inbox staff for team threads, `messages` staff
+  only once the message was reported. Never in the media library, picker
+  or admin search (`Admin\Media::find()` 404s them).
+- Routes: `message_routes()` registers one set under `/account/messages`
+  (members, inside `Account\Account::shell()`, which `page()` now wraps) and
+  `/admin/messages` (all staff, admin layout); handler `Site\Messages`
+  picks the context from the path. List (search names/titles/text, unread
+  pills, preview), `/new` (recipient checkboxes; no-JS "Search" posts
+  `_find`, PRG back with the input kept), thread (`?before=` paging of 50,
+  `?act=edit|delete|report&m=` inline forms, so JS-built messages only need
+  links), JSON `/{id}/poll?after=&since=` (new messages + earlier ones
+  whose `updated_at` ≥ since), `/{id}/read`, `/unread`, `/recipients`,
+  mute/leave/people/block/unblock/blocked. `Admin\Messages`: Team inbox
+  (`/admin/messages/team`, thread, reply, poll, read; permission
+  `messages`), reports (`/admin/messages/reports`, `/{messageId}` review
+  page audited as `message_report_view`, POST keep/remove), settings
+  (`/admin/settings/messages`, super admin: member-to-member, Team inbox,
+  listed admins, retention 1-120 months or empty), staff email preference
+  (`POST /admin/messages/preferences`).
+- Permission key `messages` (11 keys). Sidebar group "Messages" (My
+  messages for every admin, Team inbox and Reported messages with the
+  permission, Message settings super admin). Top bar speech-bubble badge =
+  own unread + unread Team inbox threads (`msg_admin_badge()`); account nav
+  "Messages" pill; both refreshed every 60 s by JS. Bell and overview
+  "Needs attention" count open message reports and unread Team inbox
+  threads. Member admin page: "Send a message" (`/admin/messages/new?to=`).
+  Reported messages are linked from the Comments guide; the comment queue
+  itself is unchanged.
+- `messages.js` (module, imported by `site.js` and `admin.js`, no
+  innerHTML): live recipient search with checkboxes moved into "Chosen"
+  and a status live region; composer sends with fetch + CSRF header (JSON
+  reply; Ctrl/Cmd+Enter), appends the message; polling every 10 s, 30 s →
+  2 min while the tab is hidden, exponential back-off to 2 min on errors,
+  immediate poll when the tab returns; new messages from others are marked
+  read with a POST only while the page is visible (and never while
+  impersonating); messages are built from `<template id="dm-msg-tpl">`;
+  `#latest` (list links) scrolls to the newest. CSS in
+  `assets/css/messages.css` (tokens fall back from site to admin names;
+  admin layout now prints `$extra_css`).
+- Email: template `message_digest` (Community group, editable). Cron job
+  `message_digests` (every 2 minutes): per participant and conversation,
+  unread non-note messages from others older than 15 minutes and newer than
+  `notified_message_id` → one queued email (`email_queue.kind = 'message'`,
+  dedupe `msg:<conv>:<user>:<newest id>[:t]`), marker moved even when skipped;
+  skipped for muted conversations, `message_emails = 0`, inactive accounts,
+  blocked-hidden conversations and any suppression (bounces, complaints,
+  unsubscribe). Team threads notify every active admin with `messages`
+  (super admins included) who has notifications on. `mail_queue_run()`
+  re-checks `kind = 'message'` rows at send time (`msg_digest_block_reason()`:
+  suppression, preference, account, already read → `suppressed`). Member
+  preference "Message notifications" on `/account/preferences` (members and
+  groups); staff tick "Email me about unread messages" on My messages.
+- Retention: cron `message_retention` daily 03:30 deletes messages (and their
+  attachments) older than the setting; conversations left empty go.
+- Privacy: admins only open conversations they are in (others 404), Team
+  inbox threads (permission) and report review pages (audited). Impersonation:
+  `impersonation_guard()` refuses every POST under `/account/messages` with
+  a messages-specific 403 even with "allow changes"; the thread shows a
+  read-only notice, no composer/actions, no read marks, and each thread
+  view while impersonating is audited (`message_view`, on behalf of).
+  Admin message actions are audited (start, send, edit, delete, report,
+  mute, leave, people, block, team reply, report keep/remove, settings,
+  preferences) without message text; member actions are not (not site
+  administration). `Site\Messages::read` and `Admin\Messages::teamRead` are
+  exempt in the audit-coverage test like `Inbox::read`.
+- Export: `member_export()` adds `messages` (only the person's own sent
+  messages: conversation id/type/title, text, attachment name, times) and
+  `message_notifications`. `account_delete()` calls `msg_account_purge()`:
+  own messages blanked (`deleted_by = account`; shown "Former member ·
+  Message deleted"), their attachments deleted after the transaction, their
+  Team inbox thread removed, pair keys released.
+- Demo: `demo_seed_messages()` (admin ↔ Amara, Tom ↔ Amara, Tom's Team inbox
+  question) runs with the demo content. Dev site: those plus a reported
+  spam-like message from Tom (for the report screenshot).
+
 ## Tests
 
 `bin/check`: lint of every PHP file, `tests/run.php` (299 unit/DB tests after
@@ -903,6 +1023,43 @@ essential-notice tests) and 10 smoke checks.
 Addendum A6 added `tests/design_test.php` (6 tests) and
 `tests/smoke_design.php` (45 checks); builder/smoke counts updated for 29
 section types and 5 themes.
+
+Addendum C3 (2026-10-30): `bin/check` = lint + **373 unit/DB tests** +
+**647 smoke checks**, all green with the local MariaDB's sql_mode and again
+with MySQL 8's default sql_mode set globally (restored afterwards to
+`STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,
+NO_ENGINE_SUBSTITUTION`). New: `tests/messages_test.php` (18: 11th key,
+who may message whom incl. 24 h rule/setting/blocks/status, recipient
+search, pair reuse/group name/20 cap/announcements, everyone announcement,
+Team inbox incl. shared read and switch-off, escaping and links, rate
+limits, unread/read/mute/block hiding/search, edit window and delete,
+leave/add/remove/owner hand-over, reports with ±5 context and keep/remove,
+private attachments, digests (15 min, once, preference, mute, suppression,
+read-before-send, Team inbox admins), retention, export and account
+deletion, impersonation read-only, media library), and
+`tests/smoke_addendum_c3.php` (53 checks through php -S: no-JS start/search
+PRG/read, escaping, 404 for outsiders, JSON send/poll/edit polling, 422 and
+419, edit/delete, attachment access for participants/outsiders/visitor/
+super admin and library exclusion, report queue/audited review/remove, Team
+inbox reply and shared read, permission split, member page link and
+preselect, 24 h rule, settings incl. validation, block/unblock, group and
+leave note, digest email through the queue, preference, export, overview
+cards, contextual help). Updated: permission counts (11), the matrix rule
+for `/admin/messages` (own messages = all staff; team/reports =
+`messages`), audit exemptions, sidebar group expectations (8 groups).
+
+C3 visual and accessibility checks (dev site, Bold theme): screenshots of
+the admin list, thread, new message, Team inbox thread and the member list,
+thread and new message at 1440 and 375 px, plus member pages without
+JavaScript; no horizontal overflow. Two headless browsers (admin and
+Amara) on one thread: the member's message appeared without a reload for
+the sender, reached the admin by polling after 9.9 s, links rendered, HTML
+shown as text, reply delivered the other way, no console errors. axe-core
+4.11 (`dev-tools/audit.mjs`): 34 page runs (`/account/messages`, a thread,
+new with results, blocked, preferences, a thread with the report form;
+admin My messages, thread, new, Team inbox list and thread, reports,
+settings, blocked; 1366 and 375 px, admin dark mode): **0 violations of
+any impact**, no console errors.
 
 Addendum C (2026-10-30): `bin/check` = lint + **355 unit/DB tests** +
 **594 smoke checks**, all green, both with the local MariaDB's sql_mode and
@@ -1339,6 +1496,31 @@ playwright-core; tools in `dev-tools/`, never deployed):
   independent hints agree ("confident"). Location lists is a super admin
   screen like Custom fields and Membership settings.
 
+- Addendum C3: "members" includes group accounts (both can message and be
+  messaged). "Choose which admins appear as recipients (or a shared Team
+  inbox)" = both options, independently switchable: the Team inbox (on by
+  default) and a list of named admins (empty by default); unlisted admins can
+  still message members, and members can reply in those conversations.
+  "New members (< 24 h)" counts from email verification; they may still
+  reply in conversations others started with them (only starting and adding
+  is limited). Rate limits apply to members and groups, not staff;
+  continuing an existing 1-to-1 or Team thread is not a new conversation.
+  Leaving a group removes it from the person's list (no read-only history);
+  1-to-1 and Team threads cannot be left (mute or block instead). Team
+  inbox read state is shared by all team admins; team replies cannot be
+  edited or deleted from the Team inbox. Admins can be messaged but not
+  blocked. "Message deleted" keeps the row (empty body) so threads keep
+  their shape; a moderator removal says so. The reported-message queue is
+  its own screen under Messages (permission `messages`) rather than a tab of
+  the comment queue (which needs `content`); the Comments guide points to
+  it. Reading marks only happen through POST (JS on view, a button without
+  JS), so GET never changes data; without JavaScript a member presses "Mark
+  as read" or replies. While impersonating, the admin may read the member's
+  messages (spec: "read-only for messages"); each view is audited. Digest
+  emails respect every suppression reason (also unsubscribe-from-all),
+  since they are notifications, not transactional mail. Retention is in
+  whole months; the export contains only messages the person sent.
+
 ## Code review fixes (2026-10-24)
 
 Two reviews (security-reviewer, plain-php-reviewer) after phase 7. Every
@@ -1639,8 +1821,18 @@ finding was confirmed in the code and fixed with regression tests
   has no search box. Sidebar group state is per browser (localStorage), not
   per account. Not checked with a real screen reader.
 
-- Addendum C gaps: C3 (direct messages) is not built (next step, another
-  agent). Nigeria's LGA list was checked for completeness (37 / 774, every
+- Addendum C3 gaps: delivery is polling (10 s), not push; on PHP's built-in
+  server each poll takes a worker. No typing indicators, read receipts for
+  others, reactions or message search across all conversations beyond the
+  list search. One attachment per message; images are re-encoded (WebP
+  variants), PDFs are served as stored. Announcement "everyone" is a
+  snapshot at creation (later members are not added automatically). Team
+  inbox has no assignment/claiming beyond the shared read marker. Rate
+  limits are fixed constants. Report review shows ± 5 messages; there is no
+  bulk handling. No real screen reader test; the thread log is a
+  `role="log"` region. Not checked on a real shared host (polling cost
+  under load unmeasured).
+- Addendum C gaps: Nigeria's LGA list was checked for completeness (37 / 774, every
   state's count matches the official count) and the duplicates/misspellings
   found in the over-counted states were fixed; spellings in the other
   states were not checked one by one against an official gazette (GeoNames
