@@ -27,6 +27,8 @@ function admin_permissions(): array
         'essential_notices' => 'Essential membership notices (with Communications: mark campaigns as essential and send them)',
         // Addendum B2: view the site as a member or group account (support).
         'impersonate' => 'Log in as a member (view the site as a member or group account for support)',
+        // Addendum C3: answer the Team inbox and review reported messages.
+        'messages' => 'Messages (answer the Team inbox and review reported messages)',
     ];
 }
 

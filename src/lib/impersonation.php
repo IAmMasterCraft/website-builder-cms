@@ -301,6 +301,10 @@ function impersonation_guard(string $method, string $path): void
         }
     }
     if ($method !== 'GET' && $method !== 'HEAD') {
+        // C3: messages are read-only while viewing as a member, even with "allow changes".
+        if (str_starts_with($path, '/account/messages')) {
+            throw new HttpException(403, 'Messages are read-only while you view the site as ' . $imp['name'] . ': you cannot send, edit, delete, report, block or leave conversations as the member. Use “Return to admin” first.');
+        }
         foreach (impersonation_change_routes() as $re => $what) {
             if (preg_match($re, $path)) {
                 if (!empty($imp['allow_changes'])) {

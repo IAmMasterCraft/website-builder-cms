@@ -30,7 +30,7 @@ function imp_guard(string $method, string $path): string
 }
 
 test('B2: impersonate is the tenth permission key and opens only its own screen', function (): void {
-    same(10, count(admin_permissions()));
+    same(11, count(admin_permissions()), 'C3 added messages as the eleventh key');
     ok(isset(admin_permissions()['impersonate']), 'impersonate key exists');
     act_as(fixture_admin('admin', ['impersonate']));
     ok(user_can(current_user(), 'impersonate'));

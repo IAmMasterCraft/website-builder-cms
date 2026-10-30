@@ -451,6 +451,9 @@ function img_html(?array $m, string $sizes = '100vw', ?string $alt = null, strin
  */
 function media_can_view(array $m, ?array $user): bool
 {
+    if ((string) $m['folder'] === 'messages' && $m['visibility'] === 'private') {
+        return msg_attachment_can_view((int) $m['id'], $user); // C3: participants only
+    }
     return match ($m['visibility']) {
         'public' => true,
         'members' => viewer_is_member($user),

@@ -421,6 +421,7 @@ function demo_seed(int $userId): void
     $add($main, 'Job board', 'url', null, null, '/jobs', $inv);
 
     demo_seed_community($userId);
+    demo_seed_messages($userId);
 
     $top = db_insert('menus', ['name' => 'Top bar', 'location' => 'topbar']);
     $add($top, 'FAQ', 'list', 'faq');
@@ -684,4 +685,49 @@ function demo_seed_community(int $userId): void
             job_create($data, $admin);
         }
     }
+}
+
+/**
+ * C3 demo: a 1-to-1 between the admin and Amara, one between two members and
+ * a Team inbox question, written straight into the tables (the demo members
+ * have just been created, so the 24-hour rule would refuse member messages).
+ */
+function demo_seed_messages(int $adminId): void
+{
+    $uid = static fn (string $email): int => (int) q_val('SELECT id FROM users WHERE email = ?', [$email]);
+    $amara = $uid('amara.okafor@example.org');
+    $tom = $uid('tom.brennan@example.org');
+    if ($amara === 0 || $tom === 0) {
+        return;
+    }
+    $conversation = static function (string $kind, array $people, array $lines, ?string $pairKey) : int {
+        $id = db_insert('conversations', ['kind' => $kind, 'pair_key' => $pairKey, 'created_by' => $people[0]]);
+        foreach ($people as $i => $p) {
+            q('INSERT INTO conversation_participants (conversation_id, user_id, part_role) VALUES (?, ?, ?)', [$id, $p, $i === 0 ? 'owner' : 'member']);
+        }
+        $minutes = count($lines) * 7 + 30;
+        foreach ($lines as [$sender, $text]) {
+            $mid = msg_insert($id, $sender, $text);
+            q('UPDATE messages SET created_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', time() - $minutes * 60), $mid]);
+            $minutes -= 7;
+        }
+        q('UPDATE conversations SET last_message_at = (SELECT MAX(created_at) FROM messages WHERE conversation_id = ?) WHERE id = ?', [$id, $id]);
+        // The newest message is left unread for its recipients; everything before was read and notified.
+        q('UPDATE conversation_participants SET notified_message_id = (SELECT MAX(id) FROM messages WHERE conversation_id = ?) WHERE conversation_id = ?', [$id, $id]);
+        return $id;
+    };
+    $pair = static fn (int $a, int $b): string => 'd:' . min($a, $b) . ':' . max($a, $b);
+    $conversation('direct', [$adminId, $amara], [
+        [$adminId, "Hello Amara, thank you for offering to help with the harbour festival!\nCould you look after the welcome table on Saturday morning?"],
+        [$amara, 'Yes, happy to. What time should I be there?'],
+        [$adminId, 'Setting up starts at 9:30. The volunteer briefing is on our website: https://example.org/volunteers'],
+    ], $pair($adminId, $amara));
+    $conversation('direct', [$tom, $amara], [
+        [$tom, 'Hi Amara, are you going to the litter pick on Sunday?'],
+        [$amara, 'I am! Shall we walk down together from Quayside?'],
+    ], $pair($tom, $amara));
+    $team = $conversation('team', [$tom], [
+        [$tom, 'Hello team, my member card shows last year\'s address. How do I change it?'],
+    ], 't:' . $tom);
+    q('UPDATE conversations SET team_notified_message_id = last_message_id WHERE id = ?', [$team]);
 }

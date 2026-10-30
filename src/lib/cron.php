@@ -17,6 +17,9 @@ function cron_jobs(): array
         'birthdays' => ['daily_at' => birthday_time(), 'run' => 'cron_birthdays'],
         'job_expiry' => ['every' => 15, 'run' => 'cron_job_expiry'],
         'bounce_mailbox' => ['every' => 5, 'run' => 'cron_bounce_mailbox'],
+        // C3: unread message digests (after 15 minutes) and the optional retention limit.
+        'message_digests' => ['every' => 2, 'run' => 'cron_message_digests'],
+        'message_retention' => ['daily_at' => '03:30', 'run' => 'cron_message_retention'],
         // Backups can take long: they run after the main lock is released, under their own lock.
         'backups' => ['daily_at' => backup_settings()['time'], 'run' => 'cron_backups', 'own_lock' => true],
     ];
@@ -68,6 +71,16 @@ function cron_bounce_mailbox(): string
         throw new RuntimeException('bounce mailbox: ' . $s['error']);
     }
     return "{$s['read']} read, {$s['recorded']} recorded, {$s['ignored']} ignored, {$s['unparsed']} unprocessed, {$s['pruned']} pruned";
+}
+
+function cron_message_digests(): string
+{
+    return msg_digest_run() . ' message notification(s) queued';
+}
+
+function cron_message_retention(): string
+{
+    return msg_retention_run() . ' old message(s) deleted';
 }
 
 function cron_job_expiry(): string

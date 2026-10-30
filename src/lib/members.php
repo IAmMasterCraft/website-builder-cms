@@ -630,7 +630,8 @@ function account_delete(int $userId, bool $onlyIfUnverified = false): bool
 {
     $photos = [];
     $logos = [];
-    $deleted = db_tx(static function () use ($userId, $onlyIfUnverified, &$photos, &$logos): bool {
+    $messageMedia = [];
+    $deleted = db_tx(static function () use ($userId, $onlyIfUnverified, &$photos, &$logos, &$messageMedia): bool {
         $user = q_one('SELECT email, status FROM users WHERE id = ? FOR UPDATE', [$userId]);
         if ($user === null || ($onlyIfUnverified && $user['status'] !== 'unverified')) {
             return false;
@@ -650,6 +651,8 @@ function account_delete(int $userId, bool $onlyIfUnverified = false): bool
         // A group that never verified was never listed: remove it with the account.
         q('DELETE FROM groups_orgs WHERE user_id = ? AND verified_at IS NULL', [$userId]);
         q('UPDATE groups_orgs SET user_id = NULL WHERE user_id = ?', [$userId]);
+        // C3: their messages lose their content ("Former member" · "message deleted").
+        $messageMedia = msg_account_purge($userId);
         q('DELETE FROM users WHERE id = ?', [$userId]);
         return true;
     });
@@ -662,6 +665,9 @@ function account_delete(int $userId, bool $onlyIfUnverified = false): bool
             media_delete_files($m);
             q('DELETE FROM media WHERE id = ?', [$mediaId]);
         }
+    }
+    foreach ($messageMedia as $mediaId) {
+        msg_delete_media($mediaId);
     }
     foreach ($logos as $mediaId) {
         media_forget($mediaId);
@@ -697,6 +703,9 @@ function member_export(int $userId): array
         'likes' => q_all('SELECT item_type, item_id, created_at FROM likes WHERE user_id = ?', [$userId]),
         'comments' => q_all('SELECT item_type, item_id, body, status, created_at FROM comments WHERE user_id = ?', [$userId]),
         'jobs' => q_all('SELECT title, organisation, status, created_at FROM jobs WHERE user_id = ?', [$userId]),
+        // C3: the messages this person sent (other people's messages are theirs).
+        'messages' => msg_export($userId),
+        'message_notifications' => (int) q_val('SELECT message_emails FROM users WHERE id = ?', [$userId]) === 1,
     ];
 }
 

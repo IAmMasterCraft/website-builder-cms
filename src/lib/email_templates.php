@@ -92,6 +92,15 @@ function email_template_defs(): array
             'body' => "Hello {first_name},\n\n{replier} replied to your comment on “{item_title}”:\n\n{reply}",
             'button' => ['label' => 'Join the conversation', 'url' => 'item_url'],
         ],
+        'message_digest' => [
+            'label' => 'Unread messages', 'group' => 'Community',
+            'description' => 'Sent 15 minutes after a message arrives if it is still unread (one email per conversation; not sent to people who switched “Message notifications” off or muted the conversation).',
+            'placeholders' => ['first_name' => 'First name', 'sender' => 'Who sent the newest message', 'conversation' => 'Conversation name', 'count' => 'Number of unread messages',
+                'messages_label' => '“1 unread message” or “3 unread messages”', 'preview' => 'Start of the newest message', 'thread_url' => 'Link to the conversation', 'preferences_url' => 'Where to switch these emails off'],
+            'subject' => '{messages_label} from {sender}',
+            'body' => "Hello {first_name},\n\nYou have {messages_label} in “{conversation}”. The newest, from {sender}:\n\n{preview}\n\nTo stop these emails, switch off “Message notifications” in your email preferences: {preferences_url}",
+            'button' => ['label' => 'Read and reply', 'url' => 'thread_url'],
+        ],
         'birthday_greeting' => [
             'label' => 'Birthday greeting', 'group' => 'Community',
             'description' => 'Sent by the daily birthday job to members who keep birthday greetings switched on.',

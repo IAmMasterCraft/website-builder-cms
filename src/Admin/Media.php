@@ -100,7 +100,8 @@ final class Media
     private static function find(array $p): array
     {
         $m = media_find((int) $p['id']);
-        if ($m === null) {
+        // C3: message attachments are private to the conversation, never library items.
+        if ($m === null || (string) $m['folder'] === 'messages') {
             abort(404);
         }
         return $m;

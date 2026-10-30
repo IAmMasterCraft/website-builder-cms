@@ -20,6 +20,8 @@ final class Dashboard
             'messages_unread' => (int) q_val('SELECT COUNT(*) FROM contact_messages WHERE read_at IS NULL'),
             'comments_pending' => comments_reported_count(),
             'jobs_pending' => (int) q_val("SELECT COUNT(*) FROM jobs WHERE status = 'pending'"),
+            'team_unread' => msg_team_unread_count(),
+            'message_reports' => msg_reports_open_count(),
             'posts_published' => (int) q_val('SELECT COUNT(*) FROM posts WHERE ' . published_sql()),
             'scheduled' => (int) q_val("SELECT (SELECT COUNT(*) FROM posts WHERE status = 'scheduled') + (SELECT COUNT(*) FROM events WHERE status = 'scheduled') + (SELECT COUNT(*) FROM pages WHERE status = 'scheduled')"),
         ];
@@ -86,7 +88,7 @@ final class Dashboard
                 }
             }
             if (user_can($user, 'gallery_media')) {
-                foreach (q_all('SELECT id, title FROM media WHERE title LIKE ? OR original_name LIKE ? ORDER BY id DESC LIMIT 10', [$like, $like]) as $r) {
+                foreach (q_all('SELECT id, title FROM media WHERE (title LIKE ? OR original_name LIKE ?) AND visibility <> \'private\' AND folder <> \'member-photos\' ORDER BY id DESC LIMIT 10', [$like, $like]) as $r) {
                     $results[] = ['type' => 'Media', 'title' => (string) $r['title'], 'url' => '/admin/media/' . $r['id']];
                 }
             }

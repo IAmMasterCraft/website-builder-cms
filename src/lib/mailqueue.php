@@ -170,7 +170,11 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
             if (!mail_claim('email_queue', (int) $row['id'], $nowSql)) {
                 continue;
             }
-            $reason = in_array($row['kind'], MAIL_BULK_KINDS, true) ? mail_bulk_block_reason((string) $row['to_email']) : mail_undeliverable_reason((string) $row['to_email']);
+            $reason = match (true) {
+                in_array($row['kind'], MAIL_BULK_KINDS, true) => mail_bulk_block_reason((string) $row['to_email']),
+                $row['kind'] === 'message' => msg_digest_block_reason($row), // C3: re-checked when sent
+                default => mail_undeliverable_reason((string) $row['to_email']),
+            };
             if ($reason !== null) {
                 q("UPDATE email_queue SET status = 'suppressed', last_error = ? WHERE id = ?", [$reason, $row['id']]);
                 $stats['suppressed']++;

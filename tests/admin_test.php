@@ -105,7 +105,7 @@ test('a suspended admin is logged out on the next request', function (): void {
 
 test('permission matrix: each key opens only its own area; super admin opens all', function (): void {
     $keys = array_keys(admin_permissions());
-    same(10, count($keys), 'eight permission keys (§2) plus essential_notices (review 2) and impersonate (B2)');
+    same(11, count($keys), 'eight permission keys (§2) plus essential_notices (review 2), impersonate (B2) and messages (C3)');
     foreach ($keys as $key) {
         $id = fixture_admin('admin', [$key]);
         act_as($id);
@@ -163,6 +163,8 @@ test('every admin POST route writes an audit entry (static check of the handlers
     $exempt = [
         'Admin\\Builder::save' => 'autosave every few seconds; builder_save_draft() logs one entry per editing session',
         'Admin\\Inbox::read' => 'marking a message read is not a change to site data',
+        'Site\\Messages::read' => 'marking a conversation read is not a change to site data (like the inbox)',
+        'Admin\\Messages::teamRead' => 'marking a Team inbox thread read is not a change to site data',
         'Admin\\Impersonation::start' => 'impersonation_start() writes the impersonate_start entry before the session switches (tested in impersonation_test.php)',
     ];
     $source = static function (string $class, string $method): string {
