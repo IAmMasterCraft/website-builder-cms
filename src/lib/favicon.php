@@ -22,6 +22,8 @@ const FAVICON_FILES = [
     'icon-512.png' => ['image/png', 512],
 ];
 const FAVICON_MIN_SIZE = 512;
+/** Review: icon uploads above this many pixels are refused (decoding them costs memory and time). */
+const FAVICON_MAX_PIXELS = 16_000_000;
 
 /** What the icons are made from: uploaded media id (or null), initial, tile colours, site name. */
 function favicon_inputs(): array
@@ -70,7 +72,7 @@ function favicon_dir(string $sig): string
  * Returns the signature, or null when the icons cannot be made (no GD, the
  * folder is not writable): the layouts then fall back to the static SVG.
  */
-function favicon_ensure(?array $in = null): ?string
+function favicon_ensure(?array $in = null, bool $wait = false): ?string
 {
     static $done = [];
     $in ??= favicon_inputs();
@@ -79,18 +81,37 @@ function favicon_ensure(?array $in = null): ?string
         return $done[$sig] ? $sig : null;
     }
     $dir = favicon_dir($sig);
-    if (is_file($dir . '/icon-512.png') && is_file($dir . '/favicon.ico')) {
+    $ready = static fn (): bool => is_file($dir . '/icon-512.png') && is_file($dir . '/favicon.ico');
+    if ($ready()) {
         $done[$sig] = true;
         return $sig;
     }
+    // Review: one generator at a time (flock). Public page views do not wait: while another
+    // request draws the set they use the static SVG; admin saves ($wait) wait for it.
+    $lock = null;
     try {
-        favicon_generate($in, $dir);
+        $root = dirname($dir);
+        if (!is_dir($root) && !mkdir($root, 0755, true) && !is_dir($root)) {
+            throw new RuntimeException('Cannot create ' . $root);
+        }
+        $lock = fopen($root . '/.lock', 'c');
+        if ($lock === false || !flock($lock, $wait ? LOCK_EX : LOCK_EX | LOCK_NB)) {
+            return null; // not remembered: the next page view looks again
+        }
+        if (!$ready()) {
+            favicon_generate($in, $dir);
+        }
         $done[$sig] = true;
         return $sig;
     } catch (Throwable $e) {
         error_log('Favicon generation failed: ' . $e->getMessage());
         $done[$sig] = false;
         return null;
+    } finally {
+        if (is_resource($lock)) {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 }
 
@@ -339,6 +360,9 @@ function favicon_upload_problem(string $path, string $name, int $size): ?string
     $dim = getimagesize($path);
     if ($dim === false || $dim[0] < FAVICON_MIN_SIZE || $dim[1] < FAVICON_MIN_SIZE) {
         return 'The icon must be at least 512 × 512 pixels (a square works best).';
+    }
+    if ($dim[0] * $dim[1] > FAVICON_MAX_PIXELS) {
+        return 'The icon is too large: use an image of at most 16 megapixels (for example 4000 × 4000).';
     }
     return null;
 }

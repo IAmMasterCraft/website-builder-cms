@@ -181,6 +181,12 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
                 continue;
             }
             $headers = json_decode((string) ($row['headers'] ?? ''), true);
+            if ($row['kind'] === 'message' && ($fresh = msg_digest_rebuild($row)) !== null) {
+                // C3 review: the preview reflects the messages as they are now, not when queued.
+                $row['subject'] = $fresh['subject'];
+                $row['text_body'] = $fresh['text'];
+                $row['html_body'] = $fresh['html'];
+            }
             try {
                 $m = new Message((string) $row['to_email'], (string) $row['to_name'], (string) $row['subject'], (string) $row['text_body'], $row['html_body'], $row['reply_to'], is_array($headers) ? $headers : []);
                 mailer()->send(mail_with_envelope($m, verp_tag('q', (int) $row['id'], (string) $row['to_email'])));

@@ -156,3 +156,37 @@ function rate_hit(string $bucket): void
 {
     q('INSERT INTO rate_hits (bucket, hit_at) VALUES (?, UTC_TIMESTAMP())', [$bucket]);
 }
+
+/**
+ * Atomic variant (C3 review): record $n hits first, then count the hits up
+ * to and including ours. Parallel requests cannot all pass the check
+ * before any of them records a hit. Returns the ids of our hits (to undo
+ * with rate_release() when the action fails for another reason), or null
+ * when the limit is reached (our hits are removed again).
+ * @return ?list<int>
+ */
+function rate_take(string $bucket, int $max, int $windowSeconds, int $n = 1): ?array
+{
+    if ($n <= 0) {
+        return [];
+    }
+    $ids = [];
+    for ($i = 0; $i < $n; $i++) {
+        $ids[] = db_insert('rate_hits', ['bucket' => $bucket, 'hit_at' => gmdate('Y-m-d H:i:s')]);
+    }
+    $since = gmdate('Y-m-d H:i:s', time() - $windowSeconds);
+    $count = (int) q_val('SELECT COUNT(*) FROM rate_hits WHERE bucket = ? AND hit_at > ? AND id <= ?', [$bucket, $since, max($ids)]);
+    if ($count > $max) {
+        rate_release($ids);
+        return null;
+    }
+    return $ids;
+}
+
+/** @param ?list<int> $ids */
+function rate_release(?array $ids): void
+{
+    if ($ids) {
+        q('DELETE FROM rate_hits WHERE id IN (' . db_placeholders(count($ids)) . ')', array_values($ids));
+    }
+}

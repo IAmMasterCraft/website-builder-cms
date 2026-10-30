@@ -384,7 +384,12 @@ test('C3: email digest after 15 minutes, once per conversation, respecting prefe
     same(0, msg_digest_run(), 'not twice');
     $row = q_one("SELECT * FROM email_queue WHERE kind = 'message' ORDER BY id DESC LIMIT 1");
     same(strtolower((string) $ada['email']), strtolower((string) $row['to_email']));
-    contains('2 unread messages', (string) $row['subject']);
+    // Review: a member wrote first and Digest never replied: no sender name, no text.
+    same('You have a new message on ' . setting('site.name', 'Gather'), (string) $row['subject']);
+    contains('2 unread messages', (string) $row['text_body']);
+    not_contains('Writer', (string) $row['text_body'] . (string) $row['html_body']);
+    not_contains('Saturday', (string) $row['text_body'] . (string) $row['html_body']);
+    not_contains('Second one', (string) $row['text_body'] . (string) $row['html_body']);
     contains('/account/messages/' . $c, (string) $row['text_body']);
     contains('Message notifications', (string) $row['text_body']);
     same(null, msg_digest_block_reason($row), 'still unread: send');
@@ -484,4 +489,235 @@ test('C3: message attachments never appear in the media library', function (): v
     $src = (string) file_get_contents(BASE . '/src/Admin/Media.php');
     contains("'messages'", $src);
     contains("visibility <> 'private'", $src);
+});
+
+// ---- Security review fixes (C3) ----------------------------------------------------------------
+
+/** A tiny PNG file whose header claims $w × $h pixels (getimagesize reads only the header). */
+function dm_png_header(int $w, int $h): string
+{
+    $ihdr = 'IHDR' . pack('NNCCCCC', $w, $h, 8, 2, 0, 0, 0);
+    $idat = 'IDAT' . gzcompress("\0\0\0\0");
+    $chunk = static fn (string $c): string => pack('N', strlen($c) - 4) . $c . pack('N', crc32($c));
+    return fixture_file("\x89PNG\r\n\x1a\n" . $chunk($ihdr) . $chunk($idat) . $chunk('IEND'), 'png');
+}
+
+test('C3 review: rate_take is hit-first and gives hits back', function (): void {
+    $b = 'take-test-' . bin2hex(random_bytes(3));
+    $taken = [];
+    for ($i = 0; $i < 3; $i++) {
+        $taken[] = rate_take($b, 3, 60);
+    }
+    ok(!in_array(null, $taken, true), 'three allowed');
+    same(null, rate_take($b, 3, 60), 'fourth refused');
+    same(3, (int) q_val('SELECT COUNT(*) FROM rate_hits WHERE bucket = ?', [$b]), 'a refused take leaves no hit');
+    rate_release($taken[0]);
+    ok(rate_take($b, 3, 60) !== null, 'released hits free the budget');
+    same(null, rate_take($b, 5, 60, 3), 'several at once: all or nothing');
+    same(3, (int) q_val('SELECT COUNT(*) FROM rate_hits WHERE bucket = ?', [$b]));
+});
+
+test('C3 review: search needs 3 letters or an exact number; opted-out members are not findable by members', function (): void {
+    dm_reset_settings();
+    $ada = dm_member('Seeker');
+    $hid = dm_member('Hideaway');
+    $num = (string) q_val('SELECT member_number FROM members WHERE user_id = ?', [$hid['id']]);
+    same([], msg_recipient_search($ada, 'Hi'), 'two letters find nobody');
+    ok(count(msg_recipient_search($ada, 'Hid')) === 1);
+    q('UPDATE members SET member_number = ? WHERE user_id = ?', ['Z9', $hid['id']]);
+    same([(int) $hid['id']], array_column(msg_recipient_search($ada, 'Z9'), 'id'), 'a short exact member number works');
+    q('UPDATE members SET member_number = ? WHERE user_id = ?', [$num, $hid['id']]);
+    q('UPDATE users SET message_findable = 0 WHERE id = ?', [$hid['id']]);
+    same([], msg_recipient_search($ada, 'Hideaway'), 'opted out: members do not find them');
+    same([], msg_recipient_search($ada, $num), 'not by number either');
+    $staff = dm_staff();
+    same([(int) $hid['id']], array_column(msg_recipient_search($staff, 'Hideaway'), 'id'), 'admins still find them');
+    [, $err] = msg_start($ada, [(int) $hid['id']], 'guessing the id');
+    same(MSG_NOT_AVAILABLE, $err, 'members cannot message an opted-out person by id');
+    same(MSG_NOT_AVAILABLE, msg_can_start_with(msg_account((int) $ada['id']), msg_account(999999999) ?? ['id' => 999999999, 'role' => 'member', 'message_findable' => 0, 'status' => 'active']), 'missing ids get the same answer');
+    dm_start(dm_user((int) $hid['id']), [$ada], 'I write first');
+    same(null, msg_can_start_with(msg_account((int) $ada['id']), msg_account((int) $hid['id'])), 'people who share a conversation can still message');
+    $ids = [];
+    $viewer = dm_member('Searchy');
+    for ($i = 0; $i < MSG_SEARCHES_PER_WINDOW; $i++) {
+        $ids[] = msg_recipient_search_limited($viewer, 'Seeker');
+    }
+    ok(!in_array(null, $ids, true));
+    same(null, msg_recipient_search_limited($viewer, 'Seeker'), 'searches are rate limited per member');
+    ok(msg_recipient_search_limited($staff, 'Seeker') !== null, 'staff are not');
+});
+
+test('C3 review: daily caps on new recipients and on adding people (members)', function (): void {
+    dm_reset_settings();
+    $ada = dm_member('Spreader');
+    $known = dm_member('Known');
+    dm_start($ada, [$known], 'hello');
+    for ($i = 0; $i < MSG_NEW_RECIPIENTS_PER_DAY - 1; $i++) {
+        rate_hit('msgnew:' . $ada['id']);
+    }
+    $a = dm_member('Na');
+    $b = dm_member('Nb');
+    [, $err] = msg_start($ada, [(int) $a['id'], (int) $b['id']], 'two new people', ['title' => 'G']);
+    ok(str_contains((string) $err, 'many new people'), 'two new people over the cap');
+    same(0, (int) q_val('SELECT COUNT(*) FROM conversations WHERE title = ? AND created_by = ?', ['G', $ada['id']]), 'nothing created');
+    q("DELETE FROM rate_hits WHERE bucket LIKE 'msg:%'");
+    [$id, $err] = msg_start($ada, [(int) $known['id']], 'people I know do not count');
+    same(null, $err);
+    q("DELETE FROM rate_hits WHERE bucket = ?", ['msgnew:' . $ada['id']]);
+    $g = dm_start($ada, [$a, $b], 'group', ['title' => 'Adds']);
+    for ($i = 0; $i < MSG_ADDS_PER_DAY; $i++) {
+        rate_hit('msgadd:' . $ada['id']);
+    }
+    ok(str_contains((string) msg_add_people($ada, $g, [(int) dm_member('Late')['id']]), 'many times'), 'add-people is capped for members');
+    $staff = dm_staff();
+    for ($i = 0; $i < MSG_ADDS_PER_DAY; $i++) {
+        rate_hit('msgadd:' . $staff['id']);
+    }
+    same(null, msg_add_people($staff, dm_start($staff, [$a], 'x', ['title' => 'Staff group']), [(int) $b['id']]), 'staff are not capped');
+});
+
+test('C3 review: digest keeps sender and preview for staff, Team and once the recipient replied', function (): void {
+    $member = dm_member('Recipient');
+    $staff = dm_staff();
+    $c = dm_start($staff, [$member], 'From the committee: the AGM is on Friday');
+    $d = msg_digest_compose($c, (int) $member['id'], false);
+    contains('From the committee', $d['text'], 'staff messages keep the preview');
+    contains((string) $staff['display_name'], $d['subject']);
+    $other = dm_member('Stranger');
+    $c2 = dm_start($other, [$member], 'Buy my stuff now');
+    $d2 = msg_digest_compose($c2, (int) $member['id'], false);
+    not_contains('Buy my stuff', $d2['text'] . $d2['html']);
+    not_contains('Stranger', $d2['subject'] . $d2['text'] . $d2['html']);
+    msg_post($member, $c2, 'Who are you?');
+    msg_post($other, $c2, 'Your neighbour from number 4');
+    $d3 = msg_digest_compose($c2, (int) $member['id'], false);
+    contains('Your neighbour', $d3['text'], 'after a reply the preview is shown');
+});
+
+test('C3 review: digests are re-checked and re-rendered when sent', function (): void {
+    q("DELETE FROM email_queue WHERE kind = 'message'");
+    $a = dm_member('Gone');
+    $staff = dm_staff();
+    $g = dm_start($staff, [$a, dm_member('Stay')], 'Original text', ['title' => 'Recheck']);
+    $mid = (int) q_val('SELECT MAX(id) FROM messages WHERE conversation_id = ?', [$g]);
+    $row = ['to_email' => $a['email'], 'dedupe_key' => "msg:$g:{$a['id']}:$mid"];
+    same(null, msg_digest_block_reason($row));
+    q("UPDATE messages SET body = 'Edited text' WHERE id = ?", [$mid]);
+    contains('Edited text', msg_digest_rebuild($row)['text'], 'preview built at send time');
+    msg_leave($a, $g);
+    ok(str_contains((string) msg_digest_block_reason($row), 'no longer sees'), 'left the group');
+    $b = dm_member('Other');
+    $c = dm_start($staff, [$b], 'Will be removed');
+    $m2 = (int) q_val('SELECT MAX(id) FROM messages WHERE conversation_id = ?', [$c]);
+    msg_blank($m2, 'moderator');
+    ok(str_contains((string) msg_digest_block_reason(['to_email' => $b['email'], 'dedupe_key' => "msg:$c:{$b['id']}:$m2"]), 'deleted or removed'));
+    $x = dm_member('Blocky');
+    $y = dm_member('Blocked');
+    $d = dm_start($y, [$x], 'hi');
+    $m3 = (int) q_val('SELECT MAX(id) FROM messages WHERE conversation_id = ?', [$d]);
+    msg_block((int) $x['id'], (int) $y['id']);
+    ok(msg_digest_block_reason(['to_email' => $x['email'], 'dedupe_key' => "msg:$d:{$x['id']}:$m3"]) !== null, 'blocked since');
+});
+
+test('C3 review: people added to a group do not see earlier messages, attachments or report them', function (): void {
+    $staff = dm_staff();
+    $a = dm_member('Early');
+    $g = dm_start($staff, [$a], 'Before you joined: secret plans', ['title' => 'History']);
+    $jpg = fixture_jpeg(400, 300);
+    [$photo] = msg_post($staff, $g, '', ['name' => 'old.jpg', 'tmp_name' => $jpg, 'size' => filesize($jpg), 'error' => UPLOAD_ERR_OK], false, false);
+    $media = media_find((int) q_val('SELECT attachment_media_id FROM messages WHERE id = ?', [$photo]));
+    $late = dm_member('Late');
+    same(null, msg_add_people($staff, $g, [(int) $late['id']]));
+    msg_post($staff, $g, 'Welcome!');
+    $conv = msg_conversation_for($g, (int) $late['id']);
+    [$rows] = msg_thread_rows($g, 0, 0, (int) $conv['p_first']);
+    $bodies = array_column($rows, 'body');
+    ok(!in_array('Before you joined: secret plans', $bodies, true) && in_array('Welcome!', $bodies, true), 'earlier messages hidden');
+    [$all] = msg_thread_rows($g, 0, 0, (int) msg_conversation_for($g, (int) $a['id'])['p_first']);
+    ok(in_array('Before you joined: secret plans', array_column($all, 'body'), true), 'first participants see everything');
+    ok(!media_can_view($media, dm_user((int) $late['id'])), 'earlier attachment not visible to the newcomer');
+    ok(media_can_view($media, dm_user((int) $a['id'])));
+    ok(msg_report($late, (int) $photo, 'x') !== null, 'cannot report what you cannot see');
+    same(0, count(msg_conversations((int) $late['id'], 'secret plans')), 'search does not match hidden text');
+    same(0, (int) q_val('SELECT first_visible_id FROM conversation_participants WHERE conversation_id = ? AND user_id = ?', [$g, $a['id']]));
+});
+
+test('C3 review: members verified < 24 h post only in team threads, with staff, or as replies', function (): void {
+    dm_reset_settings();
+    $new = dm_member('Brandnew', 2);
+    $old = dm_member('Oldtimer');
+    $staff = dm_staff();
+    $reply = dm_start($old, [$new], 'Welcome to the club');
+    [, $err] = msg_post($new, $reply, 'Thanks!');
+    same(null, $err, 'replying in a 1-to-1 someone else started');
+    $sg = dm_start($staff, [$new, $old], 'Hello both', ['title' => 'Staff-led']);
+    [, $err] = msg_post($new, $sg, 'Hi');
+    same(null, $err, 'groups started by staff are fine');
+    $mg = dm_start($old, [$new, dm_member('Third')], 'Members group', ['title' => 'Members-led']);
+    [, $err] = msg_post($new, $mg, 'Hi all');
+    ok(str_contains((string) $err, 'first day'), 'not in a members\' group they were added to');
+    $t = dm_start($new, [], 'Question', ['team' => true]);
+    [, $err] = msg_post($new, $t, 'And another');
+    same(null, $err, 'team threads are fine');
+    q('UPDATE members SET verified_at = ? WHERE user_id = ?', [gmdate('Y-m-d H:i:s', time() - 30 * 3600), $new['id']]);
+    [, $err] = msg_post($new, $mg, 'Now I can');
+    same(null, $err, 'after 24 hours');
+});
+
+test('C3 review: impersonation audits the first access to messages once per session', function (): void {
+    $member = dm_member('Seen');
+    $admin = fixture_admin('admin', ['impersonate']);
+    act_as((int) $member['id']);
+    $_SESSION['imp'] = ['admin_id' => $admin, 'admin_sv' => 0, 'member_id' => (int) $member['id'], 'expires' => time() + 600, 'name' => 'Seen'];
+    $before = (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'message_access'");
+    msg_impersonation_audit();
+    msg_impersonation_audit();
+    same($before + 1, (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'message_access'"));
+    $row = q_one("SELECT * FROM audit_log WHERE action = 'message_access' ORDER BY id DESC LIMIT 1");
+    same($admin, (int) $row['user_id']);
+    same((int) $member['id'], (int) $row['on_behalf_of']);
+    $_SESSION = [];
+});
+
+test('C3 review: block has one answer; announcement groups only pass to staff, else close', function (): void {
+    $m = dm_member('Blocker');
+    $staff = dm_staff();
+    $msg = msg_block((int) $m['id'], (int) $staff['id']);
+    same($msg, msg_block((int) $m['id'], 999999999));
+    same($msg, msg_block((int) $m['id'], (int) $m['id']));
+    $a = dm_member('Reader');
+    $ann = dm_start($staff, [$a, $m], 'News', ['title' => 'Closing', 'announcement' => true]);
+    $staff2 = dm_staff();
+    $ann2 = dm_start($staff, [$a, $staff2], 'News 2', ['title' => 'Handover', 'announcement' => true]);
+    same(null, msg_leave($staff, $ann2));
+    same('owner', q_val('SELECT part_role FROM conversation_participants WHERE conversation_id = ? AND user_id = ?', [$ann2, $staff2['id']]), 'another admin takes over');
+    same(null, msg_leave($staff, $ann));
+    ok(q_val('SELECT archived_at FROM conversations WHERE id = ?', [$ann]) !== null, 'no admin left: closed');
+    same('member', q_val('SELECT part_role FROM conversation_participants WHERE conversation_id = ? AND user_id = ?', [$ann, $a['id']]), 'members never become owners');
+    ok(str_contains((string) msg_post_problem(msg_conversation_for($ann, (int) $a['id']), $a), 'closed'));
+});
+
+test('C3 review: favicon uploads are capped at 16 megapixels; generation is locked', function (): void {
+    $big = dm_png_header(5000, 4000);
+    ok(str_contains((string) favicon_upload_problem($big, 'big.png', (int) filesize($big)), '16 megapixels'));
+    setting_set('site.name', 'Lock test ' . bin2hex(random_bytes(3)));
+    $in = favicon_inputs();
+    $dir = favicon_dir(favicon_signature($in));
+    if (is_dir($dir)) {
+        favicon_rmdir($dir); // the set depends on the initial and colours only: start without it
+    }
+    $root = dirname($dir);
+    if (!is_dir($root)) {
+        mkdir($root, 0755, true);
+    }
+    $h = fopen($root . '/.lock', 'c');
+    ok(flock($h, LOCK_EX));
+    // Another process holds the lock: a page view does not wait and falls back (checked in a child process).
+    $code = 'putenv("GATHER_CONFIG=' . BASE . '/tests/config.test.php"); require "' . BASE . '/src/load.php"; echo favicon_ensure() === null ? "fallback" : "drawn";';
+    $out = (string) shell_exec(escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg($code));
+    same('fallback', trim($out));
+    flock($h, LOCK_UN);
+    fclose($h);
+    ok(favicon_ensure(null, true) !== null, 'drawn once the lock is free');
+    setting_set('site.name', 'Gather');
 });

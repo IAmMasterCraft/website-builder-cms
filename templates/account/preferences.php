@@ -1,4 +1,4 @@
-<?php /** @var array $prefs @var bool $is_member @var bool $message_emails */ ?>
+<?php /** @var array $prefs @var bool $is_member @var bool $message_emails @var bool $message_findable */ ?>
 <section class="dash-card narrow-card">
   <form class="form" method="post" action="/account/preferences">
     <?= csrf_field() ?>
@@ -8,6 +8,9 @@
       <?php if ($is_member): ?>
       <label class="check-line"><input type="checkbox" name="birthday_greeting" value="1"<?= $prefs['birthday_greeting'] ? ' checked' : '' ?>> <span><strong>Birthday greeting</strong><br><span class="muted">A short email on your birthday.</span></span></label>
       <?php endif ?>
+    </fieldset>
+    <fieldset class="field"><legend>Messages</legend>
+      <label class="check-line"><input type="checkbox" name="message_findable" value="1"<?= !empty($message_findable) ? ' checked' : '' ?>> <span><strong>Others can find me in messages</strong><br><span class="muted">Members can find you by name or member number when they start a new message. When off, only people you already have a conversation with, and the organisation’s admins, can message you.</span></span></label>
     </fieldset>
     <?php if ($is_member): ?>
     <fieldset class="field"><legend>Privacy</legend>

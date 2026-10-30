@@ -315,6 +315,12 @@ function initPicker(form) {
   const search = async () => {
     const term = q.value.trim();
     const mine = ++seq;
+    if (term.length > 0 && term.length < 3) {
+      // Short terms are not searched (the server only matches whole member numbers there).
+      results.replaceChildren();
+      announce.textContent = 'Type at least 3 letters.';
+      return;
+    }
     try {
       const data = await getJson(`${form.dataset.recipients}?q=${encodeURIComponent(term)}`);
       if (mine !== seq) return;
@@ -333,11 +339,11 @@ function initPicker(form) {
         results.append(p);
       }
       announce.textContent = term ? `${list.length} ${list.length === 1 ? 'person' : 'people'} found.` : '';
-    } catch {
-      announce.textContent = 'Search is not available right now. Use the Search button.';
+    } catch (err) {
+      announce.textContent = err.message || 'Search is not available right now. Use the Search button.';
     }
   };
-  q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(search, 250); });
+  q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(search, 400); });
   form.querySelector('[data-dm-find]')?.addEventListener('click', (e) => { e.preventDefault(); search(); });
   q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
   updateTitle();

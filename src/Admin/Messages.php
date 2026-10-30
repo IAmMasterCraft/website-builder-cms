@@ -42,6 +42,8 @@ final class Messages
     {
         $ctx = self::teamCtx();
         $conv = self::teamConversation($ctx['user'], (int) $p['id']);
+        // Review: who read which Team inbox thread is on record (one row per view; cheap).
+        audit('team_view', 'conversation', (int) $conv['id'], 'opened a Team inbox thread');
         $data = \Site\Messages::threadData($ctx, $conv, true);
         $member = null;
         foreach ($data['participants'] as $pp) {

@@ -24,11 +24,12 @@ $person = static function (array $r, bool $checked): string {
       <label for="dm-q">Find people by name or member number</label>
       <div class="dm-search-row"><input type="search" id="dm-q" name="q" value="<?= e($q) ?>" maxlength="80" autocomplete="off" data-dm-q aria-describedby="dm-q-hint">
         <button class="btn ghost small" type="submit" name="_find" value="1" formnovalidate data-dm-find><?= icon('search') ?> Search</button></div>
-      <p class="hint" id="dm-q-hint"><?php if ($ctx['admin']): ?>You can message any member, group or admin.<?php elseif ($new_account): ?>During your first day as a member you can message the team only.<?php elseif (!$member_to_member): ?>Messages between members are switched off; you can message the team.<?php else: ?>You can message other members and the admins listed for the team.<?php endif ?></p>
+      <p class="hint" id="dm-q-hint"><?php if ($ctx['admin']): ?>You can message any member, group or admin.<?php elseif ($new_account): ?>During your first day as a member you can message the team only.<?php elseif (!$member_to_member): ?>Messages between members are switched off; you can message the team.<?php else: ?>Type at least <?= MSG_SEARCH_MIN ?> letters of a name, or a full member number. Members who chose not to be found do not appear.<?php endif ?></p>
     </div>
     <div class="dm-results" data-dm-results>
       <?php if ($results !== []): ?><p class="dm-sub"><?= $q === '' ? 'Admins you can message' : 'Results' ?></p><?php foreach ($results as $r): ?><?= $person($r, false) ?><?php endforeach ?>
-      <?php elseif ($searched && $q !== ''): ?><p class="muted">Nobody found that you can message.</p><?php endif ?>
+      <?php elseif (!empty($search_limited)): ?><p class="muted">Too many searches. Please wait a few minutes.</p>
+      <?php elseif ($searched && $q !== ''): ?><p class="muted"><?= !empty($short_term) ? 'Type at least ' . MSG_SEARCH_MIN . ' letters of a name, or a full member number.' : 'Nobody found that you can message.' ?></p><?php endif ?>
     </div>
     <p class="sr-only" role="status" data-dm-results-status></p>
   </fieldset>

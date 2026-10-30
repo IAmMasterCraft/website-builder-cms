@@ -31,7 +31,11 @@ final class Messages
                 redirect('/account');
             }
         }
-        return ['admin' => $admin, 'base' => $admin ? '/admin/messages' : '/account/messages', 'user' => $user, 'readonly' => is_impersonating()];
+        $readonly = is_impersonating();
+        if ($readonly) {
+            msg_impersonation_audit(); // review: once per impersonation, on first access to any message area
+        }
+        return ['admin' => $admin, 'base' => $admin ? '/admin/messages' : '/account/messages', 'user' => $user, 'readonly' => $readonly];
     }
 
     /** Audit entries for admin actions only (members' own messaging is not site administration). */
@@ -87,12 +91,14 @@ final class Messages
         $viewer = msg_account((int) $ctx['user']['id']);
         $selected = [];
         foreach (msg_accounts($selectedIds) as $a) {
-            if ($viewer !== null && msg_can_message($viewer, $a) === null) {
+            // Review: a ?to= prefill only shows people the search would show (or who already share a conversation).
+            if ($viewer !== null && msg_can_start_with($viewer, $a) === null) {
                 $selected[] = msg_recipient_item($a);
             }
         }
         $selectedKeys = array_column($selected, 'id');
-        $results = array_values(array_filter(msg_recipient_search($ctx['user'], $q), static fn (array $r): bool => !in_array($r['id'], $selectedKeys, true)));
+        $found = msg_recipient_search_limited($ctx['user'], $q);
+        $results = array_values(array_filter($found ?? [], static fn (array $r): bool => !in_array($r['id'], $selectedKeys, true)));
         $s = msg_settings();
         self::page($ctx, 'new', 'New message', [
             'q' => $q, 'searched' => $q !== '' || isset($_GET['q']), 'results' => $results, 'selected' => $selected,
@@ -100,7 +106,7 @@ final class Messages
             'team_checked' => !empty($values['team']) || query_param('team') === '1',
             'values' => $values, 'errors' => $old['errors'],
             'new_account' => !$ctx['admin'] && $viewer !== null && msg_account_age_hours($viewer) < MSG_NEW_ACCOUNT_HOURS,
-            'member_to_member' => $s['member_to_member'],
+            'member_to_member' => $s['member_to_member'], 'search_limited' => $found === null, 'short_term' => !$ctx['admin'] && $q !== '' && mb_strlen($q) < MSG_SEARCH_MIN,
         ]);
     }
 
@@ -108,7 +114,11 @@ final class Messages
     public static function recipients(array $p): void
     {
         $ctx = self::ctx();
-        json_out(['results' => msg_recipient_search($ctx['user'], query_param('q'))]);
+        $found = msg_recipient_search_limited($ctx['user'], query_param('q'));
+        if ($found === null) {
+            json_out(['results' => [], 'error' => 'Too many searches. Please wait a few minutes.'], 429);
+        }
+        json_out(['results' => $found]);
     }
 
     public static function store(array $p): void
@@ -183,7 +193,8 @@ final class Messages
     {
         $user = $ctx['user'];
         $convId = (int) $conv['id'];
-        [$rows, $hasEarlier] = msg_thread_rows($convId, 0, max(0, input_int('before', 0, true)));
+        $firstVisible = $teamView ? 0 : (int) ($conv['p_first'] ?? 0);
+        [$rows, $hasEarlier] = msg_thread_rows($convId, 0, max(0, input_int('before', 0, true)), $firstVisible);
         $names = msg_accounts(array_map(static fn (array $m): int => (int) ($m['sender_id'] ?? 0), $rows));
         $canAct = !$ctx['readonly'] && !$teamView;
         $messages = array_map(static fn (array $m): array => msg_present($m, $user, $names, $canAct), $rows);
@@ -213,7 +224,7 @@ final class Messages
             'act' => in_array($act, ['edit', 'delete', 'report'], true) ? $act : '', 'act_id' => $actId,
             'values' => $old['values'], 'errors' => $old['errors'],
             'manage' => $manage, 'add_q' => $addQ,
-            'add_results' => $manage && $addQ !== '' ? array_values(array_filter(msg_recipient_search($user, $addQ), static fn (array $r): bool => !in_array($r['id'], array_map('intval', array_column($participants, 'user_id')), true))) : [],
+            'add_results' => $manage && $addQ !== '' ? array_values(array_filter(msg_recipient_search_limited($user, $addQ) ?? [], static fn (array $r): bool => !in_array($r['id'], array_map('intval', array_column($participants, 'user_id')), true))) : [],
             'i_blocked' => $other !== null && (int) $other['id'] > 0 && msg_blocks((int) $user['id'], (int) $other['id']),
             'title_text' => msg_conversation_title($conv, $participants, (int) $user['id'], $teamView),
             'poll_url' => $base . '/' . $convId . '/poll', 'read_url' => $base . '/' . $convId . '/read',
@@ -269,10 +280,11 @@ final class Messages
         $convId = (int) $conv['id'];
         $after = max(0, input_int('after', 0, true));
         $since = query_param('since');
-        $new = $after > 0 ? msg_thread_rows($convId, $after)[0] : [];
+        $firstVisible = $teamView ? 0 : (int) ($conv['p_first'] ?? 0);
+        $new = $after > 0 ? msg_thread_rows($convId, $after, 0, $firstVisible)[0] : [];
         $changed = [];
         if ($after > 0 && preg_match('/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/', $since)) {
-            $changed = q_all('SELECT * FROM messages WHERE conversation_id = ? AND id <= ? AND updated_at >= ? ORDER BY id LIMIT 200', [$convId, $after, $since]);
+            $changed = q_all('SELECT * FROM messages WHERE conversation_id = ? AND id <= ? AND id >= ? AND updated_at >= ? ORDER BY id LIMIT 200', [$convId, $after, $firstVisible, $since]);
         }
         $all = array_merge($new, $changed);
         $names = msg_accounts(array_map(static fn (array $m): int => (int) ($m['sender_id'] ?? 0), $all));

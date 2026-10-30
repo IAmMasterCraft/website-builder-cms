@@ -431,7 +431,8 @@ final class Account
         $user = self::activeUser();
         $member = member_for_user((int) $user['id']);
         self::page('preferences', 'Email preferences', 'preferences', ['user' => $user, 'prefs' => $member !== null ? member_prefs($member) : member_pref_defaults(), 'is_member' => $member !== null,
-            'message_emails' => (int) q_val('SELECT message_emails FROM users WHERE id = ?', [$user['id']]) === 1]);
+            'message_emails' => (int) q_val('SELECT message_emails FROM users WHERE id = ?', [$user['id']]) === 1,
+            'message_findable' => (int) q_val('SELECT message_findable FROM users WHERE id = ?', [$user['id']]) === 1]);
     }
 
     public static function preferencesSave(array $p): void
@@ -439,7 +440,8 @@ final class Account
         csrf_check();
         $user = self::activeUser();
         // C3: "Message notifications" (unread message digests) for members and groups.
-        q('UPDATE users SET message_emails = ? WHERE id = ?', [input('message_emails') === '1' ? 1 : 0, $user['id']]);
+        // C3 review: "Others can find me in messages" (members and groups).
+        q('UPDATE users SET message_emails = ?, message_findable = ? WHERE id = ?', [input('message_emails') === '1' ? 1 : 0, input('message_findable') === '1' ? 1 : 0, $user['id']]);
         $member = member_for_user((int) $user['id']);
         if ($member === null) {
             flash('Preferences saved.');

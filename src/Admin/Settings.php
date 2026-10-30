@@ -183,6 +183,7 @@ final class Settings
         } elseif (input('logo_remove') === '1') {
             setting_set('site.logo_media_id', null);
         }
+        favicon_ensure(null, true); // review: draw the icon set now (upload, name change), not on a public page view
         audit('update', 'settings', null, 'site settings' . $iconChange . ($provider !== '' ? ' (analytics: ' . $provider . ')' : '') . ($supportChanges ? '; ' . implode('; ', $supportChanges) : ''));
         // Radio repeats keep their local time: a new time zone can make slots clash.
         $clashes = $v['timezone'] !== $oldTimezone ? radio_schedule_conflicts(new \DateTimeZone($v['timezone'])) : [];

@@ -52,6 +52,7 @@ final class Design
         if (input('reset') === '1') {
             setting_set('site.theme', $theme);
             setting_set('design', []);
+            favicon_ensure(null, true); // review: the letter tile follows the new colours at once
             audit('update', 'design', null, 'reset to ' . $theme . ' defaults');
             flash('Design reset to the ' . theme_list()[$theme]['name'] . ' theme’s defaults.');
             redirect('/admin/design');
@@ -65,6 +66,7 @@ final class Design
         $custom = array_filter($values, static fn (string $v, string $k): bool => ($defaults[$k] ?? null) !== $v, ARRAY_FILTER_USE_BOTH);
         setting_set('site.theme', $theme);
         setting_set('design', $custom);
+        favicon_ensure(null, true); // review: the letter tile follows the new colours at once
         audit('update', 'design', null, $theme . ($custom ? ' + ' . implode(', ', array_keys($custom)) : ''));
         $failing = array_filter(design_contrast_report(design_effective($theme)), static fn (array $r): bool => !$r['ok']);
         if ($failing) {

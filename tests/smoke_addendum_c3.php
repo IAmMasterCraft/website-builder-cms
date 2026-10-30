@@ -171,3 +171,27 @@ check('C3: the data export includes the messages the member sent', in_array('Dig
 $h = $admin->get('/admin');
 check('C3: overview has Team inbox and reported messages cards; sidebar has the Messages group', str_contains($h['body'], 'Team inbox (unread)') && str_contains($h['body'], 'Reported messages') && str_contains($h['body'], 'data-group="messages"'));
 check('C3: the Messages screen has a contextual Help link', str_contains($admin->get('/admin/messages/team')['body'], '/admin/help/manager-guide/messages#team-inbox'));
+
+// ---- Security review fixes ----------------------------------------------------------------------
+$carlaId = $dmMember('Carla', 'carla.dm@example.test');
+$carla = login_as($base, 'carla.dm@example.test', 'dm-smoke-password');
+$r = json_decode($carla->get('/account/messages/recipients?q=Al')['body'], true);
+check('C3 review: two letters find nobody (enumeration)', ($r['results'] ?? null) === []);
+check('C3 review: three letters do', in_array($aliceId, array_column(json_decode($carla->get('/account/messages/recipients?q=Ali')['body'], true)['results'] ?? [], 'id'), true));
+check('C3 review: Email preferences offer "Others can find me in messages"', str_contains($bob->get('/account/preferences')['body'], 'name="message_findable"'));
+$bob->post('/account/preferences', ['_csrf' => $bob->csrf('/account/preferences'), 'message_emails' => '1']);
+check('C3 review: opted out: members cannot find Bobby or prefill him; admins and his contacts still can',
+    (int) q_val('SELECT message_findable FROM users WHERE id = ?', [$bobId]) === 0
+    && !str_contains($carla->get('/account/messages/new?q=Bobby')['body'], 'value="' . $bobId . '"')
+    && !str_contains($carla->get('/account/messages/new?to=' . $bobId)['body'], 'Bobby Smoke')
+    && str_contains($alice->get('/account/messages/new?to=' . $bobId)['body'], 'name="to[]" value="' . $bobId . '" checked')
+    && str_contains($admin->get('/admin/messages/new?q=Bobby')['body'], 'value="' . $bobId . '"'));
+$r = $carla->post('/account/messages', ['_csrf' => $carla->csrf('/account/messages/new'), 'to[]' => (string) $bobId, 'body' => 'guessed id']);
+check('C3 review: posting to an opted-out id gives the generic answer', str_contains($carla->get($r['location'])['body'], MSG_NOT_AVAILABLE));
+for ($i = 0; $i < MSG_SEARCHES_PER_WINDOW; $i++) {
+    rate_hit('msgsearch:' . $carlaId);
+}
+check('C3 review: the recipient search is rate limited (429)', $carla->get('/account/messages/recipients?q=Alice')['status'] === 429);
+$admin->get('/admin/messages/team/' . $teamId);
+check('C3 review: opening a Team inbox thread is audited', q_val("SELECT action FROM audit_log WHERE item_type = 'conversation' AND item_id = ? ORDER BY id DESC LIMIT 1", [$teamId]) === 'team_view');
+check('C3 review: the generic digest template exists and is editable', $admin->get('/admin/email-templates/message_digest_new')['status'] === 200);

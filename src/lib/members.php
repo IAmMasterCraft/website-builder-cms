@@ -706,6 +706,7 @@ function member_export(int $userId): array
         // C3: the messages this person sent (other people's messages are theirs).
         'messages' => msg_export($userId),
         'message_notifications' => (int) q_val('SELECT message_emails FROM users WHERE id = ?', [$userId]) === 1,
+        'findable_in_messages' => (int) q_val('SELECT message_findable FROM users WHERE id = ?', [$userId]) === 1,
     ];
 }
 
