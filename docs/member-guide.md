@@ -134,6 +134,7 @@ renew.
 |---|---|
 | **News and event updates** | Newsletters and invitations |
 | **Birthday greeting** | A short email on your birthday |
+| **Message notifications** | An email when a message has waited unread for 15 minutes (one per conversation) |
 | **Show me in the birthday celebrants list** | Your first name and last initial appear on your birthday (your age is never shown) |
 
 Important account emails (password resets, email verification, event
@@ -158,6 +159,51 @@ gives your place back. No payment is taken on the website.
 
 **Add to calendar** on an event page puts it in your phone or computer
 calendar.
+
+## Messages
+
+**Messages** in My account is where you send and receive private messages.
+The number next to it shows how many messages you have not read yet.
+
+![Messages](images/member-messages.webp)
+
+- **New message**: search for a member by name or member number, tick them
+  and write your message. Tick several people to start a group (up to 20
+  people, give it a name).
+- **Message the team**: questions for the organisation. Any of the admins
+  who look after messages can answer, and you see their name.
+- Messages are plain text (web addresses become links). You can attach a
+  photo or a PDF (up to 5 MB); only the people in the conversation can open
+  it.
+- An open conversation shows new messages by itself after a few seconds.
+- **Edit** your message within 15 minutes of sending it, or **Delete** it
+  (the others then see "Message deleted").
+- **Mute** a conversation to stop its count and emails; **Leave
+  conversation** takes you out of a group.
+
+Some limits keep messages friendly: during your first day as a member you
+can only message the team, and you can send 30 messages in 10 minutes and
+start 10 new conversations a day. Your organisation may also have switched
+off messages between members.
+
+![A conversation](images/member-message-thread.webp)
+
+### Blocking and reporting
+
+- **Block** (in a one-to-one conversation, under Settings): that person can
+  no longer message you or add you to a group, and the conversation is
+  hidden from you. They are not told. **Blocked people** (at the bottom of
+  your messages) lets you unblock them. Admins cannot be blocked.
+- **Report** (under a message): tell the organisation about a message that
+  breaks the rules. The admins who handle reports see that message and the
+  few messages around it, nothing else of your conversations. Admins cannot
+  read your private messages otherwise.
+
+### Email notifications
+
+If a message waits unread for 15 minutes, you get one email for that
+conversation (not one per message). Switch **Message notifications** off in
+**Email preferences** to stop these emails.
 
 ## Notices
 
@@ -201,11 +247,13 @@ administrator looks at them.
 **Your data**:
 
 - **Download my data**: a file with everything the organisation holds about
-  you (profile, preferences, event registrations, comments).
+  you (profile, preferences, event registrations, comments, the messages
+  you sent).
 - **Delete my account**: enter your password and click **Request deletion**.
   An administrator confirms it. Your profile and photo are removed, your
   member number is retired, event registrations are kept without your name,
-  and your comments show as "former member".
+  your comments show as "former member", and the messages you sent are
+  emptied (others see "Former member · Message deleted").
 
 ![Your data](images/member-privacy.webp)
 
@@ -214,7 +262,9 @@ administrator looks at them.
 To help with a question ("I can't find my card"), an administrator can view
 the site as you see it, for up to 30 minutes. They cannot see or change your
 password or email address, delete your account, download your data or
-change your email choices, and they cannot like, comment or post as you.
+change your email choices, and they cannot like, comment, post or send
+messages as you. They can read your messages while viewing as you; each
+time is recorded.
 Everything they do is recorded. You normally get an email saying an
 administrator viewed your account; if you did not expect it, contact the
 organisation.

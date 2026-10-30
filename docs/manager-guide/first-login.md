@@ -41,8 +41,8 @@ All three changes are recorded in the [audit log](audit-log.md).
 ![The admin dashboard](../images/admin-overview.webp)
 
 **The menu on the left** lists every area you may manage, in groups:
-*Site*, *Content*, *Members*, *Community*, *Communications*, *Radio* and
-*System*. You only see the groups and screens you have permission for.
+*Site*, *Content*, *Members*, *Community*, *Messages*, *Communications*,
+*Radio* and *System*. You only see the groups and screens you have permission for.
 
 - Click a group's name to open or close it. The arrow next to the name
   points down when the group is open.
@@ -77,8 +77,10 @@ for that screen.
 
 - **Search content**: finds posts, pages, events and more by title.
 - **View site**: opens the public website in a new tab.
+- **The speech bubble**: your unread [messages](messages.md) (plus unread
+  Team inbox threads if you answer the Team inbox).
 - **The bell**: the number of things waiting for you (unread contact
-  messages, reported comments, jobs awaiting approval).
+  messages, reported comments and messages, jobs awaiting approval).
 - **The moon/sun**: switches the admin area between light and dark.
 - **Your name**: shows your email and role, **My profile** (change your
   name, email or password, see [Your own profile](#your-own-profile)) and

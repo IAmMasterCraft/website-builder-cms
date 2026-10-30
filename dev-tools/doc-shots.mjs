@@ -47,6 +47,8 @@ const shots = [
   ['member-password', '/account/password', { vp: D, who: 'member', h: 1100 }],
   ['member-events', '/account/events', { vp: D, who: 'member' }],
   ['member-notices', '/account/notices', { vp: D, who: 'member' }],
+  ['member-messages', '/account/messages', { vp: D, who: 'member' }],
+  ['member-message-thread', '/account/messages/2', { vp: M, who: 'member', h: 1300 }],
   ['member-jobs-new', '/account/jobs/new', { vp: D, who: 'member', h: 1200 }],
   ['member-privacy', '/account/privacy', { vp: D, who: 'member' }],
   // Admin: site
@@ -99,6 +101,11 @@ const shots = [
   ['admin-notices', '/admin/notices', { vp: D, who: 'admin' }],
   ['admin-notice-new', '/admin/notices/new', { vp: D, who: 'admin', h: 1100 }],
   ['admin-inbox', '/admin/inbox', { vp: D, who: 'admin' }],
+  // C3 messages
+  ['admin-messages', '/admin/messages', { vp: D, who: 'admin' }],
+  ['admin-message-thread', '/admin/messages/1', { vp: D, who: 'admin', h: 1100 }],
+  ['admin-team-inbox', '/admin/messages/team', { vp: D, who: 'admin' }],
+  ['admin-message-report', '/admin/messages/reports', { vp: D, who: 'admin', h: 1300, follow: 'a[href^="/admin/messages/reports/"]' }],
   ['admin-inbox-message', '/admin/inbox', { vp: D, who: 'admin', h: 1000, follow: 'a[href^="/admin/inbox/"]' }],
   ['admin-email-templates', '/admin/email-templates', { vp: D, who: 'admin', h: 1100 }],
   ['admin-email-template-edit', '/admin/email-templates/welcome_member', { vp: D, who: 'admin', h: 1200 }],

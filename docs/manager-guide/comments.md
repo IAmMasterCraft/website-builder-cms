@@ -1,5 +1,9 @@
 # Comments and reports
 
+> [!NOTE]
+> Reported *messages* (private messages between members) have their own
+> queue: see [Reported messages](messages.md#reported-messages).
+
 Permission: **content**.
 
 Members can comment on posts that allow it (tick **Allow comments** on the

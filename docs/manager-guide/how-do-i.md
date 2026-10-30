@@ -68,6 +68,10 @@ for example **Radio** for Library, Playlists and Schedule).
 | …send a newsletter? | Admin → **Campaigns** → **New campaign**. See [Campaigns](campaigns.md) |
 | …send the AGM notice to every member? | A campaign with **Essential membership notice** ticked. See [essential notices](campaigns.md#essential-membership-notices) |
 | …post an announcement on members' dashboards? | Admin → **Notices** → **New notice**. See [Notices](notices.md) |
+| …message a member, or a group of members? | Admin → **Messages** → **New message**. See [Messages](messages.md) |
+| …answer members who wrote to "the team"? | Admin → **Messages** → **Team inbox**. See [Team inbox](messages.md#team-inbox) |
+| …deal with a reported message? | Admin → **Messages** → **Reported messages**. See [Reported messages](messages.md#reported-messages) |
+| …stop members messaging each other? | Admin → **Messages** → **Message settings** *(super admin)*. See [Message settings](messages.md#message-settings) |
 | …answer a message from the contact form? | Admin → **Inbox** → the message → **Reply by email**. See [Inbox](inbox.md) |
 | …change the wording of the welcome email? | Admin → **Email templates** → **Welcome (with member number)**. See [Email templates](email-templates.md) |
 | …see whether emails were delivered? | Admin → **Delivery log**, or the campaign's **Delivery log** |

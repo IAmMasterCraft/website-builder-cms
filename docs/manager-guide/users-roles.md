@@ -26,19 +26,21 @@ and last login. Search and filter by status (**Active** / **Suspended**).
 | **Jobs** | The job board queue and settings |
 | **Gallery and media** | Albums and the media library |
 | **Essential membership notices** | Nothing on its own. Together with Communications: mark a campaign as an essential notice (sent even to members who switched news emails off) and send or schedule it |
+| **Messages** | Answer the Team inbox (messages members send to "the team") and review reported messages. Every admin has their own messages without it. See [Messages](messages.md) |
 | **Log in as a member** | View the site as a member or group account to help them (**Log in as this member** on a member's page). Nothing else on its own: give it together with **Members and groups** so the admin can find the member. See [Log in as a member](members.md#log-in-as-a-member) |
 
 Only super admins can reach Design, Site settings, Membership settings,
 Custom fields, Email settings, Users and roles, the Audit log, Backups and
-System health. Every admin can open the [help centre](help-centre.md) and
-their own **My profile**.
+System health and Message settings. Every admin can open the [help
+centre](help-centre.md), their own **My profile** and their own **Messages**.
 
 The menu on the left only shows what an admin may open: a group (such as
 *Radio*) disappears completely when they have none of its screens.
 
-Existing admins do not get the two extra permissions (**Essential
-membership notices**, **Log in as a member**) automatically when the site is
-updated: tick them for the people who need them.
+Existing admins do not get the extra permissions (**Essential
+membership notices**, **Log in as a member**, **Messages**) automatically
+when the site is updated: tick them for the people who need them. Until
+then only super admins see the Team inbox and reported messages.
 
 ## Adding an admin
 

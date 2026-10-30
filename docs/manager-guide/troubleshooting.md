@@ -45,6 +45,18 @@ and `storage/logs/cron.log`.
 | One member gets no emails | See [When someone says "I don't get your emails"](email-settings.md#when-someone-says-i-dont-get-your-emails). |
 | Emails land in spam | SPF, DKIM and DMARC records: see [Email deliverability](../email-deliverability.md#2-spf-dkim-and-dmarc). |
 
+## Messages
+
+| Problem | Fix |
+|---|---|
+| A member cannot find another member to message | Check **Message settings**: members may be stopped from messaging each other. New members can only message the team for their first 24 hours. The other person may have blocked them (they are not told). |
+| A member cannot find an admin by name | Members only see the admins ticked under **Admins members can message by name** in Message settings; otherwise they use **Message the team**. |
+| Nobody sees the Team inbox | It needs the **Messages** permission (Users and roles); super admins always have it. |
+| "You have sent a lot of messages in a short time" | Members can send 30 messages in 10 minutes and start 10 conversations a day. Wait, or continue an existing conversation. |
+| Message emails do not arrive | They are sent 15 minutes after a message arrives, only if it is still unread, through cron (it must run every minute). Check the person's **Message notifications** preference, whether the conversation is muted, and the [suppression list](email-settings.md#suppression-list). |
+| New messages only appear after reloading | The page checks every 10 seconds when JavaScript works; in a background tab it checks less often. A browser extension blocking scripts stops it (the page still works with reloads). |
+| An attachment is refused | Only photos (JPG, PNG, WebP, GIF) and PDFs up to 5 MB. |
+
 ## Uploads and media
 
 | Problem | Fix |

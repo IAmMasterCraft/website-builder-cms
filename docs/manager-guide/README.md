@@ -16,9 +16,10 @@ Everyone who manages the site is an **admin**. There are two kinds:
   other admins, backups and system health. There is always at least one.
 - **Admins** see only the areas a super admin gave them. The eight areas are
   content; pages and menus; members and groups; communications; radio;
-  events; jobs; gallery and media. Two extra permissions add abilities on
-  top: *essential membership notices* and *log in as a member* (see
-  [Users and roles](users-roles.md)).
+  events; jobs; gallery and media. Three extra permissions add abilities on
+  top: *essential membership notices*, *log in as a member* and *messages*
+  (Team inbox and reported messages; see [Users and roles](users-roles.md)).
+  Every admin has their own messages.
 
 If a page in this guide is missing from your menu, you do not have that
 permission. Ask a super admin. Pages marked *(super admin)* are only for
@@ -57,6 +58,7 @@ of the menu, or the **Help** button next to a screen's title.
 - [Comments and reports](comments.md)
 
 **Communications**
+- [Messages, Team inbox and reported messages](messages.md)
 - [Notices](notices.md)
 - [Campaigns (newsletters) and essential notices](campaigns.md)
 - [Email templates](email-templates.md)
