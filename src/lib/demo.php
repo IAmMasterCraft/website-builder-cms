@@ -350,6 +350,8 @@ function demo_seed(int $userId): void
 
     // Members (§4): a custom field and a few verified demo members with numbers.
     setting_set('members', ['prefix' => 'HCA'] + member_settings());
+    // C4: the demo asks where members are from (Country -> State/Region -> Local area), optional.
+    setting_set('members.origin', ['enabled' => true, 'levels' => 3, 'required' => 0, 'country' => '', 'country_label' => 'Country of origin', 'l1_label' => '', 'l2_label' => '', 'legend' => 'Where you are from']);
     $district = db_insert('custom_fields', ['field_key' => 'home_district', 'label' => 'Home district', 'type' => 'select',
         'options' => json_encode(['Quayside', 'Old Town', 'Hillcrest', 'Marina', 'Elsewhere']), 'is_required' => 0, 'show_on_card' => 1, 'visible_to_members' => 1, 'sort' => 1]);
     $today = new DateTimeImmutable('now', site_tz());
@@ -371,6 +373,8 @@ function demo_seed(int $userId): void
                 'card_valid_until' => $today->modify('+1 year')->format('Y-m-d'), 'verified_at' => utc_now(), 'consent_at' => utc_now(),
                 'prefs' => json_encode(['newsletters' => true, 'birthday_greeting' => true, 'celebrants' => $celebrate])]);
             custom_values_save('member_field_values', 'member_id', $mid, [$district => $dist]);
+            // C4: structured locations (codes + names) for the demo members.
+            member_locations_save($mid, ['residence' => geo_from_names('United Kingdom', $region, '', 'Harbourside')]);
         });
     }
 

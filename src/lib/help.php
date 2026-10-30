@@ -478,6 +478,7 @@ function help_slug_for_admin_path(string $path): ?string
         '/admin/members' => 'manager-guide/members',
         '/admin/impersonate' => 'manager-guide/members#log-in-as-a-member',
         '/admin/custom-fields' => 'manager-guide/members#custom-fields',
+        '/admin/locations' => 'manager-guide/members#location-lists',
         '/admin/settings/membership' => 'manager-guide/members#membership-settings',
         '/admin/jobs' => 'manager-guide/jobs',
         '/admin/comments' => 'manager-guide/comments',

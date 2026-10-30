@@ -431,13 +431,13 @@ function last_mail_link(string $pattern): string
 }
 $joiner = new Browser($base);
 status_is($joiner, '/join', 200, 'name="form_ts"');
-check('join form has every field from §4.1', (bool) preg_match_all('/name="(first_name|last_name|birth_day|birth_month|birth_year|gender|address|nationality|country|region|city|photo|password|consent|newsletters|cf_home_district)"/', $joiner->last['body'], $mm) && count(array_unique($mm[1])) === 16, implode(',', array_unique($mm[1] ?? [])));
+check('join form has every field from §4.1', (bool) preg_match_all('/name="(first_name|last_name|birth_day|birth_month|birth_year|gender|address|nat_country|res_country|res_state|res_city|photo|password|consent|newsletters|cf_home_district)"/', $joiner->last['body'], $mm) && count(array_unique($mm[1])) === 16, implode(',', array_unique($mm[1] ?? [])));
 $photoFile = $tmp . '/me.jpg';
 $im = imagecreatetruecolor(800, 600);
 imagefilledrectangle($im, 0, 0, 800, 600, imagecolorallocate($im, 40, 120, 160));
 imagejpeg($im, $photoFile);
 $joinEmail = 'joiner@example.test';
-$joinFields = ['first_name' => 'Jo', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'birth_year' => '1990', 'country' => 'United Kingdom', 'region' => 'England',
+$joinFields = ['first_name' => 'Jo', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'birth_year' => '1990', 'res_country' => 'GB', 'res_state' => 'ENG',
     'email' => $joinEmail, 'password' => 'joiner-password-1', 'password_confirm' => 'joiner-password-1', 'consent' => '1', 'newsletters' => '1', 'cf_home_district' => 'Quayside'];
 $r = $joiner->post('/join', $joinFields + guard_tokens($joiner, '/join') + ['photo' => new CURLFile($photoFile, 'image/jpeg', 'me.jpg')]);
 check('a too-fast sign-up is refused (time check)', $r['status'] === 422 && str_contains($r['body'], 'very quick'));
@@ -506,7 +506,7 @@ status_is($checker, $verifyUrl, 404, 'Not a valid card');
 $member = q_one('SELECT * FROM members WHERE id = ?', [$memberId]);
 $verifyUrl = '/verify/' . $member['member_number'] . '/' . $member['card_code'];
 status_is($checker, $verifyUrl, 200, 'Valid member card');
-$edit = ['email' => $joinEmail, 'first_name' => 'Jo', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'birth_year' => '1990', 'country' => 'United Kingdom', 'region' => 'England',
+$edit = ['email' => $joinEmail, 'first_name' => 'Jo', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'birth_year' => '1990', 'res_country' => 'GB', 'res_state' => 'ENG',
     'membership_type' => 'Standard', 'membership_fee_status' => 'paid', 'card_valid_until' => '2020-01-31', 'cf_home_district' => 'Quayside'];
 $r = $admin->submit("/admin/members/$memberId", "/admin/members/$memberId", $edit);
 check('admin edits the member and sets an expiry date', $r['status'] === 303 && q_val('SELECT card_valid_until FROM members WHERE id = ?', [$memberId]) === '2020-01-31');
@@ -530,7 +530,7 @@ $r = $admin->submit('/admin/custom-fields/new', '/admin/custom-fields', ['label'
 check('super admin adds a custom field', $r['status'] === 303 && q_val("SELECT field_key FROM custom_fields WHERE label = 'Year of arrival'") === 'year_of_arrival');
 status_is($joiner, '/join', 303);
 status_is($admin, '/admin/settings/membership', 200, 'Number format');
-$r = $admin->submit('/admin/settings/membership', '/admin/settings/membership', ['prefix' => 'HCA', 'group_prefix' => 'HCA', 'number_format' => '{0000}', 'card_months' => '12', 'free_first_n' => '0', 'terms_url' => '/privacy-policy', 'signatory' => 'Secretary', 'regions' => 'England', 'genders' => 'Female', 'types' => 'Standard']);
+$r = $admin->submit('/admin/settings/membership', '/admin/settings/membership', ['prefix' => 'HCA', 'group_prefix' => 'HCA', 'number_format' => '{0000}', 'card_months' => '12', 'free_first_n' => '0', 'terms_url' => '/privacy-policy', 'signatory' => 'Secretary', 'genders' => 'Female', 'types' => 'Standard', 'origin_levels' => '3', 'origin_required' => '0']);
 check('membership settings validate the format and prefixes', $r['status'] === 422 && str_contains($r['body'], 'different prefix') && str_contains($r['body'], 'Include {PREFIX}'));
 // Dashboard pages
 foreach (['/account/profile', '/account/password', '/account/events', '/account/downloads', '/account/notices', '/account/preferences', '/account/privacy'] as $pth) {
@@ -538,7 +538,7 @@ foreach (['/account/profile', '/account/password', '/account/events', '/account/
 }
 $r = $joiner->submit('/account/preferences', '/account/preferences', ['newsletters' => '1', 'celebrants' => '1']);
 check('email preferences save', $r['status'] === 303 && str_contains((string) q_val('SELECT prefs FROM members WHERE id = ?', [$memberId]), '"celebrants":true'));
-$r = $joiner->submit('/account/profile', '/account/profile', ['first_name' => 'Joanna', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'country' => 'United Kingdom', 'cf_home_district' => 'Marina', 'cf_year_of_arrival' => '2001']);
+$r = $joiner->submit('/account/profile', '/account/profile', ['first_name' => 'Joanna', 'last_name' => 'Joiner', 'birth_day' => '24', 'birth_month' => '10', 'res_country' => 'GB', 'cf_home_district' => 'Marina', 'cf_year_of_arrival' => '2001']);
 check('member edits their profile', $r['status'] === 303 && q_val('SELECT first_name FROM members WHERE id = ?', [$memberId]) === 'Joanna');
 check('profile form shows the saved birthday', (bool) preg_match('/<option value="24" selected>24<\/option>/', $joiner->get('/account/profile')['body']));
 $evRow = q_one("SELECT * FROM events WHERE registration_open = 1 AND start_at > UTC_TIMESTAMP() ORDER BY start_at LIMIT 1");

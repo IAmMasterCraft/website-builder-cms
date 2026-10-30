@@ -99,6 +99,7 @@ function admin_nav(?array $user): array
             ['/admin/members', 'Members', 'users', 'members'],
             ['/admin/groups', 'Groups', 'building', 'members'],
             ['/admin/custom-fields', 'Custom fields', 'text-input', 'super_admin'],
+            ['/admin/locations', 'Location lists', 'globe', 'super_admin'],
             ['/admin/settings/membership', 'Membership settings', 'settings', 'super_admin'],
         ]],
         ['community', 'Community', 'heart-handshake', [

@@ -1,7 +1,7 @@
 # Members, ID cards, custom fields and import/export
 
-Permission: **members and groups** (custom fields and membership settings:
-*super admin*).
+Permission: **members and groups** (custom fields, location lists and
+membership settings: *super admin*).
 
 ## How someone becomes a member
 
@@ -28,7 +28,13 @@ a limit per network address), so you should rarely see fake sign-ups.
 - **Search** by name, email, member number or phone.
 - **Filters**: **Status** (**Active**, **Awaiting verification**,
   **Suspended**, **Card expired**, **Deletion requested**), **Membership
-  type**, **Region**, and any **Custom field** with a value.
+  type**, and any **Custom field** with a value.
+- **Filter by location**: choose **which location** (country of residence,
+  origin, nationality, or a Location custom field), then a **country** and,
+  if you like, a **state/region** and a **local area**. For example *Origin →
+  Nigeria → Ekiti* lists everyone whose state of origin is Ekiti. The
+  export and the card print buttons follow this filter too.
+- The **Lives in** column shows each member's region and country.
 - The heading shows how many are active, awaiting verification, and (if any)
   have asked for deletion. Click that link to see them.
 - **Export CSV** / **Import CSV**: see below.
@@ -45,8 +51,13 @@ Click a member.
 ![A member's page](../images/admin-member-edit.webp)
 
 **Profile**: email, name, birthday (the year is optional and never shown
-publicly), phone, gender, address, town, region, country, nationality, and
-the **Custom fields** (including ones only admins can see).
+publicly), phone, gender, address, the **location fields** (country of
+residence → region/state → town or city, nationality, and origin when it is
+switched on, see [Location fields](#location-fields)), and the **Custom
+fields** (including ones only admins can see). For members who joined
+before the location lists existed, a line under the location fields shows
+anything they had typed that did not match the lists, so you can pick the
+right entry.
 
 **Membership**:
 
@@ -164,8 +175,9 @@ profile, member card, events, the job board, notices and downloads.
 ## ID cards
 
 Every active member has a digital card with their photo, name, number,
-membership type, valid-until date, up to two custom fields, your logo,
-your contact details, a signature, and a **QR code**.
+membership type, valid-until date, two extra lines (location lines chosen
+in Membership settings, then custom fields marked "show on the card"), your
+logo, your contact details, a signature, and a **QR code**.
 
 Scanning the QR code opens a check page on your site showing **Valid**,
 **Expired** or **Not valid**, with the member's name and photo only. Show
@@ -213,9 +225,25 @@ stock. Each card is the size of a standard ID card (85.6 × 54 mm).
   Under UK GDPR and PECR a pre-ticked box is not valid consent for marketing
   emails. Members can opt in later from their dashboard or email
   preferences.
-- **Regions**, **Gender options** (gender is always optional) and
-  **Membership types**, one per line. The first membership type is given to
-  new members.
+- **Gender options** (gender is always optional) and **Membership types**,
+  one per line. The first membership type is given to new members.
+  (Regions are no longer a list you type: they come from the
+  [location lists](#location-fields).)
+
+**Origin on the sign-up form**
+
+- **Ask where members are from**: adds a section with **Country → State →
+  Local area**, for example "State of origin" and "LGA" for a Nigerian
+  community. Off by default.
+- **Heading of the section**, **Levels to ask** (country only; country and
+  state; or all three), **Required** (optional, country, country and state,
+  or every level).
+- **Country**: *Any country* lets members choose; fixing one country (for
+  example Nigeria) starts the section at its states.
+- **Country label**, **State label** and **Local area label**: leave the
+  state and local area labels empty to use the country's own words
+  ("State of origin", "Local Government Area"), or type short forms such
+  as "LGA".
 
 **ID card artwork**
 
@@ -223,8 +251,74 @@ stock. Each card is the size of a standard ID card (85.6 × 54 mm).
   "Secretary").
 - **Card background**: a faint pattern or photo behind the front of the card.
 - **Signature image**: a PNG with a transparent background works best.
+- **Location on the card (line 1 / line 2)**: any level of a member's
+  location, for example *State of origin* or *Country of residence*. Two
+  extra lines fit on the card: these come first, then custom fields marked
+  "show on the card".
 
 Click **Save settings**.
+
+## Location fields
+
+Countries, states/regions and local areas are chosen from lists instead of
+typed, so they are spelled the same for everyone and you can filter and
+email by them.
+
+- **Where you live**: **Country of residence → Region/State → Town or
+  city** (the town is typed).
+- **Nationality**: a country.
+- **Origin** (when switched on in Membership settings): **Country → State
+  → Local area**.
+- **Location custom fields**: the same lists for your own questions.
+
+Choosing a country loads its states at once; choosing a state loads its
+local areas. Long lists have a **Type to filter** box. When a country has no
+list of states (or a state has no list of local areas), the field becomes a
+box to type in. Without JavaScript the form still works: members press
+**Update the lists** after choosing a country and the page comes back with
+the next list.
+
+The names of the levels follow the country: **State / Local Government
+Area** for Nigeria, **Nation / County** for the United Kingdom, **State /
+County** for the United States, and **Region / Area** where no local term
+is set. You can rename them under [Location lists](#location-lists).
+
+**Suggested country**: the joining form puts a likely country at the top
+of the list under **Suggested**, guessed only from the visitor's own device
+(its time zone and language settings) or a country header added by your
+hosting's CDN (for example Cloudflare). Gather never looks up IP addresses.
+When two of these hints agree and the form is still empty, the country of
+residence is filled in with a note "We guessed … from your device
+settings. Change it if that is wrong."
+
+The lists come from [GeoNames](https://www.geonames.org/) (CC BY 4.0). Nigeria
+has all 36 states plus the Federal Capital Territory and all 774 Local
+Government Areas.
+
+### Members who joined before the location lists
+
+When the site was updated, what members had typed for nationality, country,
+region and city was matched against the lists ("UK" and "Great Britain"
+became United Kingdom, "Nigerian" became Nigeria, "Lagos State" became
+Lagos). Anything that did not match was kept exactly as typed, and the
+member's page shows the original values, so nothing was lost. Those members
+pick the right entry the next time they edit their profile (or you can do
+it for them).
+
+## Location lists
+
+*Super admins only.* **Admin → Location lists**.
+
+![Location lists](../images/admin-locations.webp)
+
+- Choose a **country** and **Show** to see its first-level divisions and
+  how many local areas each has.
+- **Level names**: rename the two levels for that country (for example
+  "LGA" instead of "Local Government Area"). Leave them empty for the
+  defaults.
+- **Add a missing local area**: choose the state and type the name. It is
+  offered on every form straight away. Added areas can be removed while no
+  member has chosen them.
 
 ## Custom fields
 
@@ -237,7 +331,18 @@ Extra questions on the joining form and member profiles, for example
 
 - **Label**: the question.
 - **Type**: **Text**, **Choice from a list** (type the **Choices**, one per
-  line), **Date** or **Tick box**.
+  line), **Date**, **Tick box** or **Location** (country → state → local
+  area from the [location lists](#location-fields)).
+- **Location settings** (for the Location type): **Levels** (country only;
+  country and state; or all three), **Country** (*Any country*, or fix one
+  so the field starts at its states), the labels, and what the **member
+  card** shows (everything, or just the country, state or local area).
+  Location fields are for members, not group accounts.
+- **Changing an existing field to Location** converts the answers already
+  given: an answer that matches a name in the list (for example "Ekiti" in
+  a "State of origin" choice field with Nigeria fixed) gets its code; any
+  other answer is kept as typed. The confirmation tells you how many
+  matched.
 - **Asked of**: **Members** or **Group accounts**.
 - **Required**.
 - **Visible to members**: asked at sign-up and editable on their profile.
@@ -253,15 +358,19 @@ Extra questions on the joining form and member profiles, for example
 ![Editing a custom field](../images/admin-custom-field-edit.webp)
 
 Custom fields can be used to filter the members list and to choose a
-campaign audience ("Members with a custom field value").
+campaign audience ("Members with a custom field value"; Location fields
+use **Filter by location** and the "Members by location" audience).
 
 ## Exporting members
 
 **Members → Export CSV** downloads the list (following the current
 filters) as a spreadsheet: member number, email, names, phone, birthday,
-gender, address, nationality, country, region, city, membership type,
+gender, address, the location columns (`nationality_code`, `nationality`,
+`country_code`, `country`, `region_code`, `region`, `city`, and
+`origin_country_code`, `origin_country`, `origin_state_code`,
+`origin_state`, `origin_area_code`, `origin_area`), membership type,
 status, card valid until, joined date, and one column per custom field
-(`cf_…`).
+(`cf_…`; Location fields add `cf_…_code`, for example `NG.54.2595346`).
 
 The file contains personal data: store it safely and delete it when you
 no longer need it. (Values that could be read as spreadsheet formulas are
@@ -278,9 +387,16 @@ made safe.)
    template.
    - Required columns: `email`, `first_name`, `last_name`.
    - Optional: `member_number`, `phone`, `birth_day`, `birth_month`,
-     `birth_year`, `gender`, `address`, `nationality`, `country`, `region`,
-     `city`, `membership_type`, `card_valid_until`, and `cf_…` for custom
-     fields. Dates as `YYYY-MM-DD`.
+     `birth_year`, `gender`, `address`, the location columns listed under
+     [Exporting members](#exporting-members), `membership_type`,
+     `card_valid_until`, and `cf_…` for custom fields. Dates as
+     `YYYY-MM-DD`.
+   - Locations: a code column (`country_code`, `region_code`…) wins;
+     otherwise names are matched like the update did ("UK", "Lagos State",
+     "Nigerian"). A name that is not in the list for that country is
+     reported and the row skipped. In update mode, only the levels the file
+     has are changed: a file with just a `city` column keeps each member's
+     country and region.
 2. Choose the file. Options:
    - **Update members whose email already exists** (otherwise those rows are
      skipped).

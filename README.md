@@ -91,14 +91,17 @@ src/               bootstrap, lib/ (helpers), Core/ (router, sanitiser, mail), S
                    Site/, Account/, Admin/, Install/ handlers
 templates/         layouts/, site/, account/, admin/, sections/, install/, email/, partials/  (print only)
 themes/<name>/     civic, heritage, harvest, monochrome: theme.json (design defaults), tokens.css, overrides.css, preview.png
-public/assets/     css/, js/ (ES modules), img/ (icon + section-thumbnail sprites), fonts/ (OFL, self-hosted), vendor/ (qrcode-generator, MIT)
+public/assets/     css/, js/ (ES modules), img/ (icon + section-thumbnail sprites), fonts/ (OFL, self-hosted), vendor/ (qrcode-generator, MIT),
+                   geo/ (countries + one JSON file per country: states and local areas, from GeoNames, CC BY 4.0)
+src/geo/index.php  generated country index for validation; src/fonts/ Lato (OFL) for the generated site icon
 vendor/phpmailer/  PHPMailer 6.9.3 (LGPL 2.1, unmodified src/ files + LICENSE), loaded by src/Core/Mail/SmtpMailer.php
 demo-assets/       original demo radio media (synthesised music, speech, generated video) + the dev script that made them
-migrations/        numbered SQL files
-storage/           originals/, variants/ (private), mail/, logs/, cache/, backups/  (not web-reachable)
+migrations/        numbered SQL files (and .php data upgrades that need the app, e.g. 021)
+storage/           originals/, variants/ (private), mail/, logs/, cache/, backups/, icons/ (generated favicons)  (not web-reachable)
 docs/              Markdown guides (shown in the admin help centre and at /help; never served directly), images/ screenshots
 bin/               migrate, make-admin, demo, cron, backup, restore, check, package, docs-html
-dev-tools/         dev only (never deployed): axe-core + Lighthouse (npm install here), audit.mjs, touch-reorder.mjs
+dev-tools/         dev only (never deployed): axe-core + Lighthouse (npm install here), audit.mjs, touch-reorder.mjs,
+                   build-geo.php + geo-corrections.json (rebuild the location data; raw dumps go to geo-src/, git-ignored)
 tests/             run.php (runner), *_test.php, smoke.php
 ```
 

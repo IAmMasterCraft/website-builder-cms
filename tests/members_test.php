@@ -6,18 +6,18 @@ declare(strict_types=1);
 
 function member_profile_input(array $over = []): array
 {
-    return $over + ['first_name' => 'Ngozi', 'last_name' => 'Adeyemi', 'birth_day' => '14', 'birth_month' => '3', 'birth_year' => '', 'country' => 'United Kingdom', 'region' => 'England', 'gender' => '', 'phone' => '07700 900123'];
+    return $over + ['first_name' => 'Ngozi', 'last_name' => 'Adeyemi', 'birth_day' => '14', 'birth_month' => '3', 'birth_year' => '', 'res_country' => 'GB', 'res_state' => 'ENG', 'gender' => '', 'phone' => '07700 900123'];
 }
 
 /** Sign up a member through the model (photo from a generated JPEG). */
 function fixture_signup(string $email, array $profileOver = [], array $custom = []): array
 {
-    [$profile, $errors] = member_profile_validate(member_profile_input($profileOver));
+    [$profile, $errors, $locations] = member_profile_validate(member_profile_input($profileOver));
     if ($errors) {
         throw new RuntimeException('bad fixture profile: ' . json_encode($errors));
     }
     $jpg = fixture_jpeg(700, 500);
-    return member_signup($email, 'correct horse battery', $profile, $custom, true, ['tmp' => $jpg, 'name' => 'me.jpg', 'size' => (int) filesize($jpg)], false);
+    return member_signup($email, 'correct horse battery', $profile, $custom, true, ['tmp' => $jpg, 'name' => 'me.jpg', 'size' => (int) filesize($jpg)], false, $locations);
 }
 
 function reset_member_settings(array $over = []): void
@@ -32,8 +32,12 @@ test('join profile validation', function (): void {
     same([], $e);
     same(null, $d['birth_year']);
     same(14, $d['birth_day']);
-    [, $e] = member_profile_validate(member_profile_input(['first_name' => '', 'birth_day' => '31', 'birth_month' => '2', 'region' => 'Atlantis', 'gender' => 'robot', 'country' => '']));
-    ok(isset($e['first_name'], $e['birth_day'], $e['region'], $e['gender'], $e['country']), json_encode($e));
+    [, $e] = member_profile_validate(member_profile_input(['first_name' => '', 'birth_day' => '31', 'birth_month' => '2', 'gender' => 'robot', 'res_country' => '']));
+    ok(isset($e['first_name'], $e['birth_day'], $e['gender'], $e['res_country']), json_encode($e));
+    [, $e] = member_profile_validate(member_profile_input(['res_state' => 'Atlantis']));
+    ok(isset($e['res_state']), 'a state code that is not in the list is refused');
+    [, $e] = member_profile_validate(member_profile_input(['res_country' => 'ZZ']));
+    ok(isset($e['res_country']), 'unknown country code refused');
     [, $e] = member_profile_validate(member_profile_input(['birth_day' => '29', 'birth_month' => '2', 'birth_year' => '2023']));
     ok(isset($e['birth_day']), '29 Feb 2023 does not exist');
     [, $e] = member_profile_validate(member_profile_input(['birth_day' => '29', 'birth_month' => '2', 'birth_year' => '']));
@@ -280,7 +284,7 @@ test('CSV import creates, skips, updates and reports bad rows', function (): voi
 });
 
 test('members CSV export filters and neutralises formulas', function (): void {
-    $r = fixture_signup('csv-' . bin2hex(random_bytes(3)) . '@example.test', ['first_name' => '=HYPERLINK("x")', 'region' => 'Scotland']);
+    $r = fixture_signup('csv-' . bin2hex(random_bytes(3)) . '@example.test', ['first_name' => '=HYPERLINK("x")', 'res_state' => 'SCT']);
     account_verify($r['token']);
     $rows = members_csv_rows(['region' => 'Scotland']);
     same('member_number', $rows[0][0]);

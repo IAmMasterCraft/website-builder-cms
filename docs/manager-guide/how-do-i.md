@@ -9,6 +9,7 @@ for example **Radio** for Library, Playlists and Schedule).
 | How do I… | Where |
 |---|---|
 | …change the organisation's name, contact details or logo? | Admin → **Site settings**. See [Site settings](settings.md) |
+| …change the icon in browser tabs (favicon)? | Admin → **Site settings** → **Site icon (favicon)**. See [Site icon](settings.md#site-icon-favicon) |
 | …change the colours, fonts or theme? | Admin → **Design**. See [Design and themes](design.md) |
 | …add a page? | Admin → **Pages** → **New page**. See [Pages and the page builder](page-builder.md#creating-a-page) |
 | …edit the home page? | Admin → **Pages** → **Build** next to "Home" |
@@ -51,6 +52,10 @@ for example **Radio** for Library, Playlists and Schedule).
 | …import members from a spreadsheet? | Admin → **Members** → **Import CSV**. See [Import](members.md#importing-members-from-a-spreadsheet) |
 | …export the member list? | Admin → **Members** → **Export CSV** |
 | …ask members an extra question at sign-up? | Admin → **Custom fields** → **New field** |
+| …ask members their state of origin and LGA? | Admin → **Membership settings** → **Origin on the sign-up form**. See [Membership settings](members.md#membership-settings) |
+| …list or email everyone from one state (or country)? | Members → **Filter by location**; for email, a campaign with the audience **Members by location**. See [Location fields](members.md#location-fields) |
+| …add a local area that is missing from the list, or rename "Local Government Area"? | Admin → **Location lists**. See [Location lists](members.md#location-lists) |
+| …show a member's state of origin on their card? | Admin → **Membership settings** → **Location on the card** |
 | …change member number format or card validity? | Admin → **Membership settings** |
 | …approve a job post? | Admin → **Jobs**. See [Job board](jobs.md) |
 | …deal with a reported comment? | Admin → **Comments**. See [Comments and reports](comments.md) |

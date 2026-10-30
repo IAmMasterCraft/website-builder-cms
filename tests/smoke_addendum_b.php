@@ -146,10 +146,10 @@ $fields = [];
 foreach ($pm as [, $n, $val]) {
     $fields[$n] = html_entity_decode($val, ENT_QUOTES);
 }
-foreach (['birth_day' => '3', 'birth_month' => '4', 'country' => 'United Kingdom'] as $k => $d) {
+foreach (['birth_day' => '3', 'birth_month' => '4', 'res_country' => 'GB'] as $k => $d) {
     $fields[$k] = ($fields[$k] ?? '') !== '' ? $fields[$k] : $d;
 }
-$fields['city'] = 'Changed by support';
+$fields['res_city'] = 'Changed by support';
 $fields['_csrf'] = meta_csrf($supporter, '/account/profile');
 $r = $supporter->post('/account/profile', $fields);
 $change = q_one("SELECT * FROM audit_log WHERE action = 'profile_update' ORDER BY id DESC LIMIT 1");

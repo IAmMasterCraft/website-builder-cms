@@ -12,10 +12,14 @@ function migration_statements(string $sql): array
     return array_values(array_filter(array_map('trim', $parts), static fn (string $s): bool => $s !== ''));
 }
 
-/** @return list<string> migration file names (e.g. 001_core.sql) in order */
+/**
+ * @return list<string> migration file names (e.g. 001_core.sql) in order. A
+ * .php migration returns a function(PDO): void and runs with the app loaded
+ * (data upgrades that need PHP, such as matching typed place names).
+ */
 function migration_files(): array
 {
-    $files = glob(BASE . '/migrations/[0-9][0-9][0-9]_*.sql') ?: [];
+    $files = array_merge(glob(BASE . '/migrations/[0-9][0-9][0-9]_*.sql') ?: [], glob(BASE . '/migrations/[0-9][0-9][0-9]_*.php') ?: []);
     sort($files, SORT_STRING);
     return array_map('basename', $files);
 }
@@ -37,9 +41,17 @@ function migrate(PDO $pdo, ?callable $log = null): array
         if (in_array($file, $done, true)) {
             continue;
         }
-        $sql = (string) file_get_contents(BASE . '/migrations/' . $file);
-        foreach (migration_statements($sql) as $statement) {
-            $pdo->exec($statement);
+        if (str_ends_with($file, '.php')) {
+            $fn = require BASE . '/migrations/' . $file;
+            if (!is_callable($fn)) {
+                throw new RuntimeException("Migration $file must return a function.");
+            }
+            $fn($pdo);
+        } else {
+            $sql = (string) file_get_contents(BASE . '/migrations/' . $file);
+            foreach (migration_statements($sql) as $statement) {
+                $pdo->exec($statement);
+            }
         }
         $stmt = $pdo->prepare('INSERT INTO schema_migrations (version) VALUES (?)');
         $stmt->execute([$file]);

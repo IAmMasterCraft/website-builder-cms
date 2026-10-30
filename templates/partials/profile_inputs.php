@@ -26,11 +26,9 @@ $days = array_combine(array_map('strval', range(1, 31)), array_map('strval', ran
   <?= view('partials/ffield', ['name' => 'gender', 'label' => 'Gender', 'type' => 'select', 'options' => array_combine($settings['genders'], $settings['genders']) ?: []] + $fv) ?>
 </div>
 <?= view('partials/ffield', ['name' => 'address', 'label' => 'Address', 'auto' => 'street-address', 'extra' => ' maxlength="300"'] + $fv) ?>
-<div class="form-row">
-  <?= view('partials/ffield', ['name' => 'city', 'label' => 'Town or city', 'auto' => 'address-level2', 'extra' => ' maxlength="80"'] + $fv) ?>
-  <?= view('partials/ffield', ['name' => 'region', 'label' => 'Region', 'type' => 'select', 'options' => array_combine($settings['regions'], $settings['regions']) ?: []] + $fv) ?>
-</div>
-<div class="form-row">
-  <?= view('partials/ffield', ['name' => 'country', 'label' => 'Country of residence', 'required' => empty($forAdmin), 'auto' => 'country-name', 'extra' => ' maxlength="80"'] + $fv) ?>
-  <?= view('partials/ffield', ['name' => 'nationality', 'label' => 'Nationality', 'extra' => ' maxlength="80"'] + $fv) ?>
-</div>
+<?php foreach (member_location_configs(!empty($forAdmin)) as $slot => $cfg): ?>
+  <?= view('partials/location_field', ['prefix' => geo_prefix($slot), 'cfg' => $cfg, 'values' => $values, 'errors' => $errors, 'suggest' => empty($forAdmin) ? geo_header_country() : null]) ?>
+<?php endforeach ?>
+<?php if (!empty($forAdmin) && !empty($values['location_legacy']) && is_string($values['location_legacy']) && is_array($legacy = json_decode($values['location_legacy'], true))): ?>
+  <p class="hint">Typed before the location update: <?= e(implode(' · ', array_map(static fn ($k, $v): string => ucfirst((string) $k) . ': ' . (string) $v, array_keys($legacy), $legacy))) ?></p>
+<?php endif ?>

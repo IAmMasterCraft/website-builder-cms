@@ -54,4 +54,26 @@ Licence 1.1 (licence files next to the fonts in `public/assets/fonts/`):
 | Newsreader | `@fontsource-variable/newsreader@5.3.0` | Production Type |
 | Inter, Manrope, Nunito, Source Serif 4, Lora, Fraunces, Playfair Display | `@fontsource-variable/*` (phase 3) | see each LICENSE file |
 
+For the generated site icon (favicon) Gather draws the initial with **Lato Regular**
+(`src/fonts/Lato-Regular.ttf`, unmodified; © 2010 Łukasz Dziedzic, Reserved Font Name
+"Lato", SIL Open Font Licence 1.1, licence in `src/fonts/LICENSE-lato.txt`). The file is
+only read by PHP on the server and is never sent to browsers.
+
 No icon or font is requested from a third-party server at runtime.
+
+## Place names (location fields)
+
+Countries, first-level divisions (states, regions, provinces, nations), second-level
+divisions (for example Nigeria's Local Government Areas and UK counties) and the time zone
+table used for the country suggestion come from [GeoNames](https://www.geonames.org/),
+licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/).
+Dump files `countryInfo.txt`, `admin1CodesASCII.txt`, `admin2Codes.txt` and `timeZones.txt`
+from https://download.geonames.org/export/dump/, downloaded 2026-10-26.
+
+`dev-tools/build-geo.php` converts them into `public/assets/geo/*.json` and
+`src/geo/index.php`. Changes made to the data (documented in
+`dev-tools/geo-corrections.json`): Nigeria's state names without the inconsistent " State"
+suffix and "FCT" spelled out as Federal Capital Territory; 11 duplicate Nigerian LGAs dropped
+and 19 LGA names corrected to their official spelling so the list has exactly 774; the
+" Local Government Area" suffix removed from Nigerian LGA names; a few older time zone names
+added for browsers that still report them. Spacing around hyphens is normalised everywhere.

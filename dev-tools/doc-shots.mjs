@@ -87,6 +87,10 @@ const shots = [
   ['admin-custom-fields', '/admin/custom-fields', { vp: D, who: 'admin' }],
   ['admin-custom-field-edit', '/admin/custom-fields/1', { vp: D, who: 'admin' }],
   ['admin-membership-settings', '/admin/settings/membership', { vp: D, who: 'admin', h: 1600 }],
+  // Addendum C: location lists, site icon, the sign-up cascade
+  ['admin-locations', '/admin/locations?country=NG', { vp: D, who: 'admin', h: 1100 }],
+  ['admin-settings-icon', '/admin/settings', { vp: D, who: 'admin', vh: 900, scrollTo: '#site-icon' }],
+  ['public-join-location', '/join', { vp: D, vh: 900, scrollTo: '[data-loc-prefix="res"]' }],
   ['admin-jobs', '/admin/jobs', { vp: D, who: 'admin', h: 1100 }],
   ['admin-comments', '/admin/comments', { vp: D, who: 'admin' }],
   // Admin: communications

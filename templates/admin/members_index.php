@@ -1,5 +1,6 @@
 <?php /** @var array $rows @var array $filters @var int $total @var int $page @var int $per @var array $settings @var array $fields @var array $counts */
 $query = array_filter($filters, static fn ($v) => $v !== '');
+$loc = $filters['loc'] !== '' ? geo_filter_decode($filters['loc']) : null;
 $pages = (int) ceil($total / $per);
 ?>
 <div class="page-head">
@@ -17,8 +18,7 @@ $pages = (int) ceil($total / $per);
     <select id="ms" name="status"><option value="">All statuses</option><?php foreach (['active' => 'Active', 'unverified' => 'Awaiting verification', 'suspended' => 'Suspended', 'expired' => 'Card expired', 'deletion' => 'Deletion requested'] as $k => $l): ?><option value="<?= $k ?>"<?= $filters['status'] === $k ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach ?></select>
     <label for="mt" class="sr-only">Membership type</label>
     <select id="mt" name="type"><option value="">All types</option><?php foreach ($settings['types'] as $t): ?><option<?= $filters['type'] === $t ? ' selected' : '' ?>><?= e($t) ?></option><?php endforeach ?></select>
-    <label for="mr" class="sr-only">Region</label>
-    <select id="mr" name="region"><option value="">All regions</option><?php foreach ($settings['regions'] as $t): ?><option<?= $filters['region'] === $t ? ' selected' : '' ?>><?= e($t) ?></option><?php endforeach ?></select>
+    <?php if ($filters['region'] !== ''): ?><input type="hidden" name="region" value="<?= e($filters['region']) ?>"><?php endif ?>
     <?php if ($fields): ?>
       <label for="mf" class="sr-only">Custom field</label>
       <select id="mf" name="field"><option value="">Custom field…</option><?php foreach ($fields as $f): ?><option value="<?= (int) $f['id'] ?>"<?= $filters['field'] === (string) $f['id'] ? ' selected' : '' ?>><?= e($f['label']) ?></option><?php endforeach ?></select>
@@ -27,11 +27,19 @@ $pages = (int) ceil($total / $per);
     <?php endif ?>
     <button class="btn small ghost" type="submit">Filter</button>
     <?php if ($query): ?><a class="btn small ghost" href="/admin/members">Clear</a><?php endif ?>
+    <details class="loc-filter-box"<?= $loc !== null ? ' open' : '' ?>>
+      <summary><?= icon('pin') ?> Filter by location<?= $loc !== null ? ': ' . e(geo_filter_label($loc)) : '' ?></summary>
+      <div class="loc-filter-body">
+        <div class="field"><label for="m-loc-slot">Which location</label><select id="m-loc-slot" name="loc_slot"><?php foreach (geo_filter_slots() as $k => $l): ?><option value="<?= e($k) ?>"<?= ($loc[0] ?? 'residence') === $k ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach ?></select></div>
+        <?= view('partials/location_field', ['prefix' => 'lf', 'cfg' => geo_config(['levels' => 3, 'label' => 'Place', 'country_label' => 'Country']), 'values' => ['lf_country' => $loc[1] ?? '', 'lf_state' => $loc[2] ?? '', 'lf_area' => $loc[3] ?? ''], 'errors' => [], 'suggest' => null]) ?>
+        <button class="btn small ghost" type="submit">Apply location filter</button>
+      </div>
+    </details>
   </form>
   <form method="get" action="/admin/members/cards" target="_blank">
     <div class="table-wrap">
       <table class="data">
-        <thead><tr><th scope="col"><span class="sr-only">Select</span></th><th scope="col">Member</th><th scope="col">Number</th><th scope="col">Status</th><th scope="col">Type</th><th scope="col">Region</th><th scope="col">Joined</th><?php if ($can_impersonate): ?><th scope="col"><span class="sr-only">Actions</span></th><?php endif ?></tr></thead>
+        <thead><tr><th scope="col"><span class="sr-only">Select</span></th><th scope="col">Member</th><th scope="col">Number</th><th scope="col">Status</th><th scope="col">Type</th><th scope="col">Lives in</th><th scope="col">Joined</th><?php if ($can_impersonate): ?><th scope="col"><span class="sr-only">Actions</span></th><?php endif ?></tr></thead>
         <tbody>
         <?php if (!$rows): ?><tr><td colspan="<?= $can_impersonate ? 8 : 7 ?>" class="empty-row">No members found.</td></tr><?php endif ?>
         <?php foreach ($rows as $m): $photo = media_find($m['photo_media_id'] ? (int) $m['photo_media_id'] : null); ?>
@@ -41,7 +49,7 @@ $pages = (int) ceil($total / $per);
             <td class="tabular"><?= e($m['member_number'] ?? '—') ?></td>
             <td><span class="badge <?= e($m['status']) ?>"><?= e($m['status'] === 'unverified' ? 'unverified' : $m['status']) ?></span><?= $m['deletion_requested_at'] ? ' <span class="badge bad">deletion requested</span>' : '' ?><?= $m['card_valid_until'] && $m['card_valid_until'] < date('Y-m-d') ? ' <span class="badge warn">expired</span>' : '' ?></td>
             <td><?= e($m['membership_type']) ?></td>
-            <td><?= e($m['region'] ?? '—') ?></td>
+            <td><?= e(implode(', ', array_filter([(string) ($m['region'] ?? ''), (string) ($m['country'] ?? '')], static fn (string $x): bool => $x !== '')) ?: '—') ?></td>
             <td class="tabular"><?= e(fmt_date((string) $m['joined'])) ?></td>
             <?php if ($can_impersonate): ?><td class="actions-cell"><a class="btn small ghost" href="/admin/impersonate/<?= (int) $m['user_id'] ?>"><?= icon('eye') ?><span>Log in as</span><span class="sr-only"> <?= e(member_full_name($m)) ?></span></a></td><?php endif ?>
           </tr>

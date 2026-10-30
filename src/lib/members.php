@@ -119,12 +119,13 @@ function member_settings(): array
     $d = [
         'prefix' => 'ORG', 'group_prefix' => 'GRP', 'number_format' => '{PREFIX}-{YY}-{0000}',
         'card_months' => 12, 'free_first_n' => 0, 'terms_url' => '/privacy-policy', 'signatory' => 'Secretary',
-        'regions' => ['England', 'Scotland', 'Wales', 'Northern Ireland', 'Outside the UK'],
         'genders' => ['Female', 'Male', 'Non-binary', 'I describe myself another way'],
         'types' => ['Standard', 'Life', 'Student', 'Honorary'],
         // A2: whether the sign-up newsletter box starts ticked. Off by default: a pre-ticked
         // box is not valid consent under UK GDPR/PECR.
         'newsletter_default' => false,
+        // C4: location lines on the ID card (up to two lines fit, shared with custom fields).
+        'card_locations' => [],
     ];
     $saved = setting('members', []);
     $out = $d;
@@ -132,6 +133,24 @@ function member_settings(): array
         if (is_array($saved) && array_key_exists($k, $saved) && gettype($saved[$k]) === gettype($v)) {
             $out[$k] = $saved[$k];
         }
+    }
+    return $out;
+}
+
+/** Location lines the ID card can show (Membership settings). @return array<string,array{0:string,1:string,2:string}> key => [label, slot, level] */
+function card_location_options(): array
+{
+    $o = geo_origin_settings();
+    $out = [
+        'res_country' => ['Country of residence', 'residence', 'country'],
+        'res_admin1' => ['Region or state of residence', 'residence', 'admin1'],
+        'res_city' => ['Town or city', 'residence', 'locality'],
+        'nat_country' => ['Nationality', 'nationality', 'country'],
+    ];
+    if ($o['enabled']) {
+        $out['origin_country'] = [$o['country_label'], 'origin', 'country'];
+        $out['origin_admin1'] = [$o['l1_label'] !== '' ? $o['l1_label'] : 'State of origin', 'origin', 'admin1'];
+        $out['origin_admin2'] = [$o['l2_label'] !== '' ? $o['l2_label'] : 'Local area of origin', 'origin', 'admin2'];
     }
     return $out;
 }
@@ -281,17 +300,27 @@ function custom_fields(string $appliesTo = 'member', bool $memberVisibleOnly = f
 }
 
 /**
- * Validate custom field input (name="cf_<key>").
- * @return array{0:array<int,string>,1:array<string,string>} [field id => value, errors by input name]
+ * Validate custom field input (name="cf_<key>"; location fields use
+ * cf_<key>_country, _state, _area...). Location values are returned by slot
+ * (cf<id>) as the third element; their display text is the stored value.
+ * @return array{0:array<int,string>,1:array<string,string>,2:array<string,?array>} [field id => value, errors by input name, locations]
  */
 function custom_fields_validate(array $fields, array $input): array
 {
     $values = [];
     $errors = [];
+    $locations = [];
     foreach ($fields as $f) {
         $name = 'cf_' . $f['field_key'];
         $raw = is_string($input[$name] ?? null) ? trim($input[$name]) : '';
         $required = (int) $f['is_required'] === 1;
+        if ($f['type'] === 'location') {
+            [$loc, $lErrors] = geo_validate($input, $name, custom_field_location_config($f));
+            $errors += $lErrors;
+            $locations['cf' . $f['id']] = $loc;
+            $values[(int) $f['id']] = mb_substr(geo_display($loc), 0, 500);
+            continue;
+        }
         switch ($f['type']) {
             case 'checkbox':
                 $v = $raw === '1' ? '1' : '0';
@@ -325,7 +354,7 @@ function custom_fields_validate(array $fields, array $input): array
         }
         $values[(int) $f['id']] = $v;
     }
-    return [$values, $errors];
+    return [$values, $errors, $locations];
 }
 
 /** @param array<int,string> $values */
@@ -360,8 +389,10 @@ function custom_value_display(array $field, string $value): string
 // ---- Profile fields (join, account, admin) ------------------------------------------------
 
 /**
- * Validate the standard member profile fields.
- * @return array{0:array,1:array<string,string>}
+ * Validate the standard member profile fields. Locations (C4) come back as
+ * the third element (slot => location) and their display names are copied
+ * into the snapshot columns (country, region, city, nationality).
+ * @return array{0:array,1:array<string,string>,2:array<string,?array>}
  */
 function member_profile_validate(array $in, bool $forAdmin = false): array
 {
@@ -369,8 +400,7 @@ function member_profile_validate(array $in, bool $forAdmin = false): array
     $str = static fn (string $k): string => is_string($in[$k] ?? null) ? trim($in[$k]) : '';
     $d = [
         'first_name' => $str('first_name'), 'last_name' => $str('last_name'), 'phone' => $str('phone'),
-        'gender' => $str('gender'), 'address' => $str('address'), 'nationality' => $str('nationality'),
-        'country' => $str('country'), 'region' => $str('region'), 'city' => $str('city'),
+        'gender' => $str('gender'), 'address' => $str('address'),
     ];
     $errors = [];
     foreach (['first_name' => 'First name', 'last_name' => 'Last name'] as $k => $label) {
@@ -378,20 +408,21 @@ function member_profile_validate(array $in, bool $forAdmin = false): array
             $errors[$k] = 'Enter your ' . strtolower($label) . ' (up to 80 characters).';
         }
     }
-    foreach (['phone' => 40, 'address' => 300, 'nationality' => 80, 'country' => 80, 'city' => 80] as $k => $max) {
+    foreach (['phone' => 40, 'address' => 300] as $k => $max) {
         if (mb_strlen($d[$k]) > $max) {
             $errors[$k] = "Keep this under $max characters.";
         }
     }
-    if ($d['country'] === '' && !$forAdmin) {
-        $errors['country'] = 'Enter the country you live in.';
-    }
     if ($d['gender'] !== '' && !in_array($d['gender'], $s['genders'], true)) {
         $errors['gender'] = 'Choose one of the options.';
     }
-    if ($d['region'] !== '' && !in_array($d['region'], $s['regions'], true)) {
-        $errors['region'] = 'Choose one of the options.';
+    $locations = [];
+    foreach (member_location_configs($forAdmin) as $slot => $cfg) {
+        [$loc, $lErrors] = geo_validate($in, geo_prefix($slot), $cfg);
+        $locations[$slot] = $loc;
+        $errors += $lErrors;
     }
+    $d += member_location_snapshot($locations);
     $day = (int) $str('birth_day');
     $month = (int) $str('birth_month');
     $year = $str('birth_year') === '' ? null : (int) $str('birth_year');
@@ -405,10 +436,26 @@ function member_profile_validate(array $in, bool $forAdmin = false): array
     $d['birth_day'] = $day ?: null;
     $d['birth_month'] = $month ?: null;
     $d['birth_year'] = $year;
-    foreach (['phone', 'gender', 'address', 'nationality', 'region', 'city'] as $k) {
+    foreach (['phone', 'gender', 'address'] as $k) {
         $d[$k] = $d[$k] === '' ? null : $d[$k];
     }
-    return [$d, $errors];
+    return [$d, $errors, $locations];
+}
+
+/** Form values for a member's stored locations (all slots, custom location fields too). */
+function member_location_form_values(int $memberId): array
+{
+    $out = [];
+    $locs = member_locations($memberId);
+    foreach (GEO_SLOTS as $slot) {
+        $out += geo_form_values($locs[$slot] ?? null, geo_prefix($slot));
+    }
+    foreach (custom_fields('member') as $f) {
+        if ($f['type'] === 'location') {
+            $out += geo_form_values($locs['cf' . $f['id']] ?? null, geo_prefix('cf', (string) $f['field_key']));
+        }
+    }
+    return $out;
 }
 
 /** Square-crop (centre) and shrink a photo, then store it privately for its owner. */
@@ -464,7 +511,7 @@ function user_token_find(string $token, string $purpose): ?int
  * Create an unverified member account from validated sign-up data.
  * @return array{user_id:int, member_id:int, token:string}
  */
-function member_signup(string $email, string $password, array $profile, array $customValues, bool $newsletters, ?array $photoUpload, bool $isUpload = true): array
+function member_signup(string $email, string $password, array $profile, array $customValues, bool $newsletters, ?array $photoUpload, bool $isUpload = true, array $locations = []): array
 {
     $display = trim($profile['first_name'] . ' ' . $profile['last_name']);
     $userId = create_user($email, $password, 'member', $display, 'unverified');
@@ -474,12 +521,13 @@ function member_signup(string $email, string $password, array $profile, array $c
         q('DELETE FROM users WHERE id = ?', [$userId]);
         throw $e;
     }
-    return db_tx(static function () use ($userId, $profile, $customValues, $newsletters, $photoId): array {
+    return db_tx(static function () use ($userId, $profile, $customValues, $newsletters, $photoId, $locations): array {
         $memberId = db_insert('members', $profile + [
             'user_id' => $userId, 'membership_type' => member_settings()['types'][0] ?? 'Standard', 'photo_media_id' => $photoId,
             'prefs' => json_encode(['newsletters' => $newsletters] + member_pref_defaults(), JSON_THROW_ON_ERROR), 'consent_at' => utc_now(),
         ]);
         custom_values_save('member_field_values', 'member_id', $memberId, $customValues);
+        member_locations_save($memberId, $locations);
         return ['user_id' => $userId, 'member_id' => $memberId, 'token' => user_token_create($userId, 'verify')];
     });
 }
@@ -714,6 +762,12 @@ function members_filter_sql(array $f): array
             $params[] = (string) $f[$k];
         }
     }
+    // C4: location filter "slot|CC|admin1|admin2".
+    if (($f['loc'] ?? '') !== '' && ($loc = geo_filter_decode((string) $f['loc'])) !== null) {
+        [$cond, $p] = geo_filter_sql($loc);
+        $where[] = $cond;
+        array_push($params, ...$p);
+    }
     $field = (int) ($f['field'] ?? 0);
     if ($field > 0 && ($f['value'] ?? '') !== '') {
         $where[] = 'EXISTS (SELECT 1 FROM member_field_values v WHERE v.member_id = m.id AND v.field_id = ? AND v.value = ?)';
@@ -723,26 +777,151 @@ function members_filter_sql(array $f): array
 }
 
 const MEMBER_CSV_COLUMNS = ['member_number', 'email', 'first_name', 'last_name', 'phone', 'birth_day', 'birth_month', 'birth_year', 'gender', 'address',
-    'nationality', 'country', 'region', 'city', 'membership_type', 'status', 'card_valid_until', 'joined'];
+    'nationality_code', 'nationality', 'country_code', 'country', 'region_code', 'region', 'city',
+    'origin_country_code', 'origin_country', 'origin_state_code', 'origin_state', 'origin_area_code', 'origin_area',
+    'membership_type', 'status', 'card_valid_until', 'joined'];
+
+/**
+ * CSV columns of each location slot: [country code, country name, level-1 code, level-1 name,
+ * level-2 code, level-2 name, city] (null = the slot has no such column).
+ */
+const MEMBER_CSV_LOCATIONS = [
+    'residence' => ['country_code', 'country', 'region_code', 'region', null, null, 'city'],
+    'nationality' => ['nationality_code', 'nationality', null, null, null, null, null],
+    'origin' => ['origin_country_code', 'origin_country', 'origin_state_code', 'origin_state', 'origin_area_code', 'origin_area', null],
+];
+
+/** "NG.54.12345" for a location (custom location fields in CSV files). */
+function geo_code_path(?array $loc): string
+{
+    if ($loc === null || ($loc['country_code'] ?? null) === null) {
+        return '';
+    }
+    return implode('.', array_filter([(string) $loc['country_code'], (string) ($loc['admin1_code'] ?? ''), (string) ($loc['admin2_code'] ?? '')], static fn (string $s): bool => $s !== ''));
+}
 
 /** Rows for the members CSV (header first). Birth year included: admins only. */
 function members_csv_rows(array $filters): array
 {
     [$where, $params] = members_filter_sql($filters);
     $fields = custom_fields('member');
-    $rows = [array_merge(MEMBER_CSV_COLUMNS, array_map(static fn (array $f): string => 'cf_' . $f['field_key'], $fields))];
+    $header = MEMBER_CSV_COLUMNS;
+    foreach ($fields as $f) {
+        $header[] = 'cf_' . $f['field_key'];
+        if ($f['type'] === 'location') {
+            $header[] = 'cf_' . $f['field_key'] . '_code';
+        }
+    }
+    $rows = [$header];
     foreach (q_all("SELECT m.*, u.email, u.status, u.created_at AS joined FROM members m JOIN users u ON u.id = m.user_id WHERE $where ORDER BY m.last_name, m.first_name", $params) as $m) {
         $vals = custom_values_for_member((int) $m['id']);
+        $locs = member_locations((int) $m['id']);
+        $cells = [];
+        foreach (MEMBER_CSV_LOCATIONS as $slot => $cols) {
+            $loc = $locs[$slot] ?? null;
+            foreach ([(string) ($loc['country_code'] ?? ''), geo_display($loc, 'country'), (string) ($loc['admin1_code'] ?? ''), (string) ($loc['admin1_name'] ?? ''),
+                (string) ($loc['admin2_code'] ?? ''), (string) ($loc['admin2_name'] ?? ''), (string) ($loc['locality'] ?? '')] as $i => $v) {
+                if ($cols[$i] !== null) {
+                    $cells[$cols[$i]] = $v;
+                }
+            }
+            if ($loc === null && $slot !== 'origin') {
+                // Members not upgraded yet (or typed text only): fall back to the snapshot columns.
+                foreach ($slot === 'residence' ? ['country', 'region', 'city'] : ['nationality'] as $c) {
+                    $cells[$c] = (string) ($m[$c] ?? '');
+                }
+            }
+        }
         $line = [];
         foreach (MEMBER_CSV_COLUMNS as $c) {
-            $line[] = (string) ($m[$c] ?? '');
+            $line[] = (string) ($cells[$c] ?? $m[$c] ?? '');
         }
         foreach ($fields as $f) {
             $line[] = $vals[(int) $f['id']] ?? '';
+            if ($f['type'] === 'location') {
+                $line[] = geo_code_path($locs['cf' . $f['id']] ?? null);
+            }
         }
         $rows[] = array_map('csv_safe', $line);
     }
     return $rows;
+}
+
+/**
+ * Turn the location columns of an import row into form input for
+ * geo_validate() (codes win over names; names are matched like the upgrade
+ * does). Levels without a column keep the member's current value (update
+ * mode), so a file with only a "city" column does not clear the country.
+ * Returns the input and the slots the file has columns for.
+ * @param array<string,array> $current the member's stored locations (update mode)
+ * @return array{0:array<string,string>,1:list<string>}
+ */
+function member_import_location_input(array $in, array $header, array $current = []): array
+{
+    $out = [];
+    $slots = [];
+    $present = array_flip($header);
+    $has = static fn (?string $c): bool => $c !== null && isset($present[$c]);
+    foreach (MEMBER_CSV_LOCATIONS as $slot => [$ccCol, $nameCol, $a1Code, $a1Name, $a2Code, $a2Name, $cityCol]) {
+        if (!$has($ccCol) && !$has($nameCol) && !$has($a1Code) && !$has($a1Name) && !$has($a2Code) && !$has($a2Name) && !$has($cityCol)) {
+            continue;
+        }
+        $slots[] = $slot;
+        $p = geo_prefix($slot);
+        $cur = $current[$slot] ?? geo_empty();
+        $get = static fn (?string $c): string => $c !== null ? trim((string) ($in[$c] ?? '')) : '';
+        // Country
+        if ($has($ccCol) || $has($nameCol)) {
+            $cc = strtoupper($get($ccCol));
+            $cc = geo_country_exists($cc) ? $cc : geo_match_country($get($nameCol) !== '' ? $get($nameCol) : $get($ccCol));
+            if ($cc === null && ($get($ccCol) !== '' || $get($nameCol) !== '')) {
+                $out[$p . '_country'] = 'XX?'; // unknown country -> validation error
+                continue;
+            }
+        } else {
+            $cc = $cur['country_code'] ?? null;
+        }
+        if ($cc === null && $get($a1Name) !== '') {
+            // Older files have a region but no country ("Wales"): a UK nation implies the country.
+            $cc = geo_from_names('', $get($a1Name))['country_code'] ?? null;
+            if ($cc === null) {
+                $out[$p . '_country'] = 'XX?'; // a region without a country cannot be placed
+                continue;
+            }
+        }
+        $out[$p . '_country'] = (string) $cc;
+        // First and second level
+        $a1 = null;
+        foreach ([1 => [$a1Code, $a1Name, '_state', 'admin1'], 2 => [$a2Code, $a2Name, '_area', 'admin2']] as $level => [$codeCol, $nCol, $key, $curKey]) {
+            if ($codeCol === null && $nCol === null) {
+                continue;
+            }
+            if ($has($codeCol) || $has($nCol)) {
+                $code = $get($codeCol);
+                $name = $get($nCol);
+            } else {
+                $code = (string) ($cur[$curKey . '_code'] ?? '');
+                $name = (string) ($cur[$curKey . '_name'] ?? '');
+            }
+            if ($code === '' && $name === '') {
+                continue;
+            }
+            $options = $cc === null ? [] : ($level === 1 ? geo_admin1_options($cc) : ($a1 !== null ? geo_admin2_options($cc, $a1) : []));
+            if ($options === []) {
+                $out[$p . $key . '_text'] = $name !== '' ? $name : $code;
+                continue;
+            }
+            $match = isset($options[$code]) ? $code : geo_match_in($options, $name);
+            $out[$p . $key] = $match ?? ('?' . ($name !== '' ? $name : $code)); // unknown -> validation error
+            if ($level === 1) {
+                $a1 = $match;
+            }
+        }
+        if ($cityCol !== null) {
+            $out[$p . '_city'] = $has($cityCol) ? $get($cityCol) : (string) ($cur['locality'] ?? '');
+        }
+    }
+    return [$out, $slots];
 }
 
 /** Neutralise spreadsheet formulas in exported cells. */
@@ -765,6 +944,40 @@ function csv_unsafe(string $v): string
         }
     }
     return $v;
+}
+
+/** Form input for a custom location field from its CSV cells ("NG.54.123" code path, or "Ado-Ekiti, Ekiti, Nigeria"). */
+function custom_location_import_input(array $field, string $name, string $codePath, string $text): array
+{
+    $cfg = custom_field_location_config($field);
+    $out = [];
+    if ($codePath !== '') {
+        $parts = explode('.', $codePath);
+        $out[$name . '_country'] = strtoupper($parts[0]);
+        $out[$name . '_state'] = $parts[1] ?? '';
+        $out[$name . '_area'] = $parts[2] ?? '';
+        return $out;
+    }
+    // Names: most specific first ("area, state, country") as exported.
+    $bits = array_values(array_filter(array_map('trim', explode(',', $text)), static fn (string $b): bool => $b !== ''));
+    if ($bits === []) {
+        return $out;
+    }
+    $country = $cfg['country'] !== '' ? $cfg['country'] : geo_match_country((string) end($bits));
+    if ($cfg['country'] === '') {
+        array_pop($bits);
+    }
+    $out[$name . '_country'] = $country ?? 'XX?';
+    $bits = array_reverse($bits);
+    if ($country !== null && isset($bits[0]) && $cfg['levels'] >= 2) {
+        $a1 = geo_match_admin1($country, $bits[0]);
+        $out[$name . ($a1 !== null || geo_admin1_options($country) === [] ? ($a1 !== null ? '_state' : '_state_text') : '_state')] = $a1 ?? ($bits[0] . (geo_admin1_options($country) === [] ? '' : '?'));
+        if ($a1 !== null && isset($bits[1]) && $cfg['levels'] >= 3) {
+            $a2 = geo_match_admin2($country, $a1, $bits[1]);
+            $out[$name . ($a2 !== null || geo_admin2_options($country, $a1) === [] ? ($a2 !== null ? '_area' : '_area_text') : '_area')] = $a2 ?? ($bits[1] . (geo_admin2_options($country, $a1) === [] ? '' : '?'));
+        }
+    }
+    return $out;
 }
 
 /** Profile columns to update from an import row: only those whose CSV column is present. */
@@ -848,15 +1061,34 @@ function members_import_csv(string $path, bool $update = false): array
             $in['birth_month'] = $in['birth_month'] ?? '1';
             $noBirthday = true;
         }
-        [$profile, $errors] = member_profile_validate($in, true);
+        $existing = q_one('SELECT u.id AS user_id, u.role, m.id AS member_id FROM users u LEFT JOIN members m ON m.user_id = u.id WHERE u.email = ?', [$email]);
+        $currentLocs = $update && $existing !== null && $existing['member_id'] !== null ? member_locations((int) $existing['member_id']) : [];
+        [$locInput, $locSlots] = member_import_location_input($in, $header, $currentLocs);
+        [$profile, $errors, $locations] = member_profile_validate($locInput + $in, true);
+        // Only the location slots the file has columns for are changed (and their snapshot columns).
+        $locations = array_intersect_key($locations, array_flip($locSlots));
+        foreach (['residence' => ['country', 'region', 'city'], 'nationality' => ['nationality']] as $slot => $cols) {
+            if (!in_array($slot, $locSlots, true)) {
+                foreach ($cols as $col) {
+                    unset($profile[$col]);
+                }
+            }
+        }
         if (!empty($noBirthday)) {
             $profile['birth_day'] = null;
             $profile['birth_month'] = null;
             unset($errors['birth_day']);
         }
         $noBirthday = false;
-        [$custom, $cErrors] = custom_fields_validate(array_values(array_filter($fieldsByKey, static fn (array $f, string $k): bool => array_key_exists($k, $in), ARRAY_FILTER_USE_BOTH)), $in);
+        foreach ($fieldsByKey as $k => $f) {
+            if ($f['type'] === 'location' && (array_key_exists($k, $in) || array_key_exists($k . '_code', $in))) {
+                $in += custom_location_import_input($f, $k, (string) ($in[$k . '_code'] ?? ''), (string) ($in[$k] ?? ''));
+                $in[$k] = '';
+            }
+        }
+        [$custom, $cErrors, $cLocations] = custom_fields_validate(array_values(array_filter($fieldsByKey, static fn (array $f, string $k): bool => array_key_exists($k, $in), ARRAY_FILTER_USE_BOTH)), $in);
         $errors += $cErrors;
+        $locations += $cLocations;
         $type = $in['membership_type'] ?? '';
         if ($type !== '' && !in_array($type, $s['types'], true)) {
             $errors['membership_type'] = 'unknown membership type';
@@ -866,11 +1098,12 @@ function members_import_csv(string $path, bool $update = false): array
             $errors['member_number'] = 'invalid member number';
         }
         if ($errors) {
-            $report['errors'][] = "Row $line: " . implode('; ', array_map(static fn ($k, $v): string => "$k: $v", array_keys($errors), $errors));
+            // Name location problems after the CSV columns, not the form fields.
+            $colNames = ['res_country' => 'country', 'res_state' => 'region', 'res_city' => 'city', 'nat_country' => 'nationality'];
+            $report['errors'][] = "Row $line: " . implode('; ', array_map(static fn ($k, $v): string => ($colNames[$k] ?? $k) . ": $v", array_keys($errors), $errors));
             $report['skipped']++;
             continue;
         }
-        $existing = q_one('SELECT u.id AS user_id, u.role, m.id AS member_id FROM users u LEFT JOIN members m ON m.user_id = u.id WHERE u.email = ?', [$email]);
         try {
             if ($existing !== null) {
                 if (!$update || $existing['role'] !== 'member' || $existing['member_id'] === null) {
@@ -879,16 +1112,17 @@ function members_import_csv(string $path, bool $update = false): array
                 }
                 // Only the columns the file has are changed: a CSV with just email + names
                 // must not wipe phone numbers, birthdays or addresses.
-                $changes = member_import_changes($profile, $header);
-                db_tx(static function () use ($existing, $changes, $type, $custom): void {
+                $changes = member_import_changes($profile, array_merge($header, array_keys(member_location_snapshot(array_fill_keys($locSlots, null)))));
+                db_tx(static function () use ($existing, $changes, $type, $custom, $locations): void {
                     db_update('members', (int) $existing['member_id'], $changes + ($type !== '' ? ['membership_type' => $type] : []));
                     custom_values_save('member_field_values', 'member_id', (int) $existing['member_id'], $custom);
+                    member_locations_save((int) $existing['member_id'], $locations);
                 });
                 $report['updated']++;
                 continue;
             }
             $userId = create_user($email, bin2hex(random_bytes(16)), 'member', trim($profile['first_name'] . ' ' . $profile['last_name']), 'active');
-            db_tx(static function () use ($userId, $profile, $type, $custom, $number, $in, $s): void {
+            db_tx(static function () use ($userId, $profile, $type, $custom, $number, $in, $s, $locations): void {
                 if ($number !== '') {
                     if (!member_reserve_number($number, 'member')) {
                         throw new DomainException("member number $number was already issued");
@@ -903,6 +1137,7 @@ function members_import_csv(string $path, bool $update = false): array
                     'card_code' => card_code_new(), 'card_valid_until' => $valid, 'verified_at' => utc_now(), 'prefs' => json_encode(member_pref_defaults(), JSON_THROW_ON_ERROR),
                 ]);
                 custom_values_save('member_field_values', 'member_id', $memberId, $custom);
+                member_locations_save($memberId, $locations);
             });
             $report['created']++;
             $report['new_user_ids'][] = $userId;

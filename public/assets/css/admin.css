@@ -791,6 +791,25 @@ img { object-position: var(--fx, 50%) var(--fy, 50%); }
 .md .md-note-title { margin-bottom: 0.25rem; font-weight: 700; }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
 
+/* Cascading location fields (C4) */
+.location-field { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 0.5rem; }
+.location-field > legend { font-weight: 650; padding: 0; margin-bottom: 0.35rem; }
+.loc-grid { display: grid; gap: 0.75rem 1rem; align-items: start; }
+@media (min-width: 40rem) { .loc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.loc-grid .field { min-width: 0; }
+.loc-filter { margin-bottom: 0.35rem; }
+.loc-filter[hidden] { display: none; }
+.loc-guess:empty { display: none; }
+.loc-refresh { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0; }
+.loc-filter-box { flex-basis: 100%; }
+.loc-filter-box > summary { cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; min-height: 36px; }
+.loc-filter-body { display: grid; gap: 0.75rem; padding: 0.75rem 0 0.25rem; max-width: 44rem; }
+.toolbar .location-field select, .loc-filter-body select { width: 100%; }
+.fieldset-plain { border: 1px solid var(--line); border-radius: 12px; padding: 0.85rem 1rem 1rem; margin: 0; display: grid; gap: 0.75rem; }
+.fieldset-plain > legend { font-weight: 650; padding: 0 0.35rem; }
+.area-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.area-list li { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+
 /* C2: the organisation's name and icon tile in the sidebar; product credit in the footer */
 .logo { min-width: 0; }
 .logo-mark { flex: none; }
@@ -801,3 +820,6 @@ img { object-position: var(--fx, 50%) var(--fy, 50%); }
 .admin-footer a { color: inherit; }
 .icon-previews { display: flex; align-items: flex-end; gap: 0.75rem; min-height: 1rem; }
 .icon-previews img { display: block; }
+.toolbar select { max-width: 100%; }
+.toolbar > .muted { flex-basis: 100%; }
+@media (min-width: 64rem) { .toolbar > .muted { flex-basis: auto; } }

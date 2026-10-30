@@ -110,15 +110,21 @@ final class Join
     {
         csrf_check();
         $values = array_map(static fn ($v) => is_string($v) ? trim($v) : '', $_POST);
-        unset($values['password'], $values['password_confirm'], $values['_csrf']);
+        unset($values['password'], $values['password_confirm'], $values['_csrf'], $values['_loc_refresh']);
+        if (isset($_POST['_loc_refresh'])) {
+            // C4 without JavaScript: show the lists for the chosen country/state, nothing is saved.
+            self::render($values, [], 200);
+            return;
+        }
         if (($tripped = self::guard('join')) !== null) {
             self::render($values, ...$tripped);
             return;
         }
         $errors = self::accountErrors($_POST);
-        [$profile, $pErrors] = member_profile_validate($_POST);
-        [$custom, $cErrors] = custom_fields_validate(custom_fields('member', true), $_POST);
+        [$profile, $pErrors, $locations] = member_profile_validate($_POST);
+        [$custom, $cErrors, $cLocations] = custom_fields_validate(custom_fields('member', true), $_POST);
         $errors += $pErrors + $cErrors;
+        $locations += $cLocations;
         $photo = null;
         $email = strtolower(trim((string) ($_POST['email'] ?? '')));
         $file = $_FILES['photo'] ?? null;
@@ -139,7 +145,7 @@ final class Join
             return;
         }
         try {
-            $r = member_signup($email, (string) $_POST['password'], $profile, $custom, ($_POST['newsletters'] ?? '') === '1', $photo);
+            $r = member_signup($email, (string) $_POST['password'], $profile, $custom, ($_POST['newsletters'] ?? '') === '1', $photo, true, $locations);
         } catch (UploadException $e) {
             self::render($values, ['photo' => $e->getMessage()], 422);
             return;

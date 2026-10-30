@@ -52,7 +52,7 @@ function expected_permission(string $path): ?string
         '#^/admin/help(/|$)#' => null,
         // B2: the start screen of "Log in as this member".
         '#^/admin/impersonate(/|$)#' => 'impersonate',
-        '#^/admin/(settings|design|custom-fields|users|audit|backups|health)(\b|/|\.)#' => 'super_admin',
+        '#^/admin/(settings|design|custom-fields|locations|users|audit|backups|health)(\b|/|\.)#' => 'super_admin',
         '#^/admin/(media|albums)(/|$)#' => 'gallery_media',
         '#^/admin/(menus|pages|templates|layout)(/|$)#' => 'pages_menus',
         '#^/admin/events(/|$)#' => 'events',

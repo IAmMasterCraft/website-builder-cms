@@ -10,7 +10,7 @@ anything, then click **Save settings** (bottom right).
 
 | Field | Where it shows |
 |---|---|
-| **Organisation name** | The header (when there is no logo), page titles, emails, the member card |
+| **Organisation name** | The header (when there is no logo), page titles, emails (also as the sender name unless Email settings has one), the member card, the admin menu and admin page titles, and the generated site icon |
 | **Tagline** | Under the name on the home page and in search results |
 | **Footer "about" text** | The "About" widget in the footer |
 | **Charity / registration number** | The top bar and footer, when filled in |
@@ -74,6 +74,30 @@ Filled-in ones appear as icons in the top bar and footer.
 
 Upload a logo (PNG or WebP with a transparent background works best). Tick
 **Remove logo** to go back to showing the organisation name.
+
+## Site icon (favicon)
+
+The small icon in browser tabs, bookmarks and on phone home screens. It is
+used on every page: the public site, members' pages, the admin area, the
+help centre, error pages and the printable member card.
+
+- **Without an upload**, Gather draws it for you: the first letter of the
+  organisation name on your accent colour, like the square next to the name
+  in the header. It is redrawn automatically when you change the name or the
+  colours (under [Design](design.md)).
+- **Upload** a square PNG, JPEG or WebP image of at least **512 × 512
+  pixels** (a simple, bold mark works best at tiny sizes). Gather makes every
+  size browsers and phones ask for (`favicon.ico` with 16, 32 and 48 pixels,
+  a 32 pixel PNG, the 180 pixel Apple touch icon, 192 and 512 pixel app
+  icons) and a `site.webmanifest` with your organisation name and brand
+  colour.
+- Tick **Use the letter tile instead** to go back to the drawn icon.
+
+![Site icon settings](../images/admin-settings-icon.webp)
+
+Browsers keep icons for a long time; each new icon gets a new address, so
+visitors see it on their next visit (a few browsers need a refresh of the
+tab first).
 
 ## More settings
 

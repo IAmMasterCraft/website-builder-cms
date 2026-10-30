@@ -13,8 +13,15 @@ final class Members
     private static function filters(): array
     {
         $f = [];
-        foreach (['q', 'status', 'type', 'region', 'field', 'value'] as $k) {
+        foreach (['q', 'status', 'type', 'region', 'field', 'value', 'loc'] as $k) {
             $f[$k] = mb_substr(query_param($k), 0, 100);
+        }
+        // C4: the location filter form sends loc_slot + lf_country/lf_state/lf_area; links carry "loc".
+        if (query_param('lf_country') !== '') {
+            $f['loc'] = geo_filter_encode(query_param('loc_slot', 'residence'), strtoupper(query_param('lf_country')), query_param('lf_state'), query_param('lf_area'));
+        }
+        if ($f['loc'] !== '' && geo_filter_decode($f['loc']) === null) {
+            $f['loc'] = '';
         }
         return $f;
     }
@@ -43,7 +50,7 @@ final class Members
         $s = member_settings();
         render('admin/members_index', [
             'title' => 'Members', 'rows' => $rows, 'can_impersonate' => user_can(current_user(), 'impersonate'), 'filters' => $f, 'total' => $total, 'page' => $page, 'per' => self::PER,
-            'settings' => $s, 'fields' => array_values(array_filter(custom_fields('member'), static fn (array $cf): bool => $cf['type'] !== 'date')),
+            'settings' => $s, 'fields' => array_values(array_filter(custom_fields('member'), static fn (array $cf): bool => !in_array($cf['type'], ['date', 'location'], true))),
             'counts' => [
                 'active' => (int) q_val("SELECT COUNT(*) FROM members m JOIN users u ON u.id = m.user_id WHERE u.status = 'active' AND u.role = 'member'"),
                 'unverified' => (int) q_val("SELECT COUNT(*) FROM users WHERE status = 'unverified' AND role = 'member'"),
@@ -115,7 +122,7 @@ final class Members
         require_permission('members');
         $m = self::member($p);
         $old = take_old_input();
-        $values = $m;
+        $values = $m + member_location_form_values((int) $m['id']);
         $cv = custom_values_for_member((int) $m['id']);
         foreach (custom_fields('member') as $f) {
             $values['cf_' . $f['field_key']] = $cv[(int) $f['id']] ?? '';
@@ -135,9 +142,15 @@ final class Members
         csrf_check();
         $admin = require_permission('members');
         $m = self::member($p);
-        [$profile, $errors] = member_profile_validate($_POST, true);
-        [$custom, $cErrors] = custom_fields_validate(custom_fields('member'), $_POST);
+        if (isset($_POST['_loc_refresh'])) {
+            // C4 without JavaScript: show the next list, nothing saved yet (no audit entry: no change).
+            remember_input($_POST, []);
+            redirect('/admin/members/' . $m['id']);
+        }
+        [$profile, $errors, $locations] = member_profile_validate($_POST, true);
+        [$custom, $cErrors, $cLocations] = custom_fields_validate(custom_fields('member'), $_POST);
         $errors += $cErrors;
+        $locations += $cLocations;
         $s = member_settings();
         $email = strtolower(input('email'));
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -172,11 +185,12 @@ final class Members
             flash('Please fix the highlighted fields.', 'error');
             redirect('/admin/members/' . $m['id']);
         }
-        db_tx(static function () use ($m, $profile, $custom, $email, $type, $fee, $valid, $photoId): void {
+        db_tx(static function () use ($m, $profile, $custom, $email, $type, $fee, $valid, $photoId, $locations): void {
             db_update('members', (int) $m['id'], $profile + [
                 'membership_type' => $type, 'membership_fee_status' => $fee !== '' ? $fee : null, 'card_valid_until' => $valid !== '' ? $valid : null,
             ] + ($photoId !== null ? ['photo_media_id' => $photoId] : []));
             custom_values_save('member_field_values', 'member_id', (int) $m['id'], $custom);
+            member_locations_save((int) $m['id'], $locations);
             q('UPDATE users SET email = ?, display_name = ? WHERE id = ?', [$email, mb_substr($profile['first_name'] . ' ' . $profile['last_name'], 0, 120), $m['user_id']]);
             if ($email !== (string) $m['email']) {
                 user_end_sessions((int) $m['user_id']);

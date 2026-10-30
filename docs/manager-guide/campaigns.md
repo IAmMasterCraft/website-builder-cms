@@ -33,7 +33,7 @@ Mail transport** should say SMTP; see [Email settings](email-settings.md)).
   |---|---|
   | **All active members** | Every verified, active member |
   | **Members of one membership type** | Choose the type |
-  | **Members in a region** | Choose the region |
+  | **Members by location** | Choose which location (country of residence, origin, nationality or a Location custom field), then a country and optionally a state/region and local area, for example *Origin → Nigeria → Ekiti* |
   | **Members with a custom field value** | Choose the field and the value it must equal |
   | **Members with a birthday this month** | |
   | **People registered for an event** | Including guests who registered |

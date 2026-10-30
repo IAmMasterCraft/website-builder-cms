@@ -55,6 +55,11 @@ All three changes are recorded in the [audit log](audit-log.md).
 - **Help centre** at the bottom opens these guides inside the admin area
   (see [The help centre](help-centre.md)).
 
+The top of the menu shows your organisation's name and site icon (long
+names are shortened; point at the name to read it in full). "Gather", the
+software's name, only appears in the small "Powered by Gather" line at the
+bottom of each admin page.
+
 The icon at the top left (next to the site name) folds the menu into a
 narrow strip with one icon per group; the group you are in is highlighted.
 Point at an icon (or move to it with the Tab key, or click it) to see that
@@ -105,7 +110,8 @@ identity. Each links to the full explanation.
 2. **Design**: pick a theme and set your brand colour. See
    [Design and themes](design.md).
 3. **Membership settings**: member number format, how long membership lasts,
-   regions and membership types. See [Members](members.md#membership-settings).
+   membership types, and whether to ask where members are from. See
+   [Members](members.md#membership-settings).
 4. **Email settings** (with whoever set up the hosting): see
    [Email settings](email-settings.md).
 5. **Pages**: edit the home page and the About page; delete demo pages you do

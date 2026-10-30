@@ -17,7 +17,7 @@ const [base, adminEmail, adminPass, memberEmail, memberPass, out] = process.argv
 const chrome = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const publicPages = process.env.PUBLIC_PAGES ? process.env.PUBLIC_PAGES.split(',') : ['/'];
-const memberPages = ['/account', '/account/password', '/account/card'];
+const memberPages = process.env.MEMBER_PAGES ? process.env.MEMBER_PAGES.split(',') : ['/account', '/account/password', '/account/card'];
 const adminPages = (process.env.ADMIN_PAGES || '/admin,/admin/users,/admin/users/new,/admin/audit,/admin/backups,/admin/health,/admin/members,/admin/settings,/admin/posts').split(',');
 
 async function login(context, email, pass) {

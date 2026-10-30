@@ -21,7 +21,7 @@ spl_autoload_register(static function (string $class): void {
 
 foreach ([
     'config', 'db', 'http', 'csrf', 'view', 'settings', 'time', 'text', 'ui', 'auth', 'admins', 'mail', 'email_templates', 'mailqueue', 'bounces', 'dns', 'webhooks', 'migrate',
-    'media', 'content', 'menus', 'search', 'feeds', 'chrome', 'design', 'theme', 'forms', 'builder', 'members', 'favicon', 'cards', 'audience', 'campaigns', 'notices', 'birthdays', 'jobs', 'comments', 'radio', 'analytics', 'backup', 'health', 'cron', 'install', 'demo', 'help', 'impersonation',
+    'media', 'content', 'menus', 'search', 'feeds', 'chrome', 'design', 'theme', 'forms', 'builder', 'members', 'geo', 'favicon', 'cards', 'audience', 'campaigns', 'notices', 'birthdays', 'jobs', 'comments', 'radio', 'analytics', 'backup', 'health', 'cron', 'install', 'demo', 'help', 'impersonation',
 ] as $lib) {
     require BASE . '/src/lib/' . $lib . '.php';
 }

@@ -93,7 +93,7 @@ final class Account
         if ($member === null) {
             abort(404);
         }
-        $values = $member;
+        $values = $member + member_location_form_values((int) $member['id']);
         foreach (custom_fields('member', true) as $f) {
             $values['cf_' . $f['field_key']] = custom_values_for_member((int) $member['id'])[(int) $f['id']] ?? '';
         }
@@ -116,17 +116,24 @@ final class Account
         if ($member === null) {
             abort(404);
         }
-        [$profile, $errors] = member_profile_validate($_POST);
-        [$custom, $cErrors] = custom_fields_validate(custom_fields('member', true), $_POST);
+        if (isset($_POST['_loc_refresh'])) {
+            // C4 without JavaScript: show the next list, nothing saved yet.
+            remember_input($_POST, []);
+            redirect('/account/profile');
+        }
+        [$profile, $errors, $locations] = member_profile_validate($_POST);
+        [$custom, $cErrors, $cLocations] = custom_fields_validate(custom_fields('member', true), $_POST);
         $errors += $cErrors;
+        $locations += $cLocations;
         if ($errors) {
             remember_input($_POST, $errors);
             flash('Please check the highlighted fields.', 'error');
             redirect('/account/profile');
         }
-        db_tx(static function () use ($member, $profile, $custom, $user): void {
+        db_tx(static function () use ($member, $profile, $custom, $user, $locations): void {
             db_update('members', (int) $member['id'], $profile);
             custom_values_save('member_field_values', 'member_id', (int) $member['id'], $custom);
+            member_locations_save((int) $member['id'], $locations);
             q('UPDATE users SET display_name = ? WHERE id = ?', [mb_substr($profile['first_name'] . ' ' . $profile['last_name'], 0, 120), $user['id']]);
         });
         // While an admin views the account (B2), audit() records the admin acting on behalf of the member.

@@ -16,8 +16,9 @@ email newsletter. For important news, use both.
 
 - **Title**.
 - **Message**: formatted text with links.
-- **Audience**: who sees it (all active members, one membership type, a
-  region, members with a custom field value, people registered for an event,
+- **Audience**: who sees it (all active members, one membership type,
+  members by location (for example everyone whose state of origin is
+  Ekiti), members with a custom field value, people registered for an event,
   group accounts, admins…). The number of recipients is shown.
 - **Also send an email copy**: emails the notice to the audience once, when
   you first publish it. It respects people's email preferences and the

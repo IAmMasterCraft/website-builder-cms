@@ -10,6 +10,17 @@ colours and menus, but the buttons and pages are the same.
 2. Fill in the form:
    - **About you**: your name, and the other details your organisation asks
      for (some are optional).
+   - **Where you live**: choose your **country**, then your **region or
+     state** from the list that appears, and type your town or city. The
+     country you are most likely in is shown at the top of the list under
+     **Suggested** (a guess from your device's time zone and language; if
+     the form fills it in for you, a note says so; change it if it is
+     wrong). Long lists have a **Type to filter** box: type a few letters
+     to find your entry. If your browser does not run JavaScript, press
+     **Update the lists** after choosing a country to see the next list.
+   - **Nationality**, and, if your organisation asks, **where you are
+     from** (country, state and local area, for example State of origin and
+     LGA).
    - **Photo for your member card**: a clear, recent photo of your face. You
      can drag and zoom to choose the square that appears on your card. Only
      you and the site's administrators can see it.
@@ -21,6 +32,12 @@ colours and menus, but the buttons and pages are the same.
 3. Click **Create my account**.
 
 ![The joining form](images/public-join.webp)
+
+The location questions: choose a country first, then the region or state
+list appears (here with the country guessed from the device and a filter
+box above the long list):
+
+![Choosing where you live: country, then region or state](images/public-join-location.webp)
 
 On a phone, the same form fits the screen:
 

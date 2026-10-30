@@ -15,10 +15,24 @@ function card_data(array $member): array
     $sig = media_find((int) setting('card.signature_media_id', 0) ?: null);
     $extra = [];
     if (!empty($member['id'])) {
+        // C4: chosen location lines first (any level, Membership settings), then "show on card" custom fields.
+        $locs = member_locations((int) $member['id']);
+        $options = card_location_options();
+        foreach (member_settings()['card_locations'] as $key) {
+            if (isset($options[$key]) && ($text = geo_display($locs[$options[$key][1]] ?? null, $options[$key][2])) !== '') {
+                $extra[] = ['label' => $options[$key][0], 'value' => $text];
+            }
+        }
         $values = custom_values_for_member((int) $member['id']);
         foreach (custom_fields('member') as $f) {
-            if ((int) $f['show_on_card'] === 1 && ($values[(int) $f['id']] ?? '') !== '') {
-                $extra[] = ['label' => $f['label'], 'value' => custom_value_display($f, $values[(int) $f['id']])];
+            if ((int) $f['show_on_card'] !== 1 || ($values[(int) $f['id']] ?? '') === '') {
+                continue;
+            }
+            $value = $f['type'] === 'location'
+                ? geo_display($locs['cf' . $f['id']] ?? null, custom_field_location_config($f)['card_level'])
+                : custom_value_display($f, $values[(int) $f['id']]);
+            if ($value !== '') {
+                $extra[] = ['label' => $f['label'], 'value' => $value];
             }
         }
     }

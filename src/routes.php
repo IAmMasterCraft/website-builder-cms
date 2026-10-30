@@ -15,6 +15,7 @@ function app_routes(): Router
     $r->get('/sitemap.xml', [Site\Feeds::class, 'sitemap']);
     $r->get('/robots.txt', [Site\Feeds::class, 'robots']);
     $r->get('/theme.css', [Site\Feeds::class, 'themeCss']);
+    $r->get('/geo/custom.json', [Site\Geo::class, 'custom']);
     $r->get('/favicon.ico', [Site\Icons::class, 'root']);
     $r->get('/apple-touch-icon.png', [Site\Icons::class, 'root']);
     $r->get('/icons/{sig:[a-f0-9]{16}}/{file:[a-z0-9.-]+}', [Site\Icons::class, 'file']);
@@ -200,6 +201,10 @@ function app_routes(): Router
     $r->get('/admin/custom-fields/{id:\d+}', [Admin\CustomFields::class, 'edit']);
     $r->post('/admin/custom-fields/{id:\d+}', [Admin\CustomFields::class, 'update']);
     $r->post('/admin/custom-fields/{id:\d+}/delete', [Admin\CustomFields::class, 'delete']);
+    $r->get('/admin/locations', [Admin\Locations::class, 'index']);
+    $r->post('/admin/locations/labels', [Admin\Locations::class, 'labels']);
+    $r->post('/admin/locations/areas', [Admin\Locations::class, 'addArea']);
+    $r->post('/admin/locations/areas/{id:\d+}/delete', [Admin\Locations::class, 'deleteArea']);
     $r->get('/admin/settings/membership', [Admin\MembershipSettings::class, 'edit']);
     $r->post('/admin/settings/membership', [Admin\MembershipSettings::class, 'update']);
 

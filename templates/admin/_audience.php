@@ -4,12 +4,23 @@ $fieldOpts = ['' => 'Choose a field…'];
 foreach ($choices['fields'] as $f) { $fieldOpts[(string) $f['id']] = $f['label']; }
 $eventOpts = ['' => 'Choose an event…'];
 foreach ($choices['events'] as $ev) { $eventOpts[(string) $ev['id']] = $ev['title'] . ' (' . fmt_date($ev['start_at']) . ')'; }
+$types = $choices['types'];
+if ($a['type'] !== 'region') {
+    unset($types['region']); // older audiences only; new ones use "location"
+}
+$loc = $a['type'] === 'location' ? geo_filter_decode($a['value']) : null;
+$locValues = ['aud_loc_country' => $loc[1] ?? '', 'aud_loc_state' => $loc[2] ?? '', 'aud_loc_area' => $loc[3] ?? ''];
 ?>
 <fieldset class="field audience" data-audience>
   <legend>Audience</legend>
-  <?= field_html('audience_type', 'Send to', 'select', $a['type'], $error, ['options' => $choices['types'], 'prefix' => 'aud']) ?>
+  <?= field_html('audience_type', 'Send to', 'select', $a['type'], $error, ['options' => $types, 'prefix' => 'aud']) ?>
   <div class="audience-extra" data-audience-for="membership_type"><?= field_html('audience_membership_type', 'Membership type', 'select', $a['type'] === 'membership_type' ? $a['value'] : '', null, ['options' => array_combine($choices['membership_types'], $choices['membership_types']) ?: [], 'prefix' => 'aud']) ?></div>
   <div class="audience-extra" data-audience-for="region"><?= field_html('audience_region', 'Region', 'select', $a['type'] === 'region' ? $a['value'] : '', null, ['options' => array_combine($choices['regions'], $choices['regions']) ?: [], 'prefix' => 'aud']) ?></div>
+  <div class="audience-extra" data-audience-for="location">
+    <?= field_html('audience_loc_slot', 'Which location', 'select', $loc[0] ?? 'residence', null, ['options' => $choices['location_slots'], 'prefix' => 'aud']) ?>
+    <?= view('partials/location_field', ['prefix' => 'aud_loc', 'cfg' => geo_config(['levels' => 3, 'label' => 'Place', 'country_label' => 'Country']), 'values' => $locValues, 'errors' => [], 'suggest' => null]) ?>
+    <p class="hint">Pick a country, then optionally a region/state and a local area. Example: Origin → Nigeria → Ekiti.</p>
+  </div>
   <div class="audience-extra field-row" data-audience-for="custom_field">
     <?= field_html('audience_field_id', 'Custom field', 'select', (string) $a['field_id'], null, ['options' => $fieldOpts, 'prefix' => 'aud']) ?>
     <?= field_html('audience_field_value', 'Equals', 'text', $a['type'] === 'custom_field' ? $a['value'] : '', null, ['max' => 200, 'prefix' => 'aud']) ?>
