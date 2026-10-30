@@ -98,9 +98,11 @@ function admin_nav(?array $user): array
         ['members', 'Members', 'id-card', [
             ['/admin/members', 'Members', 'users', 'members'],
             ['/admin/groups', 'Groups', 'building', 'members'],
+            ['/admin/members/birthdays', 'Birthdays', 'gift', 'members'],
             ['/admin/custom-fields', 'Custom fields', 'text-input', 'super_admin'],
             ['/admin/locations', 'Location lists', 'globe', 'super_admin'],
             ['/admin/settings/membership', 'Membership settings', 'settings', 'super_admin'],
+            ['/admin/settings/birthdays', 'Birthday notices', 'bell', 'super_admin'],
         ]],
         ['community', 'Community', 'heart-handshake', [
             ['/admin/jobs', 'Jobs', 'briefcase', 'jobs'],
@@ -180,6 +182,9 @@ function admin_chrome(): array
     $pendingComments = comments_reported_count();
     $pendingJobs = (int) q_val("SELECT COUNT(*) FROM jobs WHERE status = 'pending'");
     $messageReports = user_can($user, 'messages') ? msg_reports_open_count() : 0;
+    // D1: "N birthdays today" for the people who receive the birthday notices.
+    $birthdays = birthday_is_recipient($user) ? birthday_count('today') : 0;
+    $detail = ['unread' => $unread, 'comments' => $pendingComments, 'jobs' => $pendingJobs, 'message_reports' => $messageReports, 'birthdays' => $birthdays];
     return [
         'site_name' => (string) setting('site.name', 'Gather'),
         'tile_url' => favicon_tile_url(), // C2: the site's icon tile next to its name
@@ -188,11 +193,27 @@ function admin_chrome(): array
         'nav_active' => admin_nav_active($nav, request_path()),
         'path' => request_path(),
         'flash' => flash(),
-        'notifications' => $unread + $pendingComments + $pendingJobs + $messageReports,
-        'notification_detail' => ['unread' => $unread, 'comments' => $pendingComments, 'jobs' => $pendingJobs, 'message_reports' => $messageReports],
+        'notifications' => array_sum($detail),
+        'notification_detail' => $detail,
+        'notification_label' => admin_notification_label($detail),
         // C3: unread direct messages (own, plus the Team inbox with the messages permission).
         'messages_unread' => $user !== null ? msg_admin_badge($user) : 0,
     ];
+}
+
+/** Text for the bell: "3 items need attention: 2 birthdays today, 1 payment report to review". */
+function admin_notification_label(array $d): string
+{
+    $parts = array_filter([
+        ($d['unread'] ?? 0) > 0 ? pluralise((int) $d['unread'], 'unread contact message') : '',
+        ($d['comments'] ?? 0) > 0 ? pluralise((int) $d['comments'], 'reported comment') : '',
+        ($d['jobs'] ?? 0) > 0 ? pluralise((int) $d['jobs'], 'job', 'jobs') . ' awaiting approval' : '',
+        ($d['message_reports'] ?? 0) > 0 ? pluralise((int) $d['message_reports'], 'reported message') : '',
+        ($d['birthdays'] ?? 0) > 0 ? pluralise((int) $d['birthdays'], 'birthday') . ' today' : '',
+        ($d['payments'] ?? 0) > 0 ? pluralise((int) $d['payments'], 'payment report') . ' to review' : '',
+    ]);
+    $total = (int) array_sum($d);
+    return $total === 0 ? 'Nothing needs attention' : pluralise($total, 'item') . ' need' . ($total === 1 ? 's' : '') . ' attention: ' . implode(', ', $parts);
 }
 
 /** Footer widgets a column can show (§3.2). */

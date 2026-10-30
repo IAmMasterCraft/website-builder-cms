@@ -63,19 +63,16 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good
         <?php endforeach ?>
       </div>
     </section>
-    <?php if ($birthdays !== null): ?>
-    <section class="panel" aria-labelledby="bday-title">
+    <?php if ($birthdays !== null): $bt = $birthdays['tab']; ?>
+    <section class="panel" aria-labelledby="bday-title" id="birthdays">
       <div class="panel-head"><h2 id="bday-title">Birthdays</h2><span class="muted small-text">Emails at <?= e(birthday_time()) ?></span></div>
+      <?= tabs_html('/admin', 'bday', $bt, ['today' => ['Today', $birthdays['counts']['today']], 'week' => ['This week', $birthdays['counts']['week']], 'month' => ['This month', $birthdays['counts']['month']]]) ?>
       <div class="panel-body">
-        <?php $todayYmd = (new DateTimeImmutable('now', site_tz()))->format('Y-m-d'); $todayList = array_filter($birthdays, static fn (array $b): bool => $b['celebrated_on'] === $todayYmd); $weekList = array_filter($birthdays, static fn (array $b): bool => $b['celebrated_on'] !== $todayYmd); ?>
-        <h3 class="h-small">Today</h3>
-        <?php if ($todayList): ?>
-          <ul class="bday-list"><?php foreach ($todayList as $b): ?><li><span><?= e($b['first_name'] . ' ' . $b['last_name']) ?> <span class="muted tabular"><?= e($b['member_number'] ?? '') ?></span></span><?= member_pref($b, 'birthday_greeting') ? '<span class="badge ok">greeting on</span>' : '' ?></li><?php endforeach ?></ul>
-        <?php else: ?><p class="muted">No member birthdays today.</p><?php endif ?>
-        <h3 class="h-small">Next 7 days</h3>
-        <?php if ($weekList): ?>
-          <ul class="bday-list"><?php foreach ($weekList as $b): ?><li><span><?= e($b['first_name'] . ' ' . $b['last_name']) ?></span><span class="muted tabular"><?= e(DateTimeImmutable::createFromFormat('!Y-m-d', $b['celebrated_on'], site_tz())->format('D j M')) ?></span></li><?php endforeach ?></ul>
-        <?php else: ?><p class="muted">None in the coming week.</p><?php endif ?>
+        <?php if ($birthdays['rows']): ?>
+          <ul class="bday-list"><?php foreach (array_slice($birthdays['rows'], 0, 40) as $b): ?><li><span><?= e(member_full_name($b)) ?> <span class="muted tabular"><?= e($b['member_number'] ?? '') ?></span><?= $bt !== 'today' && $b['celebrated_on'] === $birthdays['today'] ? ' <span class="badge ok">today</span>' : '' ?></span><span class="muted tabular"><?= $bt === 'today' ? (member_pref($b, 'birthday_greeting') ? '<span class="badge ok">greeting on</span>' : '') : e(birthday_day_label($b)) ?></span></li><?php endforeach ?></ul>
+          <?php if (count($birthdays['rows']) > 40): ?><p class="muted small-text">and <?= count($birthdays['rows']) - 40 ?> more.</p><?php endif ?>
+        <?php else: ?><p class="muted"><?= e(['today' => 'No member birthdays today.', 'week' => 'No birthdays this week.', 'month' => 'No birthdays this month.'][$bt]) ?></p><?php endif ?>
+        <?php if (user_can($user, 'members')): ?><p><a href="/admin/members/birthdays">All birthdays by month</a></p><?php endif ?>
       </div>
     </section>
     <?php endif ?>

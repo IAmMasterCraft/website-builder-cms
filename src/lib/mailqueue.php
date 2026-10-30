@@ -23,6 +23,12 @@ const MAIL_PAUSE_MIN_SECONDS = 300;
 const MAIL_PAUSE_MAX_SECONDS = 3600;
 /** Kinds in email_queue that are bulk mail (preferences and suppression re-checked at send time). */
 const MAIL_BULK_KINDS = ['notice'];
+/**
+ * Essential notices in email_queue (D1 birthday notices to admins, D2 payment
+ * report emails to admins and payment reminders to members): they ignore the
+ * newsletter preference but skip every suppressed address and inactive accounts.
+ */
+const MAIL_ESSENTIAL_KINDS = ['digest', 'essential'];
 
 function mail_per_minute(): int
 {
@@ -79,6 +85,16 @@ function mail_bulk_block_reason(string $email, bool $essential = false): ?string
         return 'Not sent: news emails were switched off after the email was queued.';
     }
     return null;
+}
+
+/** Why an essential notice must not go to this address (any suppression, or the account is no longer active), or null. */
+function mail_essential_block_reason(string $email): ?string
+{
+    if (($sup = email_suppression($email)) !== null) {
+        return 'Not sent: ' . email_suppression_label((string) $sup['reason']) . '.';
+    }
+    $status = q_val('SELECT status FROM users WHERE email = ?', [strtolower($email)]);
+    return $status !== null && $status !== 'active' ? 'Not sent: the account is no longer active.' : null;
 }
 
 /** Current pause after a mail server failure: [until, seconds, error] or null. */
@@ -172,6 +188,7 @@ function mail_queue_run(?int $now = null, ?int $perMinute = null): array
             }
             $reason = match (true) {
                 in_array($row['kind'], MAIL_BULK_KINDS, true) => mail_bulk_block_reason((string) $row['to_email']),
+                in_array($row['kind'], MAIL_ESSENTIAL_KINDS, true) => mail_essential_block_reason((string) $row['to_email']),
                 $row['kind'] === 'message' => msg_digest_block_reason($row), // C3: re-checked when sent
                 default => mail_undeliverable_reason((string) $row['to_email']),
             };

@@ -824,3 +824,7 @@ img { object-position: var(--fx, 50%) var(--fy, 50%); }
 .toolbar select { max-width: 100%; }
 .toolbar > .muted { flex-basis: 100%; }
 @media (min-width: 64rem) { .toolbar > .muted { flex-basis: auto; } }
+
+/* D1: birthday list and notice settings */
+.indent { display: grid; gap: 0.35rem; padding-left: 1.6rem; }
+tr.is-today td { background: var(--accent-soft); }

@@ -60,10 +60,20 @@ final class Dashboard
             $all ? [] : [$user['id']]
         );
         $cron = setting('cron.last_run');
+        // D1: birthday card with Today / This week / This month tabs (?bday=week|month, works without JS).
+        $birthdays = null;
+        if (user_can($user, 'members') || birthday_is_recipient($user)) {
+            $tab = in_array(query_param('bday'), ['week', 'month'], true) ? query_param('bday') : 'today';
+            $today = (new \DateTimeImmutable('now', site_tz()))->setTime(0, 0);
+            $birthdays = [
+                'tab' => $tab, 'rows' => birthday_period_members($tab, $today), 'today' => $today->format('Y-m-d'),
+                'counts' => ['today' => birthday_count('today', $today), 'week' => birthday_count('week', $today), 'month' => birthday_count('month', $today)],
+            ];
+        }
         return [
             'title' => 'Overview',
             'counts' => self::counts(),
-            'birthdays' => user_can($user, 'members') ? birthday_members(birthday_dates_ahead((new \DateTimeImmutable('now', site_tz()))->setTime(0, 0), 7)) : null,
+            'birthdays' => $birthdays,
             'activity' => $activity,
             'activity_all' => $all,
             'user' => $user,

@@ -194,6 +194,51 @@ of **backs** with the columns swapped, so double-sided printing lines up.
 Use your browser's **Print** (or **Save as PDF**), at 100 % size, on card
 stock. Each card is the size of a standard ID card (85.6 × 54 mm).
 
+## Birthdays
+
+**Admin → Members → Birthdays** (members permission) lists every active
+member's birthday for one month: the day, name and member number, with a
+**Send a message** button and a link to the member's page. Pick another
+month with the **Month** list. **Export CSV** downloads the same list (name,
+member number, day, month). The birth year and age are never shown or
+exported. Members born on 29 February appear on 28 February in years that
+are not leap years.
+
+The **Birthdays** card on the admin overview has three tabs, **Today**,
+**This week** (Monday to Sunday) and **This month**, with the number of
+birthdays in each tab's label. People who receive the birthday notices also
+see "N birthdays today" in the bell at the top of every admin page.
+
+## Birthday notices
+
+**Admin → Members → Birthday notices** (*super admin*) chooses the emails
+that remind admins about birthdays. They are sent at the birthday hour
+(**Email settings → Birthday emails at**, 07:00 by default, site time):
+
+| Email | When | What it lists |
+|---|---|---|
+| **Daily** | every day | today's birthdays, then the next 7 days |
+| **Weekly** | on Mondays | every birthday from Monday to Sunday |
+| **Monthly** | on the 1st | every birthday in the month, grouped by week |
+
+All three are on by default. **Skip the email when there are no birthdays**
+(on by default) avoids empty emails. Each line shows the name, member
+number and day (with a note for 29 February) plus links to the member's
+admin page and to **Send a message**. The birth year and age are never
+included.
+
+**Who receives them**: **Every admin who can manage members** (super admins
+and admins with the members permission; the default) or **Only these
+people** (tick active admins and super admins). Admins whose address is on
+the suppression list (bounced, complained or unsubscribed) are skipped.
+
+Each person gets at most one daily email per day, one weekly email per week
+and one monthly email per month, even if cron runs twice. The emails go
+through the email queue like other notices. Change the wording under
+**Email templates** (**Birthday notice: daily / weekly / monthly**).
+Members' own birthday greetings are separate: each member switches them on
+or off in their email preferences.
+
 ## Membership settings
 
 *Super admins only.*

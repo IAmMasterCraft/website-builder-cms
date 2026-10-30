@@ -190,6 +190,11 @@ function app_routes(): Router
     $r->get('/admin/members/import', [Admin\Members::class, 'importForm']);
     $r->post('/admin/members/import', [Admin\Members::class, 'import']);
     $r->get('/admin/members/cards', [Admin\Members::class, 'cards']);
+    // D1: birthday list and the super admin's notice settings
+    $r->get('/admin/members/birthdays', [Admin\Birthdays::class, 'index']);
+    $r->get('/admin/members/birthdays.csv', [Admin\Birthdays::class, 'csv']);
+    $r->get('/admin/settings/birthdays', [Admin\Birthdays::class, 'settings']);
+    $r->post('/admin/settings/birthdays', [Admin\Birthdays::class, 'saveSettings']);
     $r->get('/admin/members/{id:\d+}', [Admin\Members::class, 'edit']);
     $r->post('/admin/members/{id:\d+}', [Admin\Members::class, 'update']);
     $r->post('/admin/members/{id:\d+}/status', [Admin\Members::class, 'status']);

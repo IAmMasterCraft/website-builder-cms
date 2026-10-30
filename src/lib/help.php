@@ -480,6 +480,8 @@ function help_slug_for_admin_path(string $path): ?string
         '/admin/custom-fields' => 'manager-guide/members#custom-fields',
         '/admin/locations' => 'manager-guide/members#location-lists',
         '/admin/settings/membership' => 'manager-guide/members#membership-settings',
+        '/admin/members/birthdays' => 'manager-guide/members#birthdays',
+        '/admin/settings/birthdays' => 'manager-guide/members#birthday-notices',
         '/admin/jobs' => 'manager-guide/jobs',
         '/admin/comments' => 'manager-guide/comments',
         '/admin/messages' => 'manager-guide/messages',

@@ -36,7 +36,7 @@ foreach (['/admin/campaigns', '/admin/notices', '/admin/notices/new', '/admin/in
     status_is($admin, $path, 200);
 }
 $r = $admin->get('/admin');
-check('overview links new campaign and radio upload, shows birthdays panel', str_contains($r['body'], '/admin/campaigns') && str_contains($r['body'], 'Upload to radio') && str_contains($r['body'], 'Next 7 days'));
+check('overview links new campaign and radio upload, shows birthdays panel', str_contains($r['body'], '/admin/campaigns') && str_contains($r['body'], 'Upload to radio') && str_contains($r['body'], 'This week'));
 $r = $admin->get('/admin/email-templates/welcome_member/preview');
 check('email template preview is HTML with a style-only CSP', $r['status'] === 200 && str_contains($r['headers'], "style-src 'unsafe-inline'") && !str_contains($r['headers'], "script-src 'self'") && str_contains($r['body'], 'ORG-26-0042'));
 foreach (['/admin/campaigns', '/admin/inbox', '/admin/jobs', '/admin/comments', '/admin/radio', '/admin/radio/schedule', '/admin/settings/email', '/admin/email-templates'] as $path) {

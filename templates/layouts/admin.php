@@ -60,7 +60,7 @@ $u = $c['user'];
       <div class="top-actions">
         <a class="btn ghost small" href="/" target="_blank" rel="noopener" aria-label="View site (opens in a new tab)"><?= icon('external') ?><span class="hide-sm">View site</span></a>
         <a class="icon-btn" href="/admin/messages" data-dm-badge-link><?= icon('message') ?><span class="dot tabular" data-dm-badge data-dm-src="/admin/messages/unread"<?= $c['messages_unread'] > 0 ? '' : ' hidden' ?>><?= (int) $c['messages_unread'] ?></span><span class="sr-only" data-dm-badge-label><?= $c['messages_unread'] > 0 ? e(pluralise((int) $c['messages_unread'], 'unread message')) : 'Messages' ?></span></a>
-        <a class="icon-btn" href="/admin#needs-attention"><?= icon('bell') ?><?php if ($c['notifications'] > 0): ?><span class="dot tabular"><?= (int) $c['notifications'] ?></span><?php endif ?><span class="sr-only"><?= (int) $c['notifications'] ?> items need attention</span></a>
+        <a class="icon-btn" href="/admin#needs-attention" title="<?= e($c['notification_label']) ?>"><?= icon('bell') ?><?php if ($c['notifications'] > 0): ?><span class="dot tabular"><?= (int) $c['notifications'] ?></span><?php endif ?><span class="sr-only"><?= e($c['notification_label']) ?></span></a>
         <button type="button" class="icon-btn" data-theme-toggle><?= icon('moon', 'icon when-light') ?><?= icon('sun', 'icon when-dark') ?><span class="sr-only">Switch light or dark mode</span></button>
         <details class="profile">
           <summary aria-label="Account menu: <?= e($u['display_name']) ?>"><span class="avatar" aria-hidden="true"><?= e(mb_strtoupper(mb_substr((string) $u['display_name'], 0, 1))) ?></span><span class="hide-sm"><?= e($u['display_name']) ?></span></summary>
