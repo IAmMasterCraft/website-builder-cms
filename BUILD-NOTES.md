@@ -774,6 +774,125 @@ uses Bold).
   `member-impersonation`. `doc-shots.mjs` gained `hover`, `ctx` and an
   `imp` viewer.
 
+**Addendum C (C1, C2, C4), 2026-10-30** (C3 direct messages: not built here)
+- C1 site icons (`src/lib/favicon.php`, `Site\Icons`): Site settings →
+  "Site icon (favicon)" upload (PNG/JPEG/WebP, at least 512 × 512; stored
+  as public media in folder `site`, setting `site.favicon_media_id`, counted
+  in `media_usage()`). Without an upload: the site name's initial
+  (accents stripped; `#` when the name has no Latin letter or digit) drawn
+  with Lato Regular (`src/fonts/`, OFL, unmodified, fake-bold by drawing
+  around a small circle, 2× supersampled) on the header logo tile colours
+  (accent + accent ink, rounded 22 %). Files in
+  `storage/icons/<16-hex signature>/`: `favicon.ico` (16/32/48, own ICO
+  encoder: 32-bit BGRA BMP entries + AND mask), `favicon-32.png`,
+  `apple-touch-icon.png` (180, opaque full square), `icon-192.png`,
+  `icon-512.png`. Signature = hash of `FAVICON_VERSION` + source media (or
+  initial + colours): `favicon_ensure()` regenerates on the next page view
+  after a name/colour/icon change (temporary folder renamed into place, old
+  sets removed), so no save hook is needed and existing installs get icons
+  without a migration. Routes `/icons/{sig}/{file}` (immutable for the
+  current signature, 1 h otherwise; file names allow-listed),
+  `/favicon.ico`, `/apple-touch-icon.png` (1 day), `/site.webmanifest`
+  (name, short name ≤ 12 chars, brand colour as `theme_color`, icons;
+  versioned link). `favicon_head_tags()` in every layout (site incl. error
+  pages and help, admin, bare = installer, print = card); the installer
+  serves the default tile before a database exists (icon paths are let
+  through the install gate in `public/index.php`). Fallback to the static
+  SVG when GD/FreeType or storage fail (GD's built-in font when FreeType is
+  missing).
+- C2: admin sidebar header = site icon tile (`icon-192.png`) + site name
+  (CSS ellipsis, `title` tooltip; full text stays in the DOM), titles were
+  already "… · Admin · site name"; `Powered by Gather` footer line on admin
+  pages. `mail_from_name()`: Email settings name, else `config.php` unless it
+  is the old installer default "Gather", else the site name; the installer
+  and `config.example.php` no longer write "Gather". The installer itself
+  still says "Gather setup" (no site name exists yet).
+- C4 data: `dev-tools/build-geo.php` (+ `geo-corrections.json`, raw dumps
+  in git-ignored `dev-tools/geo-src/`) → `public/assets/geo/countries.json`
+  (250 countries, phone codes, built-in labels for 14 countries, 450 time
+  zones incl. old aliases such as Asia/Calcutta) + 227 per-country files
+  (`a1` [[code, name]], `a2` {a1: [[code, name]]}, 1.4 MB total) +
+  `src/geo/index.php`. Nigeria: 37 / 774 after corrections (see below).
+- C4 storage (migration `020_locations`): `member_locations` (member_id,
+  slot `residence|nationality|origin|cf<id>`, country_code/name,
+  admin1_code/name, admin2_code/name, locality; PK member+slot; FK cascade;
+  index slot+codes), `geo_custom_areas` (admin-added local areas, codes
+  `x<id>`), `custom_fields.type` + `location`, `custom_fields.field_config`
+  (JSON), `members.location_legacy`. A code is NULL when the level was typed
+  (no list). `members.country/region/city/nationality` are kept as display
+  snapshots, written from the validated locations
+  (`member_location_snapshot()`), so lists, search, the old "region"
+  audience and exports keep working.
+- `migrate()` now also runs `migrations/NNN_*.php` files (return a
+  `function (PDO): void`, run with the app loaded, recorded like SQL files).
+  `021_locations_upgrade.php` converts existing members in batches of 500
+  (skips members that already have location rows, so it is re-runnable):
+  `geo_from_names()` matches names case/accent-insensitively, with aliases
+  and demonyms ("UK", "England" as a country, "Nigerian", "Côte d'Ivoire"),
+  " State"/"LGA"/"County" words ignored, and a UK nation typed as the region
+  with no country implies GB. Unmatched values are kept as typed without a
+  code; when anything did not match exactly the original four values are
+  stored in `location_legacy` and shown under the location fields on the
+  admin member page. Custom select fields are *not* converted
+  automatically: changing a field's type to Location (Custom fields) runs
+  `custom_field_location_convert()` (fixed country: match states, then an
+  LGA unique within the country; otherwise "area, state, country" text)
+  and reports matched/kept counts in the flash and audit entry.
+- C4 forms: `geo_validate()` (codes must exist in the bundled data or
+  `geo_custom_areas`; levels without a list → free text up to 120 chars;
+  required levels; fixed country ignores posted input) used by
+  `member_profile_validate()` (now returns `[profile, errors, locations]`)
+  and `custom_fields_validate()` (third element: locations by slot; the
+  stored value is the display text). Input names `<prefix>_country`,
+  `_state`, `_state_text`, `_area`, `_area_text`, `_city`; prefixes `res`,
+  `nat`, `origin`, `cf_<key>`. `partials/location_field.php` renders the
+  lists for the current values; the level below appears once the level
+  above is known; "Update the lists" (`_loc_refresh`, `formnovalidate`)
+  re-renders (join) or PRG-redirects with the input kept (profile, admin
+  edit) without saving. Labels: `geo_labels()` (built-in + "Location
+  lists" overrides), origin labels from Membership settings, level-1
+  suffix " of origin".
+- `location.js` (module, no innerHTML): per-country JSON fetched once
+  (versioned URL, Map cache, failures fall back to text inputs), admin
+  areas from `/geo/custom.json?v=<geo.custom_version>`, type-to-filter
+  `<input type="search">` (aria-controls, label) above selects with 15+
+  options (countries keep their optgroups), label `for` switched between
+  select and text input, refresh buttons removed. Country hint: browser
+  time zone → country (GeoNames table), then the first
+  `navigator.languages` region subtag, then the CDN header passed as
+  `data-geo-header` (`CF-IPCountry`, `CloudFront-Viewer-Country`,
+  `X-Country-Code`, `X-Vercel-IP-Country`; validated). The best guess goes
+  under "Suggested" in every country select on the page; only the
+  residence select is pre-filled, and only when two hints agree, the
+  select is untouched and no text field of the form has a value, with a
+  `role="status"` note. The server alone only adds the header country to
+  "Suggested" (never selected).
+- Admin: members list "Filter by location" (slot + cascade; `loc` =
+  `slot|CC|a1|a2`, decoded against the whitelist and the data, never put in
+  SQL) and a "Lives in" column; CSV export follows it. Audience type
+  `location` (same encoding; label "Members by Origin: Ekiti (Nigeria)");
+  `region` stays for saved audiences (hidden from the picker unless in
+  use; validated against members' region snapshots). "Location lists"
+  (`Admin\Locations`, super admin, Members group): per-country level names
+  (setting `geo.labels`), states with bundled area counts, add a missing
+  local area (duplicates of bundled/added names refused), remove while
+  unused; audited. Membership settings: the "Regions" list is gone (the
+  setting is ignored), new "Origin on the sign-up form" panel (setting
+  `members.origin`) and "Location on the card" lines 1-2
+  (`members.card_locations`; card shows location lines first, then
+  "show on card" custom fields, two lines in total). Custom field form:
+  Location type with levels, fixed country, labels and card level (members
+  only).
+- CSV: columns `nationality_code, nationality, country_code, country,
+  region_code, region, city, origin_country_code, origin_country,
+  origin_state_code, origin_state, origin_area_code, origin_area`;
+  location custom fields add `cf_<key>_code` (`NG.54.2595346`). Import:
+  codes win, names matched like the upgrade, unknown names reported with
+  the CSV column name; update mode changes only the slots (and levels) the
+  file has columns for.
+- Demo: origin block on; demo members get residence locations. Dev site:
+  origin on, Amara Okafor has origin Nigeria → Ekiti → Ado-Ekiti.
+
 ## Tests
 
 `bin/check`: lint of every PHP file, `tests/run.php` (299 unit/DB tests after
@@ -784,6 +903,51 @@ essential-notice tests) and 10 smoke checks.
 Addendum A6 added `tests/design_test.php` (6 tests) and
 `tests/smoke_design.php` (45 checks); builder/smoke counts updated for 29
 section types and 5 themes.
+
+Addendum C (2026-10-30): `bin/check` = lint + **355 unit/DB tests** +
+**594 smoke checks**, all green, both with the local MariaDB's sql_mode and
+with MySQL 8's default (`ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,
+NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,
+NO_ENGINE_SUBSTITUTION`, set globally for the run and restored). New:
+`tests/locations_test.php` (14: Nigeria 37/774 and the corrections, UK
+nations, time zone table and file flags, alphabetical countries, labels and
+overrides, validation of every level, free text, fixed country, profile
+snapshot, the 021 upgrade on typed values incl. legacy copy and re-run,
+matching, admin-added areas, location audiences/filters incl. an injection
+attempt, ID card lines, CSV export/import/partial update, Location custom
+field validation and conversion, CDN hint, migration order and enum),
+`tests/site_icon_test.php` (3: ICO entries and DIB headers, PNG sizes,
+transparent corners, tile colour, opaque Apple icon, regeneration on name
+and colour change, initial fallback, head tags, manifest, upload rules,
+media usage, sender name), `tests/smoke_addendum_c.php` (39 checks: icon
+links on 9 page types, cache headers, 404 names, ICO/Apple/manifest, upload
+too small / ok / back to the tile, sidebar name and tile, titles and
+"Powered by"; sign-up fields, Suggested from `CF-IPCountry`, no-JS refresh
+for states and LGAs, origin settings validation, wrong code 422, sign-up
+storing codes and names, profile refresh/save, filters, CSV, admin edit,
+location campaign audience, location lists add/labels/delete,
+`/geo/custom.json`, Location custom field, members-only rule). The
+permission matrix covers `/admin/locations` (super admin) and the CSRF
+enumeration the new POST routes.
+
+Addendum C visual and accessibility checks (headless Chrome, Bold theme,
+dev site): `/join` at 1440 px (time zone Africa/Lagos, en-NG: Nigeria
+suggested and pre-filled with the note) and 375 px (Europe/London, en-US:
+United Kingdom suggested, not pre-filled); choosing Nigeria in the origin
+block lists 37 states labelled "State of origin", Ekiti lists 16 LGAs
+labelled "Local Government Area", "ek" filters the state list to Ekiti; no
+horizontal overflow, no console errors. Admin members list with a location
+filter, Location lists, Site settings icon panel and member page at 1440
+and 375 px (fixed an overflow of the country picker on Location lists at
+375 px). The icon itself was checked as images (512 px tile, ICO decoded by
+macOS `sips`) and by HTTP on every page type; a headless browser has no
+tab strip, so the tab itself was not photographed. axe-core 4.11
+(`dev-tools/audit.mjs`, which now takes `MEMBER_PAGES`): 44 page runs (`/`,
+`/join`, `/login`, `/help`, a 404, `/account`, `/account/profile`,
+`/account/card`, admin overview, members, members with a location filter,
+member page, Location lists NG and GB, settings, membership settings,
+custom field new/edit, a campaign, new notice; 1366 and 375 px, admin dark
+mode): **0 violations of any impact**.
 
 Addendum B (2026-10-26): `bin/check` = lint + **329 unit/DB tests** +
 **548 smoke checks**, all green; after the Addendum B security review
@@ -1152,6 +1316,29 @@ playwright-core; tools in `dev-tools/`, never deployed):
   guides stay staff-only in the app and public on GitHub/the static
   site). Links from a guide to files outside `docs/` render as text.
 
+- Addendum C1: "brand colour" for the default icon is read as the colours
+  of the header logo tile (accent + its ink), since the spec also asks for
+  "the same style as the header logo tile"; the manifest's `theme_color`
+  is the brand colour. "Stored as public media": the uploaded source is a
+  public media item; the generated files live in `storage/icons/` and are
+  served by PHP with long-cache versioned URLs (the uploads folder only
+  serves WebP).
+- Addendum C2: the installer keeps "Gather setup" (there is no site name
+  yet); the top bar already showed the site name and keeps it.
+- Addendum C4: "each level optional per form" = levels and required levels
+  are configurable per use (residence: country required at sign-up,
+  optional for admins; nationality: country only; origin and Location
+  custom fields: 1-3 levels, required 0-3). Location custom fields are for
+  members only (groups keep their typed country). The origin block is off
+  by default on new installs (on in the demo). Existing "origin" custom
+  fields are converted when the super admin changes their type to Location
+  (an automatic guess on a live site could pick the wrong country); the
+  answers are never dropped. Admin-added areas exist only at the second
+  level (spec: "add missing local areas"); a country without first-level
+  lists uses typed text. The country hint pre-fills only when two
+  independent hints agree ("confident"). Location lists is a super admin
+  screen like Custom fields and Membership settings.
+
 ## Code review fixes (2026-10-24)
 
 Two reviews (security-reviewer, plain-php-reviewer) after phase 7. Every
@@ -1451,6 +1638,24 @@ finding was confirmed in the code and fixed with regression tests
   heading weighting (no stemming or fuzzy matching); the static docs site
   has no search box. Sidebar group state is per browser (localStorage), not
   per account. Not checked with a real screen reader.
+
+- Addendum C gaps: C3 (direct messages) is not built (next step, another
+  agent). Nigeria's LGA list was checked for completeness (37 / 774, every
+  state's count matches the official count) and the duplicates/misspellings
+  found in the over-counted states were fixed; spellings in the other
+  states were not checked one by one against an official gazette (GeoNames
+  names such as "Irepodun/Ifelodun" are kept). Many other countries'
+  second-level names are GeoNames' own (UK: "Borough of Bolton", "City and
+  Borough of Leeds"...). Without JavaScript the sign-up "Update the lists"
+  step cannot keep a chosen photo file (browsers never re-send file
+  inputs); pressing Enter in a text field submits the first button, which
+  can be "Update the lists" (re-shows the form, nothing lost but the
+  photo). Group accounts keep a typed country. The location filter lives
+  in the members list and the audience picker; there is no saved-segment
+  feature. The legacy `region` audience matches the snapshot text, so it
+  follows renamed regions only after members re-save. Lato is used only
+  for the initial in the generated icon (not the theme's heading font,
+  which ships as WOFF2 that GD cannot read).
 
 ## Acceptance check (spec §14), final status
 
