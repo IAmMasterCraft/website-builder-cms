@@ -1,0 +1,57 @@
+{
+  "_doc": [
+    "Corrections applied by dev-tools/build-geo.php on top of the GeoNames dumps.",
+    "Keys per country: admin1_rename {code: name}, admin1_strip_suffix, admin2_strip_suffix,",
+    "admin2_drop [\"<admin1>.<admin2>\"], admin2_rename {\"<admin1>.<admin2>\": name}, expect {admin1, admin2}.",
+    "The build fails when the counts in 'expect' do not match after the corrections.",
+    "Codes are never changed (members store them); only names are fixed and duplicates dropped."
+  ],
+  "NG": {
+    "_doc": [
+      "Checked 2026-10-26 against the official structure: 36 states + the Federal Capital Territory, 774 LGAs.",
+      "GeoNames lists 785 second-level areas: 11 are later duplicates (geonameid 948xxxx, named '... Local Government Area')",
+      "of LGAs already present under an older, sometimes misspelled name. The duplicates are dropped and the older",
+      "entries renamed to the official spelling. Two of the 948xxxx entries (Lagos Mainland, Lagos Island) are real",
+      "LGAs that have no older entry and are kept. Benue's 'Bukuru' is Buruku LGA (Bukuru is a town in Plateau State).",
+      "Admin1 names mix 'X State' and 'X': the suffix is dropped so every state reads the same; FCT is spelled out."
+    ],
+    "admin1_strip_suffix": " State",
+    "admin1_rename": { "11": "Federal Capital Territory" },
+    "admin2_strip_suffix": " Local Government Area",
+    "admin2_drop": [
+      "05.9485473", "05.9485475",
+      "45.9485480", "45.9485481",
+      "26.9485482", "26.9485483",
+      "28.9485478",
+      "40.9485472", "40.9492098",
+      "44.9485484",
+      "50.9485477"
+    ],
+    "admin2_rename": {
+      "05.25010": "Ifako-Ijaiye",
+      "05.25016": "Oshodi-Isolo",
+      "05.25002": "Ajeromi-Ifelodun",
+      "05.25004": "Amuwo-Odofin",
+      "05.25008": "Eti-Osa",
+      "05.25009": "Ibeju-Lekki",
+      "45.1006": "Isiala Ngwa North",
+      "45.1007": "Isiala Ngwa South",
+      "45.1009": "Obi Ngwa",
+      "26.7004": "Buruku",
+      "26.7013": "Makurdi",
+      "28.17003": "Ehime Mbano",
+      "28.17011": "Mbaitoli",
+      "40.513": "Koko/Besse",
+      "44.702": "Bursari",
+      "44.715": "Tarmuwa",
+      "50.33017": "Ogu/Bolo",
+      "50.33019": "Omuma",
+      "50.33022": "Port Harcourt"
+    },
+    "expect": { "admin1": 37, "admin2": 774 }
+  },
+  "GB": {
+    "_doc": ["England, Scotland, Wales and Northern Ireland as the first level; counties and council areas below."],
+    "expect": { "admin1": 4 }
+  }
+}
