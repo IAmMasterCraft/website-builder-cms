@@ -15,6 +15,8 @@ $u = $c['user'];
 <meta name="csrf" content="<?= e(csrf_token()) ?>">
 <?= favicon_head_tags() ?>
 <link rel="stylesheet" href="<?= e(asset('assets/css/admin.css')) ?>">
+<?php foreach ($extra_css ?? [] as $css): ?><link rel="stylesheet" href="<?= e(asset($css)) ?>">
+<?php endforeach ?>
 <script src="<?= e(asset('assets/js/admin-boot.js')) ?>"></script>
 <script type="module" src="<?= e(asset('assets/js/admin.js')) ?>"></script>
 </head>
@@ -57,6 +59,7 @@ $u = $c['user'];
       </form>
       <div class="top-actions">
         <a class="btn ghost small" href="/" target="_blank" rel="noopener" aria-label="View site (opens in a new tab)"><?= icon('external') ?><span class="hide-sm">View site</span></a>
+        <a class="icon-btn" href="/admin/messages" data-dm-badge-link><?= icon('message') ?><span class="dot tabular" data-dm-badge data-dm-src="/admin/messages/unread"<?= $c['messages_unread'] > 0 ? '' : ' hidden' ?>><?= (int) $c['messages_unread'] ?></span><span class="sr-only" data-dm-badge-label><?= $c['messages_unread'] > 0 ? e(pluralise((int) $c['messages_unread'], 'unread message')) : 'Messages' ?></span></a>
         <a class="icon-btn" href="/admin#needs-attention"><?= icon('bell') ?><?php if ($c['notifications'] > 0): ?><span class="dot tabular"><?= (int) $c['notifications'] ?></span><?php endif ?><span class="sr-only"><?= (int) $c['notifications'] ?> items need attention</span></a>
         <button type="button" class="icon-btn" data-theme-toggle><?= icon('moon', 'icon when-light') ?><?= icon('sun', 'icon when-dark') ?><span class="sr-only">Switch light or dark mode</span></button>
         <details class="profile">

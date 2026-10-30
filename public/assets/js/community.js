@@ -63,7 +63,7 @@ export function initCommunity() {
               form.remove();
               const summary = document.querySelector('[data-unread-summary]');
               if (summary) summary.textContent = data.unread ? `${data.unread} unread notice${data.unread === 1 ? '' : 's'}` : 'You are all caught up.';
-              document.querySelectorAll('.account-nav .count-pill').forEach((pill) => {
+              document.querySelectorAll('.account-nav .count-pill:not([data-dm-badge])').forEach((pill) => {
                 if (data.unread) pill.firstChild.textContent = String(data.unread); else pill.remove();
               });
             } catch { /* the button still works */ }

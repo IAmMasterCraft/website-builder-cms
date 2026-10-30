@@ -15,7 +15,7 @@ function set_session_cookie(array $r): string
 // ---- B1: sidebar groups ------------------------------------------------------------
 $h = $admin->get('/admin/members')['body'];
 check('B1: each sidebar group header is a button with aria-expanded and aria-controls', (bool) preg_match('#<button type="button" class="nav-group-toggle" aria-expanded="(true|false)" aria-controls="nav-g-site">#', $h)
-    && substr_count($h, 'class="nav-group-toggle"') === 7);
+    && substr_count($h, 'class="nav-group-toggle"') === 8); // C3 added the Messages group
 check('B1: the group of the current page is the active parent, open, with the current link marked', (bool) preg_match('#<li class="nav-group is-active-parent" data-group="members">\s*<p class="nav-section"[^>]*>Members</p>\s*<button type="button" class="nav-group-toggle" aria-expanded="true" aria-controls="nav-g-members">#', $h)
     && str_contains($h, '<a href="/admin/members" aria-current="page">') && substr_count($h, 'is-active-parent') === 1);
 check('B1: other groups start closed; the no-JS label and the list ids are in the markup', str_contains($h, 'aria-expanded="false" aria-controls="nav-g-radio"') && str_contains($h, '<ul class="nav-items" id="nav-g-radio"') && str_contains($h, 'class="nav-section" id="nav-g-radio-label"'));
@@ -26,7 +26,7 @@ create_user('b1-radio@example.test', 'b1-radio-password', 'admin', 'Radio Only',
 $radioB = login_as($base, 'b1-radio@example.test', 'b1-radio-password');
 $h = $radioB->get('/admin/radio')['body'];
 preg_match_all('#data-group="([a-z]+)"#', $h, $gm);
-check('B1: groups without permitted screens are not shown (radio-only admin: Site and Radio)', $gm[1] === ['site', 'radio'] && !str_contains($h, '/admin/members') && !str_contains($h, '/admin/settings'));
+check('B1: groups without permitted screens are not shown (radio-only admin: Site, own Messages (C3) and Radio)', $gm[1] === ['site', 'messages', 'radio'] && !str_contains($h, '/admin/members') && !str_contains($h, '/admin/settings'));
 
 // ---- B3: help centre ---------------------------------------------------------------
 $r = $admin->get('/admin/help');
@@ -78,7 +78,7 @@ $impMember = login_as($base, 'imani.view@example.test', 'imani-password-1');
 $h = $admin->get('/admin/members/' . $impMid)['body'];
 check('B2: the member page offers "Log in as this member"', str_contains($h, 'href="/admin/impersonate/' . $impUid . '"'));
 check('B2: the members list has a "Log in as" row action', str_contains($admin->get('/admin/members?q=imani')['body'], 'href="/admin/impersonate/' . $impUid . '"'));
-check('B2: the Users & roles form lists the impersonate permission (10 keys)', str_contains($admin->get('/admin/users/new')['body'], 'value="impersonate"') && substr_count($admin->get('/admin/users/new')['body'], 'name="permissions[]"') === 10);
+check('B2: the Users & roles form lists the impersonate permission (11 keys since C3)', str_contains($admin->get('/admin/users/new')['body'], 'value="impersonate"') && substr_count($admin->get('/admin/users/new')['body'], 'name="permissions[]"') === 11);
 status_is($admin, '/admin/impersonate/' . $impUid, 200, 'Log in as this member');
 $staffId = (int) q_val("SELECT id FROM users WHERE role = 'super_admin' ORDER BY id LIMIT 1");
 $r = $admin->get('/admin/impersonate/' . $staffId);

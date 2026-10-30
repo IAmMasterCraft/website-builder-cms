@@ -1,6 +1,7 @@
 // Public site enhancements. Every feature works without this file.
 import { initLightbox } from './lightbox.js';
 import { initCommunity } from './community.js';
+import { initMessages } from './messages.js';
 import { initRadio } from './radio.js';
 import { initHeader } from './header.js';
 import { initReveal, initCounters, initParallax, initSteps } from './motion.js';
@@ -9,6 +10,7 @@ import { initCarousels } from './carousel.js';
 import { initAccordions, initShowcase } from './accordion.js';
 
 initHeader();
+initMessages();
 initReveal();
 initHero();
 

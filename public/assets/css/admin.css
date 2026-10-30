@@ -102,6 +102,7 @@ p { margin: 0 0 0.75rem; text-wrap: pretty; }
 .js[data-nav-open~="content"] .nav-group[data-group="content"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="members"] .nav-group[data-group="members"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="community"] .nav-group[data-group="community"]:not(.is-closed) > .nav-items,
+.js[data-nav-open~="messages"] .nav-group[data-group="messages"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="communications"] .nav-group[data-group="communications"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="radio"] .nav-group[data-group="radio"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="system"] .nav-group[data-group="system"]:not(.is-closed) > .nav-items { display: block; }

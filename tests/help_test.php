@@ -272,13 +272,14 @@ test('B3: bin/docs-html builds a static site with relative links, images and .no
 test('B1: sidebar groups follow permissions; empty groups disappear; active parent is the most specific link', function (): void {
     act_as(fixture_admin());
     $all = admin_nav(current_user());
-    same(['site', 'content', 'members', 'community', 'communications', 'radio', 'system'], array_column($all, 'key'));
+    same(['site', 'content', 'members', 'community', 'messages', 'communications', 'radio', 'system'], array_column($all, 'key'));
     foreach ($all as $g) {
         ok($g['label'] !== '' && $g['icon'] !== '' && $g['links'] !== []);
     }
     act_as(fixture_admin('admin', ['radio']));
     $radio = admin_nav(current_user());
-    same(['site', 'radio'], array_column($radio, 'key'), 'only Overview (site) and Radio');
+    same(['site', 'messages', 'radio'], array_column($radio, 'key'), 'only Overview (site), own messages (C3) and Radio');
+    same([['/admin/messages', 'My messages', 'message']], $radio[1]['links'], 'C3: every admin has their own messages; Team inbox and reports need the permission');
     same([['/admin', 'Overview', 'home']], $radio[0]['links']);
     same(['/admin/radio/playlists', 'radio'], admin_nav_active($radio, '/admin/radio/playlists/4'));
     same(['/admin/radio', 'radio'], admin_nav_active($radio, '/admin/radio/media/2'));
@@ -289,7 +290,9 @@ test('B1: sidebar groups follow permissions; empty groups disappear; active pare
     same(['/admin/members', 'members'], admin_nav_active($all, '/admin/impersonate/12'), 'the start screen belongs to Members');
     same(['/admin/members', 'members'], admin_nav_active($all, '/admin/members.csv'));
     act_as(fixture_admin('admin', ['essential_notices', 'impersonate']));
-    same(['site'], array_column(admin_nav(current_user()), 'key'));
+    same(['site', 'messages'], array_column(admin_nav(current_user()), 'key'));
+    same(['/admin/messages/team', 'messages'], admin_nav_active($all, '/admin/messages/team/3'));
+    same(['/admin/settings/messages', 'messages'], admin_nav_active($all, '/admin/settings/messages'));
 });
 
 test('B3 review: /help serves only the screenshots the member guide uses', function (): void {

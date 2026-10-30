@@ -624,6 +624,9 @@ require __DIR__ . '/smoke_addendum_b.php';
 // Addendum C: site icons, organisation name in the admin, cascading location fields.
 require __DIR__ . '/smoke_addendum_c.php';
 
+// Addendum C3: direct messages.
+require __DIR__ . '/smoke_addendum_c3.php';
+
 // ---- Login safety ----------------------------------------------------------
 $r = $visitor->post('/login', ['email' => 'sam@example.test', 'password' => 'x']);
 check('login POST without CSRF token is rejected (419)', $r['status'] === 419);

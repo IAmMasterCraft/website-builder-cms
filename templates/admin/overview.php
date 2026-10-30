@@ -11,6 +11,8 @@ $attention = [
     ['Unread messages', $counts['messages_unread'], 'inbox', user_can($user, 'communications') ? '/admin/inbox?show=unread' : null],
     ['Reported comments', $counts['comments_pending'], 'help', user_can($user, 'content') ? '/admin/comments' : null],
     ['Jobs awaiting approval', $counts['jobs_pending'], 'flag', user_can($user, 'jobs') ? '/admin/jobs' : null],
+    ['Team inbox (unread)', $counts['team_unread'], 'message', user_can($user, 'messages') ? '/admin/messages/team?show=unread' : null],
+    ['Reported messages', $counts['message_reports'], 'flag', user_can($user, 'messages') ? '/admin/messages/reports' : null],
     ['Scheduled items', $counts['scheduled'], 'clock', null],
 ];
 $hour = (int) (new DateTimeImmutable('now', site_tz()))->format('G');

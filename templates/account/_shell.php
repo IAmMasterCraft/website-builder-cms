@@ -7,6 +7,7 @@ $links = [
     ['events', '/account/events', 'My events', 'calendar', $verified],
     ['jobs', '/account/jobs', 'Jobs', 'briefcase', $verified],
     ['downloads', '/account/downloads', 'Downloads', 'file-down', $verified],
+    ['messages', '/account/messages', 'Messages', 'message', $verified],
     ['notices', '/account/notices', 'Notices', 'bell', $verified],
     ['preferences', '/account/preferences', 'Email preferences', 'mail', $verified],
     ['password', '/account/password', 'Email and password', 'lock', true],
@@ -25,7 +26,7 @@ $links = [
     <nav class="account-nav" aria-label="Account">
       <ul>
         <?php foreach ($links as [$key, $href, $label, $ic, $show]): if (!$show) { continue; } ?>
-          <li><a href="<?= e($href) ?>"<?= $active === $key ? ' aria-current="page"' : '' ?>><?= icon($ic) ?> <?= e($label) ?><?php if ($key === 'notices' && !empty($unread_notices)): ?> <span class="count-pill tabular"><?= (int) $unread_notices ?><span class="sr-only"> unread</span></span><?php endif ?></a></li>
+          <li><a href="<?= e($href) ?>"<?= $active === $key ? ' aria-current="page"' : '' ?>><?= icon($ic) ?> <?= e($label) ?><?php if ($key === 'notices' && !empty($unread_notices)): ?> <span class="count-pill tabular"><?= (int) $unread_notices ?><span class="sr-only"> unread</span></span><?php endif ?><?php if ($key === 'messages'): ?> <span class="count-pill tabular" data-dm-badge data-dm-src="/account/messages/unread"<?= empty($unread_messages) ? ' hidden' : '' ?>><?= (int) ($unread_messages ?? 0) ?></span><span class="sr-only" data-dm-badge-label><?= empty($unread_messages) ? '' : ', ' . e(pluralise((int) $unread_messages, 'unread message')) ?></span><?php endif ?></a></li>
         <?php endforeach ?>
       </ul>
       <form method="post" action="/logout"><?= csrf_field() ?><button class="btn ghost small" type="submit"><?= icon('logout') ?> Log out</button></form>

@@ -106,6 +106,12 @@ function admin_nav(?array $user): array
             ['/admin/jobs', 'Jobs', 'briefcase', 'jobs'],
             ['/admin/comments', 'Comments', 'message', 'content'],
         ]],
+        ['messages', 'Messages', 'message', [
+            ['/admin/messages', 'My messages', 'message', null],
+            ['/admin/messages/team', 'Team inbox', 'inbox', 'messages'],
+            ['/admin/messages/reports', 'Reported messages', 'flag', 'messages'],
+            ['/admin/settings/messages', 'Message settings', 'settings', 'super_admin'],
+        ]],
         ['communications', 'Communications', 'mail', [
             ['/admin/campaigns', 'Campaigns', 'send', 'communications'],
             ['/admin/notices', 'Notices', 'bell', 'communications'],
@@ -173,6 +179,7 @@ function admin_chrome(): array
     $unread = (int) q_val('SELECT COUNT(*) FROM contact_messages WHERE read_at IS NULL');
     $pendingComments = comments_reported_count();
     $pendingJobs = (int) q_val("SELECT COUNT(*) FROM jobs WHERE status = 'pending'");
+    $messageReports = user_can($user, 'messages') ? msg_reports_open_count() : 0;
     return [
         'site_name' => (string) setting('site.name', 'Gather'),
         'tile_url' => favicon_tile_url(), // C2: the site's icon tile next to its name
@@ -181,8 +188,10 @@ function admin_chrome(): array
         'nav_active' => admin_nav_active($nav, request_path()),
         'path' => request_path(),
         'flash' => flash(),
-        'notifications' => $unread + $pendingComments + $pendingJobs,
-        'notification_detail' => ['unread' => $unread, 'comments' => $pendingComments, 'jobs' => $pendingJobs],
+        'notifications' => $unread + $pendingComments + $pendingJobs + $messageReports,
+        'notification_detail' => ['unread' => $unread, 'comments' => $pendingComments, 'jobs' => $pendingJobs, 'message_reports' => $messageReports],
+        // C3: unread direct messages (own, plus the Team inbox with the messages permission).
+        'messages_unread' => $user !== null ? msg_admin_badge($user) : 0,
     ];
 }
 

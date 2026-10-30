@@ -72,6 +72,9 @@ function app_routes(): Router
 
     $r->post('/contact', [Site\Contact::class, 'send']);
 
+    // C3: direct messages, member side (the same handlers serve /admin/messages)
+    message_routes($r, '/account/messages');
+
     // Communications (§5), jobs (§4.6), likes and comments (§4.7)
     $unsub = '{token:[A-Za-z0-9_-]{4,300}\.[a-f0-9]{32}}';
     $r->get('/unsubscribe/' . $unsub, [Site\Unsubscribe::class, 'show']);
@@ -305,6 +308,20 @@ function app_routes(): Router
     $r->get('/admin/impersonate/{id:\d+}', [Admin\Impersonation::class, 'confirm']);
     $r->post('/admin/impersonate/{id:\d+}', [Admin\Impersonation::class, 'start']);
 
+    // Addendum C3: direct messages for staff, the Team inbox, reported messages, settings
+    $r->get('/admin/messages/team', [Admin\Messages::class, 'team']);
+    $r->get('/admin/messages/team/{id:\d+}', [Admin\Messages::class, 'teamShow']);
+    $r->post('/admin/messages/team/{id:\d+}', [Admin\Messages::class, 'teamReply']);
+    $r->get('/admin/messages/team/{id:\d+}/poll', [Admin\Messages::class, 'teamPoll']);
+    $r->post('/admin/messages/team/{id:\d+}/read', [Admin\Messages::class, 'teamRead']);
+    $r->get('/admin/messages/reports', [Admin\Messages::class, 'reports']);
+    $r->get('/admin/messages/reports/{id:\d+}', [Admin\Messages::class, 'report']);
+    $r->post('/admin/messages/reports/{id:\d+}', [Admin\Messages::class, 'resolve']);
+    $r->get('/admin/settings/messages', [Admin\Messages::class, 'settings']);
+    $r->post('/admin/settings/messages', [Admin\Messages::class, 'saveSettings']);
+    $r->post('/admin/messages/preferences', [Site\Messages::class, 'preferences']);
+    message_routes($r, '/admin/messages');
+
     // Addendum B3: help centre (docs/ rendered in the admin)
     $docImage = '{name:[a-z0-9][a-z0-9_-]*\.(?:webp|png|jpe?g|gif)}';
     $r->get('/admin/help', [Admin\Help::class, 'index']);
@@ -324,6 +341,31 @@ function app_routes(): Router
     // Pages last: /{page-slug}
     $r->get('/' . $slug, [Site\Pages::class, 'show']);
     return $r;
+}
+
+/** C3: one set of message routes under /account/messages (members) and /admin/messages (staff). */
+function message_routes(Router $r, string $base): void
+{
+    $c = Site\Messages::class;
+    $r->get($base, [$c, 'index']);
+    $r->get($base . '/new', [$c, 'create']);
+    $r->post($base, [$c, 'store']);
+    $r->get($base . '/unread', [$c, 'unread']);
+    $r->get($base . '/recipients', [$c, 'recipients']);
+    $r->get($base . '/blocked', [$c, 'blocked']);
+    $r->post($base . '/block/{item:\d+}', [$c, 'block']);
+    $r->post($base . '/unblock/{item:\d+}', [$c, 'unblock']);
+    $r->get($base . '/{id:\d+}', [$c, 'show']);
+    $r->post($base . '/{id:\d+}', [$c, 'send']);
+    $r->get($base . '/{id:\d+}/poll', [$c, 'poll']);
+    $r->post($base . '/{id:\d+}/read', [$c, 'read']);
+    $r->post($base . '/{id:\d+}/mute', [$c, 'mute']);
+    $r->post($base . '/{id:\d+}/leave', [$c, 'leave']);
+    $r->post($base . '/{id:\d+}/people', [$c, 'addPeople']);
+    $r->post($base . '/{id:\d+}/people/{item:\d+}/remove', [$c, 'removePerson']);
+    $r->post($base . '/{id:\d+}/m/{item:\d+}/edit', [$c, 'edit']);
+    $r->post($base . '/{id:\d+}/m/{item:\d+}/delete', [$c, 'delete']);
+    $r->post($base . '/{id:\d+}/m/{item:\d+}/report', [$c, 'report']);
 }
 
 /** Routes while the app is not installed yet. */

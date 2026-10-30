@@ -9,6 +9,7 @@ $fv = ['values' => array_map(static fn ($v) => is_scalar($v) ? (string) $v : '',
   </div>
   <div class="actions">
     <?php if ($m['member_number']): ?><a class="btn ghost" href="/admin/members/<?= (int) $m['id'] ?>/card" target="_blank" rel="noopener"><?= icon('award') ?> View / print card</a><?php endif ?>
+    <?php if ($m['status'] === 'active'): ?><a class="btn ghost" href="/admin/messages/new?to=<?= (int) $m['user_id'] ?>"><?= icon('message') ?> Send a message</a><?php endif ?>
     <?php if ($can_impersonate): ?><a class="btn ghost" href="/admin/impersonate/<?= (int) $m['user_id'] ?>"><?= icon('eye') ?> Log in as this member</a><?php endif ?>
   </div>
 </div>

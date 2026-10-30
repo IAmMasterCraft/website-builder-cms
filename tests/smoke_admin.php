@@ -52,6 +52,9 @@ function expected_permission(string $path): ?string
         '#^/admin/help(/|$)#' => null,
         // B2: the start screen of "Log in as this member".
         '#^/admin/impersonate(/|$)#' => 'impersonate',
+        // C3: the Team inbox and reported messages need `messages`; everyone has their own messages.
+        '#^/admin/messages/(team|reports)(/|$)#' => 'messages',
+        '#^/admin/messages(/|$)#' => null,
         '#^/admin/(settings|design|custom-fields|locations|users|audit|backups|health)(\b|/|\.)#' => 'super_admin',
         '#^/admin/(media|albums)(/|$)#' => 'gallery_media',
         '#^/admin/(menus|pages|templates|layout)(/|$)#' => 'pages_menus',

@@ -39,13 +39,20 @@ final class Account
 
     private static function page(string $template, string $title, string $active, array $data, int $status = 200): void
     {
+        self::shell('account/' . $template, $title, $active, $data, $status);
+    }
+
+    /** Render any template inside the account shell (also used by the member Messages pages, C3). */
+    public static function shell(string $view, string $title, string $active, array $data, int $status = 200): void
+    {
         $user = $data['user'];
         $data += ['title' => $title, 'active' => $active, 'noindex' => true, 'is_group' => $user['role'] === 'group', 'extra_css' => ['assets/css/card.css']];
         $data['unread_notices'] = $user['status'] === 'active' ? notices_unread_count((int) $user['id']) : 0;
+        $data['unread_messages'] = $user['status'] === 'active' ? msg_unread_count((int) $user['id']) : 0;
         // A5: emails to this address bounce: ask the member to update it.
         $sup = email_suppression((string) $user['email']);
         $data['bounce_suppression'] = $sup !== null && in_array($sup['reason'], EMAIL_UNDELIVERABLE_REASONS, true) ? $sup : null;
-        render('account/_shell', $data + ['inner' => view('account/' . $template, $data)], 'site', $status);
+        render('account/_shell', $data + ['inner' => view($view, $data)], 'site', $status);
     }
 
     public static function home(array $p): void
@@ -423,13 +430,16 @@ final class Account
     {
         $user = self::activeUser();
         $member = member_for_user((int) $user['id']);
-        self::page('preferences', 'Email preferences', 'preferences', ['user' => $user, 'prefs' => $member !== null ? member_prefs($member) : member_pref_defaults(), 'is_member' => $member !== null]);
+        self::page('preferences', 'Email preferences', 'preferences', ['user' => $user, 'prefs' => $member !== null ? member_prefs($member) : member_pref_defaults(), 'is_member' => $member !== null,
+            'message_emails' => (int) q_val('SELECT message_emails FROM users WHERE id = ?', [$user['id']]) === 1]);
     }
 
     public static function preferencesSave(array $p): void
     {
         csrf_check();
         $user = self::activeUser();
+        // C3: "Message notifications" (unread message digests) for members and groups.
+        q('UPDATE users SET message_emails = ? WHERE id = ?', [input('message_emails') === '1' ? 1 : 0, $user['id']]);
         $member = member_for_user((int) $user['id']);
         if ($member === null) {
             flash('Preferences saved.');
