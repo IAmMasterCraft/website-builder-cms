@@ -165,7 +165,7 @@ test('backups cron job runs daily at the configured local time', function (): vo
 
 test('health checks report PHP, extensions, database, cron, storage and uploads', function (): void {
     $g = health_checks();
-    same(['PHP', 'Database', 'Cron', 'Storage', 'Uploads', 'Mail and site', 'Bounces and complaints', 'Server and paths'], array_keys($g));
+    same(['PHP', 'Database', 'Cron', 'Storage', 'Uploads', 'Mail and site', 'Bounces and complaints', 'Payments', 'Server and paths'], array_keys($g));
     $find = static function (string $label) use ($g): ?array {
         foreach ($g as $items) {
             foreach ($items as $i) {

@@ -101,7 +101,7 @@ final class Media
     {
         $m = media_find((int) $p['id']);
         // C3: message attachments are private to the conversation, never library items.
-        if ($m === null || (string) $m['folder'] === 'messages') {
+        if ($m === null || in_array((string) $m['folder'], ['messages', 'receipts'], true)) {
             abort(404);
         }
         return $m;

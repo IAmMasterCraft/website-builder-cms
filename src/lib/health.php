@@ -388,8 +388,27 @@ function health_checks(?int $now = null): array
         ($b['enabled'] ? 'on, daily at ' . $b['time'] . ', keeping ' . $b['keep'] : 'off') . ($latest ? ' · newest ' . fmt_datetime(gmdate('Y-m-d H:i:s', $latest['time'])) : ' · none stored'));
     $g['Mail and site'] = $m;
     $g['Bounces and complaints'] = health_bounce_items($now);
+    $g['Payments'] = health_payment_items();
     $g['Server and paths'] = health_path_items();
     return $g;
+}
+
+/** D2: ledger counters match the records (reconcile), charge batches still running, the site currency. @return list<array> */
+function health_payment_items(): array
+{
+    $out = [];
+    try {
+        $drift = payments_reconcile();
+        $out[] = health_item('Payment counters', $drift === [] ? 'ok' : 'bad', $drift === []
+            ? 'item and charge totals match the payment records'
+            : pluralise(count($drift), 'difference') . ' found (' . $drift[0] . (count($drift) > 1 ? '; …' : '') . '). Run php bin/payments-reconcile --fix');
+        $pending = (int) q_val('SELECT COUNT(*) FROM payment_items WHERE charges_pending = 1');
+        $out[] = health_item('Dues charges', $pending === 0 ? 'ok' : 'warn', $pending === 0 ? 'no charges waiting to be created' : pluralise($pending, 'item') . ' still creating member charges (cron, 500 at a time)');
+        $out[] = health_item('Site currency', 'ok', site_currency() . ' (' . currency_info()[0] . ')' . (payments_exist() ? ': locked, payments exist' : ''));
+    } catch (Throwable $e) {
+        $out[] = health_item('Payments', 'bad', 'check failed: ' . $e->getMessage());
+    }
+    return $out;
 }
 
 /** A5: bounce and complaint rates, blocks, paused campaigns, the bounce mailbox. @return list<array> */

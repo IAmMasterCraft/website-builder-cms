@@ -150,7 +150,7 @@ final class Wizard
         if ((int) q_val("SELECT COUNT(*) FROM users WHERE role = 'super_admin'") > 0) {
             redirect('/install/theme');
         }
-        self::page('admin', 'admin', ['old' => ['site_name' => 'Gather', 'name' => '', 'email' => '']]);
+        self::page('admin', 'admin', ['old' => ['site_name' => 'Gather', 'name' => '', 'email' => '', 'currency' => currency_guess()]]);
     }
 
     public static function admin(array $p): void
@@ -160,7 +160,7 @@ final class Wizard
         if ((int) q_val("SELECT COUNT(*) FROM users WHERE role = 'super_admin'") > 0) {
             redirect('/install/theme');
         }
-        $old = ['site_name' => input('site_name'), 'name' => input('name'), 'email' => strtolower(input('email'))];
+        $old = ['site_name' => input('site_name'), 'name' => input('name'), 'email' => strtolower(input('email')), 'currency' => strtoupper(input('currency'))];
         $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
         $errors = [];
         if ($old['site_name'] === '' || mb_strlen($old['site_name']) > 120) {
@@ -175,12 +175,16 @@ final class Wizard
         if (($problem = password_problem($password)) !== null) {
             $errors['password'] = $problem;
         }
+        if (!isset(currency_table()[$old['currency']])) {
+            $old['currency'] = currency_guess();
+        }
         if ($errors) {
             self::page('admin', 'admin', ['errors' => $errors, 'old' => $old], 422);
             return;
         }
         $id = create_user($old['email'], $password, 'super_admin', $old['name']);
         setting_set('site.name', $old['site_name']);
+        setting_set('payments', ['currency' => $old['currency']] + payment_settings()); // D2: changeable until the first payment
         $_SESSION['install_admin'] = $id;
         redirect('/install/theme');
     }

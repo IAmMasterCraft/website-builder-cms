@@ -71,7 +71,11 @@ Dump files `countryInfo.txt`, `admin1CodesASCII.txt`, `admin2Codes.txt` and `tim
 from https://download.geonames.org/export/dump/, downloaded 2026-10-26.
 
 `dev-tools/build-geo.php` converts them into `public/assets/geo/*.json` and
-`src/geo/index.php`. Changes made to the data (documented in
+`src/geo/index.php`; `dev-tools/build-currencies.php` takes each country's
+currency code from `countryInfo.txt` into `src/geo/currencies.php` (the
+installer's currency guess, Addendum D2). The currency names, symbols and
+decimals in `src/lib/currency.php` were written for this project from
+ISO 4217. Changes made to the data (documented in
 `dev-tools/geo-corrections.json`): Nigeria's state names without the inconsistent " State"
 suffix and "FCT" spelled out as Federal Capital Territory; 11 duplicate Nigerian LGAs dropped
 and 19 LGA names corrected to their official spelling so the list has exactly 774; the

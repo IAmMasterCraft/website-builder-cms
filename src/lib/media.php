@@ -454,6 +454,9 @@ function media_can_view(array $m, ?array $user): bool
     if ((string) $m['folder'] === 'messages' && $m['visibility'] === 'private') {
         return msg_attachment_can_view((int) $m['id'], $user); // C3: participants only
     }
+    if ((string) $m['folder'] === 'receipts' && $m['visibility'] === 'private') {
+        return payment_receipt_can_view((int) $m['id'], $user); // D2: the member and payments admins only
+    }
     return match ($m['visibility']) {
         'public' => true,
         'members' => viewer_is_member($user),

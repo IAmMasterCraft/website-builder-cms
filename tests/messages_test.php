@@ -47,7 +47,7 @@ function dm_start(array $sender, array $to, string $body = 'Hello there', array 
 }
 
 test('C3: messages is the eleventh permission key and only opens the Team inbox and reports', function (): void {
-    same(11, count(admin_permissions()));
+    same(12, count(admin_permissions()), 'D2 added payments');
     ok(isset(admin_permissions()['messages']));
     $a = dm_staff(['messages']);
     ok(user_can($a, 'messages') && !user_can($a, 'members'));

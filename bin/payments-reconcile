@@ -1,0 +1,31 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// D2: recompute the maintained payment counters (charge paid totals and
+// statuses, item expected/collected/outstanding) from the payment records
+// and report any drift.
+//   php bin/payments-reconcile          report only (exit 1 when drift is found)
+//   php bin/payments-reconcile --fix    correct the stored counters
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require __DIR__ . '/../src/load.php';
+
+$fix = in_array('--fix', array_slice($argv, 1), true);
+$drift = payments_reconcile($fix);
+if ($drift === []) {
+    echo "No drift: every counter matches the payment records.\n";
+    exit(0);
+}
+echo count($drift) . " difference(s)" . ($fix ? ' fixed' : '') . ":\n";
+foreach ($drift as $line) {
+    echo '  ' . $line . "\n";
+}
+if ($fix) {
+    audit_as(null, null, 'reconcile', 'payments', null, count($drift) . ' counter difference(s) fixed by bin/payments-reconcile');
+    $left = payments_reconcile();
+    echo $left === [] ? "All counters match now.\n" : count($left) . " difference(s) remain.\n";
+    exit($left === [] ? 0 : 1);
+}
+exit(1);

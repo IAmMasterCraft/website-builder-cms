@@ -11,7 +11,7 @@ const LOGIN_MAX_FAILURES_IP = 50;
 const LOGIN_MAX_FAILURES_EMAIL = 30;
 const LOGIN_LOCK_SECONDS = 900;
 
-/** Admin permission keys (§2, plus essential_notices from the second security review and impersonate from Addendum B2) => label. */
+/** Admin permission keys (§2, plus essential_notices from the second security review, impersonate (B2), messages (C3) and payments (D2)) => label. */
 function admin_permissions(): array
 {
     return [
@@ -29,6 +29,8 @@ function admin_permissions(): array
         'impersonate' => 'Log in as a member (view the site as a member or group account for support)',
         // Addendum C3: answer the Team inbox and review reported messages.
         'messages' => 'Messages (answer the Team inbox and review reported messages)',
+        // Addendum D2: review payment reports, record payments, items, reports.
+        'payments' => 'Payments (review payment reports, record payments, dues items and reports)',
     ];
 }
 

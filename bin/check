@@ -7,7 +7,7 @@ PHP="${PHP:-php}"
 
 echo "== Lint"
 lint_errors=$(find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 "$PHP" -l 2>&1 | grep -v '^No syntax errors' || true)
-for f in bin/migrate bin/make-admin bin/cron bin/demo bin/backup bin/restore bin/docs-html; do
+for f in bin/migrate bin/make-admin bin/cron bin/demo bin/backup bin/restore bin/docs-html bin/payments-reconcile; do
   out=$("$PHP" -l "$f" 2>&1) || lint_errors+=$'\n'"$out"
 done
 for f in bin/check bin/package dev-tools/htaccess-check.sh; do out=$(bash -n "$f" 2>&1) || lint_errors+=$'\n'"$out"; done

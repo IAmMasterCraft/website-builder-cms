@@ -575,6 +575,11 @@ function account_verify(string $token, ?DateTimeImmutable $now = null): ?int
         q('UPDATE members SET member_number = ?, card_code = COALESCE(card_code, ?), card_valid_until = COALESCE(card_valid_until, ?), verified_at = UTC_TIMESTAMP(), membership_fee_status = COALESCE(membership_fee_status, ?) WHERE id = ?',
             [$number, card_code_new(), $validUntil, $fee, $m['id']]);
     });
+    // D2: open dues that apply to people who join later.
+    $memberId = q_val("SELECT m.id FROM members m JOIN users u ON u.id = m.user_id WHERE m.user_id = ? AND u.status = 'active'", [$userId]);
+    if ($memberId !== null) {
+        payment_charges_for_new_member((int) $memberId);
+    }
     return $userId;
 }
 
@@ -653,6 +658,8 @@ function account_delete(int $userId, bool $onlyIfUnverified = false): bool
         q('UPDATE groups_orgs SET user_id = NULL WHERE user_id = ?', [$userId]);
         // C3: their messages lose their content ("Former member" · "message deleted").
         $messageMedia = msg_account_purge($userId);
+        // D2: payment records are kept, anonymised ("Former member #<number>").
+        payments_account_purge($userId);
         q('DELETE FROM users WHERE id = ?', [$userId]);
         return true;
     });
@@ -707,6 +714,8 @@ function member_export(int $userId): array
         'messages' => msg_export($userId),
         'message_notifications' => (int) q_val('SELECT message_emails FROM users WHERE id = ?', [$userId]) === 1,
         'findable_in_messages' => (int) q_val('SELECT message_findable FROM users WHERE id = ?', [$userId]) === 1,
+        // D2: dues and payment records.
+        'payments' => payments_export($userId),
     ];
 }
 
@@ -1151,6 +1160,8 @@ function members_import_csv(string $path, bool $update = false): array
             });
             $report['created']++;
             $report['new_user_ids'][] = $userId;
+            // D2: open dues that apply to people who join later.
+            payment_charges_for_new_member((int) q_val('SELECT id FROM members WHERE user_id = ?', [$userId]));
         } catch (Throwable $e) {
             if (isset($userId) && $existing === null) {
                 q('DELETE FROM users WHERE id = ? AND id NOT IN (SELECT user_id FROM members)', [$userId]);

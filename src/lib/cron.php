@@ -20,6 +20,11 @@ function cron_jobs(): array
         // C3: unread message digests (after 15 minutes) and the optional retention limit.
         'message_digests' => ['every' => 2, 'run' => 'cron_message_digests'],
         'message_retention' => ['daily_at' => '03:30', 'run' => 'cron_message_retention'],
+        // D2: charges for big memberships in batches, report emails to admins (at most one per 15 min each), reminders, receipt retention.
+        'payment_charges' => ['every' => 1, 'run' => 'cron_payment_charges'],
+        'payment_notices' => ['every' => 1, 'run' => 'cron_payment_notices'],
+        'payment_reminders' => ['daily_at' => '09:00', 'run' => 'cron_payment_reminders'],
+        'payment_retention' => ['daily_at' => '03:45', 'run' => 'cron_payment_retention'],
         // Backups can take long: they run after the main lock is released, under their own lock.
         'backups' => ['daily_at' => backup_settings()['time'], 'run' => 'cron_backups', 'own_lock' => true],
     ];

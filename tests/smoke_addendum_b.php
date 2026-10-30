@@ -78,7 +78,7 @@ $impMember = login_as($base, 'imani.view@example.test', 'imani-password-1');
 $h = $admin->get('/admin/members/' . $impMid)['body'];
 check('B2: the member page offers "Log in as this member"', str_contains($h, 'href="/admin/impersonate/' . $impUid . '"'));
 check('B2: the members list has a "Log in as" row action', str_contains($admin->get('/admin/members?q=imani')['body'], 'href="/admin/impersonate/' . $impUid . '"'));
-check('B2: the Users & roles form lists the impersonate permission (11 keys since C3)', str_contains($admin->get('/admin/users/new')['body'], 'value="impersonate"') && substr_count($admin->get('/admin/users/new')['body'], 'name="permissions[]"') === 11);
+check('B2: the Users & roles form lists the impersonate permission (12 keys since D2)', str_contains($admin->get('/admin/users/new')['body'], 'value="impersonate"') && substr_count($admin->get('/admin/users/new')['body'], 'name="permissions[]"') === 12);
 status_is($admin, '/admin/impersonate/' . $impUid, 200, 'Log in as this member');
 $staffId = (int) q_val("SELECT id FROM users WHERE role = 'super_admin' ORDER BY id LIMIT 1");
 $r = $admin->get('/admin/impersonate/' . $staffId);

@@ -7,5 +7,8 @@
   <?= view('install/_field', ['name' => 'name', 'label' => 'Your name', 'old' => $old, 'errors' => $errors, 'auto' => 'name']) ?>
   <?= view('install/_field', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'old' => $old, 'errors' => $errors, 'auto' => 'username']) ?>
   <?= view('install/_field', ['name' => 'password', 'label' => 'Password', 'type' => 'password', 'old' => [], 'errors' => $errors, 'auto' => 'new-password', 'hint' => 'At least 10 characters.']) ?>
+  <div class="field"><label for="i-currency">Currency for dues and payments</label>
+    <select id="i-currency" name="currency" aria-describedby="i-currency-hint"><?php foreach (currency_options() as $code => $label): ?><option value="<?= e($code) ?>"<?= ($old['currency'] ?? 'NGN') === $code ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach ?></select>
+    <p class="hint" id="i-currency-hint">Guessed from your browser; you can change it later under Settings → Payments (until the first payment is recorded).</p></div>
   <div class="form-actions"><button class="btn accent" type="submit">Create account</button></div>
 </form>

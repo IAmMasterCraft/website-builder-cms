@@ -105,7 +105,7 @@ test('a suspended admin is logged out on the next request', function (): void {
 
 test('permission matrix: each key opens only its own area; super admin opens all', function (): void {
     $keys = array_keys(admin_permissions());
-    same(11, count($keys), 'eight permission keys (§2) plus essential_notices (review 2), impersonate (B2) and messages (C3)');
+    same(12, count($keys), 'eight permission keys (§2) plus essential_notices (review 2), impersonate (B2), messages (C3) and payments (D2)');
     foreach ($keys as $key) {
         $id = fixture_admin('admin', [$key]);
         act_as($id);
