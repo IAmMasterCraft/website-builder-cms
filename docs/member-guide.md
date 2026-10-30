@@ -135,6 +135,7 @@ renew.
 | **News and event updates** | Newsletters and invitations |
 | **Birthday greeting** | A short email on your birthday |
 | **Message notifications** | An email when a message has waited unread for 15 minutes (one per conversation) |
+| **Others can find me in messages** | Members can find you by name or member number when they start a new message (on by default). Switch it off and only people you already have a conversation with, and the organisation's admins, can message you |
 | **Show me in the birthday celebrants list** | Your first name and last initial appear on your birthday (your age is never shown) |
 
 Important account emails (password resets, email verification, event
@@ -167,9 +168,10 @@ The number next to it shows how many messages you have not read yet.
 
 ![Messages](images/member-messages.webp)
 
-- **New message**: search for a member by name or member number, tick them
-  and write your message. Tick several people to start a group (up to 20
-  people, give it a name).
+- **New message**: search for a member by name (at least 3 letters) or by
+  their full member number, tick them and write your message. Tick several
+  people to start a group (up to 20 people, give it a name). Members who
+  switched off **Others can find me in messages** do not appear.
 - **Message the team**: questions for the organisation. Any of the admins
   who look after messages can answer, and you see their name.
 - Messages are plain text (web addresses become links). You can attach a
@@ -182,9 +184,12 @@ The number next to it shows how many messages you have not read yet.
   conversation** takes you out of a group.
 
 Some limits keep messages friendly: during your first day as a member you
-can only message the team, and you can send 30 messages in 10 minutes and
-start 10 new conversations a day. Your organisation may also have switched
-off messages between members.
+can only message the team and reply to messages sent to you (not post in
+members' groups you were added to), you can send 30 messages in 10 minutes,
+start 10 new conversations a day, contact 40 new people a day and add people
+to groups 20 times a day. If someone adds you to a group, you see the
+messages written from then on. Your organisation may also have switched off
+messages between members.
 
 ![A conversation](images/member-message-thread.webp)
 
@@ -202,7 +207,9 @@ off messages between members.
 ### Email notifications
 
 If a message waits unread for 15 minutes, you get one email for that
-conversation (not one per message). Switch **Message notifications** off in
+conversation (not one per message). When a member you have not written to
+yet starts a conversation with you, the email only says you have a new
+message on the website (no name, no text) until you reply. Switch **Message notifications** off in
 **Email preferences** to stop these emails.
 
 ## Notices

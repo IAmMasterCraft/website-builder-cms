@@ -1024,6 +1024,10 @@ Addendum A6 added `tests/design_test.php` (6 tests) and
 `tests/smoke_design.php` (45 checks); builder/smoke counts updated for 29
 section types and 5 themes.
 
+After the Addendum C security review fixes: `bin/check` = lint + **383
+unit/DB tests** + **655 smoke checks**, green under both sql_modes
+(MariaDB's own and MySQL 8's default set globally, restored afterwards).
+
 Addendum C3 (2026-10-30): `bin/check` = lint + **373 unit/DB tests** +
 **647 smoke checks**, all green with the local MariaDB's sql_mode and again
 with MySQL 8's default sql_mode set globally (restored afterwards to
@@ -1746,6 +1750,77 @@ finding was confirmed in the code and fixed with regression tests
   permission removed, member gone).
 - VERY LOW `bin/docs-html`: refuses an output folder that is a symbolic
   link (before emptying anything).
+
+## Addendum C security review fixes (2026-10-30)
+
+A fresh-context review of Addendum C found no critical/high issues; each
+Medium/Low finding was fixed with tests (`tests/messages_test.php` "C3
+review" tests, smoke checks at the end of `tests/smoke_addendum_c3.php`).
+Migration `023_messages_review.sql` (022 untouched):
+`conversation_participants.first_visible_id` (0 for existing rows = all
+visible), `conversations.archived_at`, `users.message_findable` (default 1).
+
+- MEDIUM member enumeration: members' recipient searches need
+  `MSG_SEARCH_MIN` (3) characters, otherwise only an exact member/group
+  number matches (the JS does not search 1-2 letters); 60 searches per 10
+  minutes per member (`msg_recipient_search_limited()`, JSON 429, the no-JS
+  page and "add people" share the budget; staff unlimited). New preference
+  "Others can find me in messages" (members and groups, Email preferences,
+  default on; in the data export). Opted-out accounts never appear in
+  members' searches; staff always find everyone and are always findable.
+  `msg_visible_to()` / `msg_can_start_with()`: a member may pick an account
+  only if the search would show it or they already share a conversation;
+  used for `?to=` prefills (others silently dropped), `msg_start()` and
+  `msg_add_people()` (one generic `MSG_NOT_AVAILABLE` answer, also for
+  missing ids).
+- MEDIUM digests as a spam channel: members may contact
+  `MSG_NEW_RECIPIENTS_PER_DAY` (40) people a day they never shared a
+  conversation with (new conversations and additions together, bucket
+  `msgnew:`), and "add people" `MSG_ADDS_PER_DAY` (20) times a day. Digests
+  for direct/group conversations started by a member or group, to someone
+  who has never written in them, use the new editable template
+  `message_digest_new` ("You have a new message on {site_name}", no sender,
+  no text). Staff-started, Team inbox and replied conversations keep sender
+  and preview.
+- LOW history on join: people added to a group (or re-added) get
+  `first_visible_id` = newest id + 1 (and their read/notified markers reset);
+  thread pages, paging, polling (new and changed), list search, digests,
+  reports and attachment access (`msg_attachment_can_view()`) all filter on
+  it. Creators and first participants keep 0.
+- LOW 24-hour rule when posting (`msg_new_account_post_problem()`, called by
+  `msg_post_problem()`): a member or group verified < 24 h ago may post only
+  in (a) its Team inbox thread, (b) conversations whose other active people
+  are all staff, (c) a 1-to-1 someone else started (a reply), (d) a group
+  started by staff. Not in a members' group they were added to, nor a 1-to-1
+  they started themselves. Announcements are staff-only anyway.
+- LOW impersonation audit: `msg_impersonation_audit()` writes one
+  `message_access` entry per impersonation session on the first access to
+  any message area (list, thread, polling, paging, new, attachments; flag in
+  `$_SESSION['imp']['msg_audited']`), plus the existing `message_view` per
+  thread view.
+- LOW digest re-validation: `msg_digest_block_reason()` now also refuses when
+  the person left, was removed, muted the conversation or hid it by a block,
+  when a Team digest's admin lost the `messages` permission, and when the
+  newest message was deleted or removed. `mail_queue_run()` rebuilds the
+  subject/body at send time (`msg_digest_rebuild()` → `msg_digest_compose()`),
+  so previews show the current text and count.
+- LOW favicon: `favicon_ensure($in, $wait)` takes an exclusive `flock` on
+  `storage/icons/.lock`; public page views do not wait (static SVG fallback
+  while another request draws, not remembered) and the admin Site settings
+  and Design saves generate the set in their own request (`$wait = true`).
+  Icon uploads above 16 megapixels are refused (`FAVICON_MAX_PIXELS`).
+- LOW atomic rate limits: `rate_take($bucket, $max, $window, $n)` inserts
+  the hits first, then counts hits up to its own ids and removes them when
+  over (all-or-nothing for `$n`); `rate_release()` gives them back when a
+  later step fails (bad attachment, another limit). Used for every message
+  limit (messages, new conversations, new recipients, adds, reports,
+  searches). Older limits elsewhere (comments, jobs, sign-up forms) still
+  use check-then-hit; not part of this review.
+- Info: `msg_block()` gives one answer for staff, missing and own ids. Team
+  inbox thread views are audited (`team_view`, one row per view: cheap).
+  Announcement groups pass ownership only to staff; when the last admin
+  leaves, the group is archived (read-only, "closed", no adding, no
+  digests).
 
 ## Known gaps / next steps
 

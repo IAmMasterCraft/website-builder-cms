@@ -59,6 +59,7 @@ the member sees your name with an "Admin" label.
 
 - Opening a thread marks it read **for the whole team**, so two people do
   not answer the same question; **Unread** shows threads nobody has read.
+  Each opening is recorded in the audit log.
 - New team messages are counted in the top-bar badge and on the dashboard
   under **Needs attention**.
 - Admins who answer the Team inbox get an email about new team messages
@@ -110,14 +111,30 @@ To stop someone messaging altogether, suspend their account from
 - Only verified (active) members and groups can send messages.
 - During their **first 24 hours** after verifying, new members can only
   message the team and the listed admins.
-- Members can send at most **30 messages in 10 minutes** and start at most
-  **10 new conversations a day**; admins have no limit.
+- Members can send at most **30 messages in 10 minutes**, start at most
+  **10 new conversations a day**, contact at most **40 new people a day**
+  (people they never had a conversation with) and add people to groups **20
+  times a day**; admins have no limit.
+- Members find others with at least **3 letters** of a name or a full member
+  number, and only people who leave **Others can find me in messages** on
+  (Email preferences). Admins always find everyone and are always findable.
+- New members (first 24 hours) can only post in their Team inbox thread, in
+  conversations with admins, in 1-to-1s someone else started with them, and
+  in groups an admin started.
+- People added to a group see the messages written from then on, not the
+  earlier ones (or their attachments).
+- Email notifications about a conversation a member started with someone
+  who has not replied yet say only "You have a new message on <site>"
+  (template **Unread messages (from someone new)**), with no name or text.
+- If the last admin leaves an announcement group, it is **closed**: members
+  can still read it, nobody can post.
 - A member can **block** another member or group: the blocked person cannot
   message them or add them to a group, and their one-to-one conversation is
   hidden. Admins cannot be blocked.
 - When an admin uses [Log in as a member](members.md#log-in-as-a-member),
-  the member's messages are **read-only**: the admin can read them (each
-  view is in the audit log) but cannot send, edit, delete, report, block or
+  the member's messages are **read-only**: the admin can read them (the
+  first look at the messages and each conversation opened are in the audit
+  log) but cannot send, edit, delete, report, block or
   leave anything, even with "allow changes".
 - A member's [data export](members.md) includes the messages they sent.
   When an account is deleted, its messages lose their content and show as
