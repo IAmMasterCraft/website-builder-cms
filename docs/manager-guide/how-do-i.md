@@ -59,6 +59,12 @@ for example **Radio** for Library, Playlists and Schedule).
 | …change member number format or card validity? | Admin → **Membership settings** |
 | …approve a job post? | Admin → **Jobs**. See [Job board](jobs.md) |
 | …deal with a reported comment? | Admin → **Comments**. See [Comments and reports](comments.md) |
+| …see this month's birthdays, or choose who gets birthday emails? | Admin → **Members** → **Birthdays**; **Birthday notices** (super admin). See [Birthdays](members.md#birthdays) |
+| …set up this year's dues? | Admin → **Payments** → **Dues and items** → **New item**, then **Open for payments**. See [Payments](payments.md#dues-and-items) |
+| …confirm a payment a member reported? | Admin → **Payments** → **Pending** → **Approve**. See [Pending payments](payments.md#pending-payments) |
+| …record cash collected at a meeting? | Admin → **Payments** → **Record a payment** |
+| …correct a payment approved by mistake? | Open it → **Reverse this payment**. See [Reversals](payments.md#reversals-correcting-a-mistake) |
+| …see who has not paid? | The item's page → **Unpaid** tab (with CSV export, **Remind unpaid**, **Message unpaid**) |
 | …see exactly what a member sees, to help them? | The member → **Log in as this member**. See [Log in as a member](members.md#log-in-as-a-member) |
 
 ## Communications

@@ -249,18 +249,99 @@ replied to shows as "[deleted]", so their replies still make sense.) If you see 
 click **Report**: comments reported by several members are hidden until an
 administrator looks at them.
 
+## Paying dues and reporting payments
+
+Your organisation does not take card payments on the website. You pay the
+usual way (bank transfer, cash, mobile money, a cheque...) and then **tell
+the organisation on the website**, with a photo or PDF of the receipt. A
+treasurer checks it and confirms it, and you get a receipt you can print.
+
+![Payments](images/member-payments.webp)
+
+**My account → Payments** shows:
+
+- **What I owe**: your dues and other charges, with the amount, what you
+  have paid, the balance and the due date (**Overdue** after it). Totals:
+  what is outstanding and what you paid this year. If you reported a payment
+  that is not confirmed yet, it says so under the item.
+- **You can also pay for**: optional things such as donations.
+- **My payment history**: every payment you reported, with its status and,
+  once confirmed, a **Receipt** button. Choose a year to see older ones.
+
+### Reporting a payment
+
+1. Pay first, using the bank details shown at the top of the form (or the
+   way your organisation told you).
+2. Click **Report a payment** (or the button next to the item).
+3. Choose **What did you pay for?** The amount is filled in with what you
+   still owe; change it if you paid part (unless the item says it must be
+   paid in full). Choose **Other** and say what it was for if it is not in
+   the list.
+4. Enter the **date you paid** (not a future date), **how you paid** and the
+   **reference** from your bank app or slip (it helps the treasurer find
+   your payment). Fill in **Paid by** only if someone else paid for you.
+5. Add the **receipt**: a photo or screenshot (JPG, PNG, WebP) or a PDF, up
+   to 5 MB. Only you and the organisation's payment team can see it.
+6. Click **Send payment report**. It shows as **Pending**.
+
+![Report a payment](images/member-payment-report.webp)
+
+If the form thinks you may have reported the same payment already (same
+reference, or same amount, date and item), or the amount is more than you
+owe, it asks you to check. Tick **I have checked: save this payment anyway**
+if it really is a different payment. Your receipt file is kept, so you do
+not need to choose it again.
+
+**One bank transfer for several things?** Report it once for the first item,
+then open that payment and click **Report another payment for the same
+transfer**: the date, method, reference and receipt are filled in for you.
+
+### After you report
+
+- **Pending**: waiting for the treasurer. You can still **Edit** it or
+  **Withdraw** it.
+- **Needs info**: the treasurer has a question (you also get an email).
+  Open the payment, click **Answer by editing the payment**, change what is
+  needed (for example add the reference or a clearer receipt) and click
+  **Send answer**.
+- **Approved**: confirmed. You get an email with a link to your receipt.
+- **Rejected**: not confirmed; the email and the payment page say why.
+- **Reversed**: a confirmed payment was later cancelled (for example the
+  transfer bounced). Its receipt is no longer valid.
+
+The history on each payment shows what happened and when. The organisation's
+team appears as "Treasurer" (or the name your organisation chose).
+
+### Your receipt
+
+On a confirmed payment, click **View and print receipt**. It has a receipt
+number, the amount in figures and words, the dates and a QR code. Click
+**Print or save as PDF**. Anyone you show it to can scan the QR code to check
+it is genuine: the check page shows only whether it is valid, the
+organisation, the amount, the date and your initials.
+
+### Reminders
+
+You may get an email a few days before something is due and again if it is
+still unpaid some days after. They stop once you have paid (confirmed). If
+you have already paid, report the payment so the treasurer can confirm it.
+
 ## Your data and deleting your account
 
 **Your data**:
 
 - **Download my data**: a file with everything the organisation holds about
   you (profile, preferences, event registrations, comments, the messages
-  you sent).
+  you sent, your dues and payment records).
 - **Delete my account**: enter your password and click **Request deletion**.
   An administrator confirms it. Your profile and photo are removed, your
   member number is retired, event registrations are kept without your name,
   your comments show as "former member", and the messages you sent are
-  emptied (others see "Former member · Message deleted").
+  emptied (others see "Former member · Message deleted"). Payment records
+  are kept for the organisation's accounts with your name replaced by
+  "Former member" and your member number; your uploaded receipts are
+  deleted after the retention period (7 years unless your organisation
+  chose otherwise).
 
 ![Your data](images/member-privacy.webp)
 
@@ -269,8 +350,8 @@ administrator looks at them.
 To help with a question ("I can't find my card"), an administrator can view
 the site as you see it, for up to 30 minutes. They cannot see or change your
 password or email address, delete your account, download your data or
-change your email choices, and they cannot like, comment, post or send
-messages as you. They can read your messages while viewing as you; each
+change your email choices, and they cannot like, comment, post, send
+messages or report payments as you. They can read your messages while viewing as you; each
 time is recorded.
 Everything they do is recorded. You normally get an email saying an
 administrator viewed your account; if you did not expect it, contact the

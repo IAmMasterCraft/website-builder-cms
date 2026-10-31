@@ -26,7 +26,14 @@ marked **Default** or **Edited**.
 | Job awaiting approval (to admins) | A member posts a job that needs approval |
 | Reply to a comment | Someone replies to a member's comment |
 | Birthday greeting | On a member's birthday (if they opted in) |
-| Birthday digest (to admins) | Each morning: today's and the coming week's birthdays |
+| Birthday notice: daily / weekly / monthly (to admins) | At the birthday hour: today's birthdays (daily), Monday to Sunday (on Mondays), the whole month (on the 1st). See [Birthday notices](members.md#birthday-notices) |
+| Payment report received | A member reports a payment (only when switched on in Payment settings) |
+| Payment confirmed (with receipt) | An admin approves or records a payment |
+| Payment report not confirmed | An admin rejects a payment report |
+| Payment report: more information needed | An admin asks a question about a payment report |
+| Payment reminder (due date) | Before and after an item's due date, to members with a balance |
+| Payment reminder (sent by an admin) | **Remind unpaid** on an item's page |
+| New payment reports (to admins) | Members report or edit payments (at most one email per admin per 15 minutes). See [Payments](payments.md) |
 | Contact form copy | The sender asked for a copy of their contact message |
 | Contact form message (to the organisation) | Someone uses the contact form |
 | Reply from the inbox | You reply to a message in the [Inbox](inbox.md) |

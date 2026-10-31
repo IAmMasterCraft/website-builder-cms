@@ -201,7 +201,9 @@ member's birthday for one month: the day, name and member number, with a
 **Send a message** button and a link to the member's page. Pick another
 month with the **Month** list. **Export CSV** downloads the same list (name,
 member number, day, month). The birth year and age are never shown or
-exported. Members born on 29 February appear on 28 February in years that
+exported.
+
+![Birthdays](../images/admin-birthdays.webp) Members born on 29 February appear on 28 February in years that
 are not leap years.
 
 The **Birthdays** card on the admin overview has three tabs, **Today**,
@@ -214,6 +216,8 @@ see "N birthdays today" in the bell at the top of every admin page.
 **Admin → Members → Birthday notices** (*super admin*) chooses the emails
 that remind admins about birthdays. They are sent at the birthday hour
 (**Email settings → Birthday emails at**, 07:00 by default, site time):
+
+![Birthday notices](../images/admin-birthday-settings.webp)
 
 | Email | When | What it lists |
 |---|---|---|

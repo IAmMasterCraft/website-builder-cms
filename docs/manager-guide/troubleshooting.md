@@ -45,6 +45,21 @@ and `storage/logs/cron.log`.
 | One member gets no emails | See [When someone says "I don't get your emails"](email-settings.md#when-someone-says-i-dont-get-your-emails). |
 | Emails land in spam | SPF, DKIM and DMARC records: see [Email deliverability](../email-deliverability.md#2-spf-dkim-and-dmarc). |
 
+## Payments and birthday notices
+
+| Problem | Fix |
+|---|---|
+| The currency cannot be changed | It locks once the first payment is recorded, so old amounts keep their meaning. Choose it before opening any item. |
+| A member says they cannot see an item in "What I owe" | The item is still a **draft** or **closed**, it does not apply to them (membership type or location), it was opened before they joined without **Also apply to people who join later**, or their charge was waived. Add a charge on their **Payments** page. |
+| An item says "Creating charges…" for a long time | Charges for large memberships are made 500 at a time by cron every minute: check **System health → Cron**. |
+| A payment was approved by mistake | Open it and **Reverse this payment** with a reason. Approved payments are never edited or deleted. |
+| "Separation of duties is on" and nobody else can approve | Ask another admin with the payments permission, or a super admin can switch it off in **Payment settings**. |
+| No "new payment report" emails | Your **Email me about new payment reports** box on **Payments → Pending** is off, your address is on the suppression list, or cron is not running. At most one email per 15 minutes is sent. |
+| Members did not get a reminder | The item needs a due date and **Email reminders** on; only members with a balance get them, each at most once before and once after the due date; suppressed addresses are skipped. |
+| System health: "Payment counters … difference" | Technical: run `php bin/payments-reconcile` to list the differences and `php bin/payments-reconcile --fix` to correct them. |
+| A receipt's QR code says "Not a valid receipt" | The payment was reversed, or the code was typed wrongly. |
+| No birthday emails | **Birthday notices** settings (which emails, recipients), **Skip the email when there are no birthdays**, the birthday hour in **Email settings**, and cron. |
+
 ## Messages
 
 | Problem | Fix |
