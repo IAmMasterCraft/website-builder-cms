@@ -15,7 +15,8 @@ admin@example.org`). The demo member amara.okafor@example.org has the
 password member-demo-2026 (used by `dev-tools/audit.mjs`). Re-seeding: drop
 the tables, `php bin/migrate`, `bin/make-admin`, `php bin/demo
 admin@example.org`, then pick a theme on the Design screen (the dev site
-uses Bold).
+uses Bold). Since Addendum D the dev site's currency is GBP and it has the
+payment demo data (`demo_seed_payments()`).
 
 ## Phases done
 
@@ -1013,6 +1014,145 @@ uses Bold).
   question) runs with the demo content. Dev site: those plus a reported
   spam-like message from Tom (for the report screenshot).
 
+**Addendum D: birthday notices for admins, payments, 2026-10-31**
+- D1 birthday notices (`src/lib/birthdays.php`, `Admin\Birthdays`): setting
+  `birthdays.notices` {daily, weekly, monthly, skip_empty, recipients
+  members|chosen, chosen[]} (defaults: all on, skip empty, admins who manage
+  members). `birthday_run()` sends the greetings as before, then the daily
+  notice (today, plus the next 7 days as before), the weekly one on Mondays
+  (Monday-Sunday) and the monthly one on the 1st (grouped "Week of 2 March",
+  weeks start on Monday), all at the birthday hour. Idempotent per recipient
+  and period through the queue's dedupe key (`bday:d:Y-m-d:<uid>`,
+  `bday:w:o-WW:<uid>`, `bday:m:Y-m:<uid>`); the old `birthdays.digest.<date>`
+  settings marker is no longer written. Lines: name, member number, day
+  ("Sun 28 Feb (birthday 29 Feb, celebrated on 28 Feb this year)"), member
+  admin link and `/admin/messages/new?to=` link; never year or age.
+  Recipients with any suppression are skipped when queued, and queue kind
+  `digest` is now an essential admin notice (`MAIL_ESSENTIAL_KINDS`:
+  `mail_essential_block_reason()` = any suppression or an inactive account
+  at send time). Templates `birthday_digest` (relabelled daily, gains
+  `{count}`), `birthday_digest_weekly`, `birthday_digest_monthly`. Screens:
+  Members → Birthdays (`/admin/members/birthdays`, members permission, month
+  filter, CSV name/member_number/day/month, audited export), Members →
+  Birthday notices (`/admin/settings/birthdays`, super admin). Overview card
+  tabs Today / This week / This month (`?bday=`, counts in the labels, no JS
+  needed); the bell counts birthdays today for recipients and gained a
+  descriptive label/title (`admin_notification_label()`).
+- D2 data (migration `024_payments.sql`, new tables only plus
+  `users.payment_emails`): `payment_items` (kind, amount NULL = any,
+  due date, status draft/open/closed, allow part, applies_to everyone/
+  membership_type/location/members/nobody + value, include new members,
+  counts as dues + covers until, reminders, maintained counters expected/
+  collected/outstanding, batch state `charges_pending`/`charges_cursor`),
+  `payment_charges` (unique item+member, amount, paid, waived + reason,
+  `charge_status` unpaid/part/paid/waived, reminder stamps, former label),
+  `payments` (the ledger: entry_type payment/reversal with unique
+  `reverses_id`, amount in minor units, currency, paid_on, method,
+  reference, payer, note, receipt media, status pending/needs_info/
+  approved/rejected/withdrawn, recorded_by, reviewer, receipt number + code,
+  former label; indexes status+created_at, member, item+status, reference,
+  paid_on), `payment_events` (timeline of records and charges),
+  `receipt_sequences` (per-year counter locked FOR UPDATE),
+  `payment_admin_notices` (batched email marker per admin).
+- Money (`src/lib/currency.php`): integers in minor units only; ISO 4217
+  table (name, symbol, decimals: JPY/XOF 0, KWD/BHD 3), `money_parse()`
+  (string arithmetic, symbol/code and thousands separators accepted, too many
+  decimals refused), `money()`, `money_input()`, `money_words()` (English
+  words with unit names for common currencies, "and NN/100" otherwise).
+  Country → currency from GeoNames `countryInfo.txt` (`dev-tools/
+  build-currencies.php` → `src/geo/currencies.php`). The installer's admin
+  step has a currency select pre-filled by `currency_guess()` (CDN country
+  header, then the Accept-Language region, else NGN). The currency is
+  locked once any payment exists.
+- Library (`src/lib/payments.php`): every write in `payments_tx()` (retries
+  deadlocks 1213 and MariaDB 11's snapshot-isolation error 1020; settings
+  are loaded before the snapshot). Lock order payment → charge → item.
+  Charge changes go through `payment_charge_save()` which moves the item
+  counters by the difference of `payment_charge_contrib()` (waived charge:
+  expected = paid, outstanding 0). Approve: ledger apply, receipt number
+  `RCP-<year>-<00000>` from the locked sequence (year of approval, site
+  time), random 24-hex verify code, dues items set `membership_fee_status`
+  = paid and move `card_valid_until` forward to "covers until"; a reversal
+  back below paid sets it to due. Reversal = new approved negative entry
+  (paid_on = day of reversal), original untouched. Admin-recorded payments
+  are approved at once (pending when separation of duties is on). Waive /
+  un-waive / change amount need a reason (charge timeline + audit).
+  `payments_reconcile($fix)` recomputes charges then items (derived-table
+  queries, ONLY_FULL_GROUP_BY safe); `bin/payments-reconcile [--fix]`;
+  System health group "Payments" (counters, charge batches, currency).
+- Charges: opening an item creates the first 500 charges in the request and
+  the rest by cron (`payment_charges`, every minute, 20 s budget, keyset on
+  members.id); re-opening with "join later" re-scans. Later joiners get
+  charges on verification and on CSV import (`payment_charges_for_new_member()`).
+  "Chosen members" items get charges from "Add members" on the item page;
+  optional (nobody) items have no charges.
+- Member side (`Account\Payments`, members only; groups 404, staff go to
+  admin): `/account/payments` (what I owe with overdue badges and amounts
+  waiting for confirmation, totals outstanding / paid this year, optional
+  items, history by year, stacked table on phones), `/new` (`?charge=`,
+  `?item=`, `?from=` = "same transfer" pre-fill reusing the receipt), POST
+  (validation: date not future, not before 2000, method, part payments,
+  receipt required setting; warnings for duplicates and overpayment need
+  "save anyway"; an uploaded receipt is kept across that round trip as a
+  signed `held_receipt` token bound to the user; unused held receipts are
+  removed after a day), record page with timeline (admins shown as the
+  reviewer label), edit/withdraw while pending or needs info (an edit of a
+  needs-info record is the answer and returns it to pending), receipt
+  page (print layout + `payments.css`, QR by the existing `card.js`),
+  public `/verify-receipt/{code}` (valid / reversed / unknown, organisation,
+  amount, date, initials; 60 checks per 10 min per IP; no-store, noindex).
+  20 reports or edits a day per member (`rate_take`). Receipts are private
+  media in folder `receipts` (`payment_store_receipt()`: JPG/PNG/WebP/GIF
+  re-encoded, PDF as is, 5 MB); `media_can_view()` → `payment_receipt_can_view()`
+  (owner's member account or `payments`); never in the media library.
+- Admin side (`Admin\Payments`, permission `payments`, 12th key; sidebar
+  group "Payments" with a pending count badge; bell counts pending reports):
+  Pending queue (oldest first, keyset `?after=created_at|id`, 50 a page,
+  receipt thumbnails, duplicate/overpayment warnings computed with one query
+  per page, Approve / Reject with presets / Ask for info inline, bulk
+  approve skips anything with warnings), review screen (`n`/`p`/`a`/`r`/`i`
+  shortcuts in `payments.js`, next/previous pending, separation notice),
+  reversal form, All payments (filters status incl. reversed/reversal, item,
+  method, source, date range, member; search reference/receipt/name/number;
+  keyset `?before=`; CSV streamed in batches of 1,000 with the spec's
+  columns), Record a payment (member search, any open item), Dues and items
+  (list with counters, `<progress>` bars, status counts by one grouped
+  query), item form (amount/audience locked after opening), item page
+  (tabs Unpaid/Part-paid/Paid/Waived with keyset paging and CSV, Remind
+  unpaid with the count shown, Message unpaid = C3 announcement, add
+  members, open/close/duplicate/delete draft), member payments page
+  (charges with change amount/waive and their history, records, add a
+  charge; linked from the member page), Reports (by item, month, method,
+  YTD; CSV), overview card (pending, collected this month, top outstanding),
+  Payment settings (super admin). Every POST: CSRF, audit, 303.
+- Notifications: member emails are queued (transactional): approved (receipt
+  link), rejected (reason), needs info (question), received (optional).
+  Admin emails `payment_reported_admin` via cron `payment_notices` (every
+  minute; at most one per admin per 15 minutes; per-admin switch
+  `users.payment_emails` on the Payments page; kind `essential`, suppression
+  respected). Reminders: cron `payment_reminders` daily 09:00, per item N
+  days before (until the due date) and N days after, once per charge per
+  stage (`reminded_*_at`), balance only, active members, suppression
+  skipped; "Remind unpaid" at most once a day per charge (dedupe). Seven
+  new editable templates in the group "Payments".
+- Privacy: `member_export()` adds `payments` (charges, records with
+  timeline); `account_delete()` calls `payments_account_purge()` inside its
+  transaction (waiting reports withdrawn, records anonymised "Former member
+  #<number>" with payer name cleared, unpaid charges with no records
+  deleted, other balances waived "Account deleted"); cron
+  `payment_retention` (daily 03:45) deletes former members' receipt files
+  after the retention years. Impersonation: every POST under
+  `/account/payments` is 403 with a payments message, even with "allow
+  changes"; pages show a read-only note.
+- Demo: `demo_seed_payments()` (run by `demo_seed()`, so `bin/demo` and the
+  installer's demo content): this year's dues (counts as dues, due 31 Mar),
+  a hall levy, a donation item, next year's draft; Amara and Priya's dues
+  approved with GD-drawn placeholder "transfer confirmation" receipts, Tom's
+  cash recorded by the admin, three pending reports, one rejected, one
+  needing info; bank details text. GBP unless the installer already chose a
+  currency (amounts scaled for NGN, KES etc.). The dev site was migrated and
+  seeded the same way (GBP).
+
 ## Tests
 
 `bin/check`: lint of every PHP file, `tests/run.php` (299 unit/DB tests after
@@ -1027,6 +1167,56 @@ section types and 5 themes.
 After the Addendum C security review fixes: `bin/check` = lint + **383
 unit/DB tests** + **655 smoke checks**, green under both sql_modes
 (MariaDB's own and MySQL 8's default set globally, restored afterwards).
+
+Addendum D (2026-10-31): `bin/check` = lint + **403 unit/DB tests** +
+**724 smoke checks**, all green with the local MariaDB's sql_mode and again
+with MySQL 8's default sql_mode set globally (restored afterwards to
+`STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,
+NO_ENGINE_SUBSTITUTION`). New: `tests/birthdays_test.php` (6: defaults,
+weekly on Mondays only and once per ISO week with the right recipients and
+links and no birth year, monthly on the 1st grouped by week with 29 Feb on
+28 Feb in 2027 and on 29 Feb in 2028, daily skip-empty and switches,
+chosen recipients and suppression at queue and send time, dashboard
+periods) and `tests/payments_test.php` (14: money parsing/printing/words
+incl. 0 and 3 decimals, 12th key, batched charge creation and later
+joiners, validation and duplicate/overpayment warnings and the "same
+transfer" receipt, approve/reverse invariants with fee status and card date
+and reconcile finding and fixing drift, reject/info/edit/withdraw and the
+member timeline without admin names, emails incl. 15-minute batching,
+separation of duties/recorded payments/waive/amount, receipt numbers from
+24 approvals in 4 parallel PHP processes unique and gap-free, private
+receipts and EXIF stripping, account deletion anonymisation and retention,
+reminders before/after once per stage, reports under ONLY_FULL_GROUP_BY,
+verify lookup). `tests/smoke_addendum_d.php` (69 checks through php -S: D1
+list/CSV/settings/overview tabs/bell/permission; installer currency guess
+from CF-IPCountry and Accept-Language; item create/open/lock, member report
+without and with receipt, escaping, receipt file access for owner/other
+member/visitor/library, 404 for other members' records, duplicate warning
+with the kept receipt and token binding, queue/bell/sidebar count, admin
+email, review screen, 419 without token, approve with receipt number and
+email, printable receipt and words, verify page initials only, ask for
+info/answer/reject with preset, reversal and invalid receipt, reconcile,
+recorded cash setting fee status and card date, bulk approve, charge
+change with reason, filters, CSV columns, item page/CSV/remind once a
+day/message unpaid, reports and CSV, duplicate for next period, settings
+with currency lock and sanitised bank details, impersonation read-only,
+export, overview card, member 403, health). Updated: permission counts
+(12), the matrix rule for `/admin/payments`, sidebar groups (9), health
+groups, help map.
+
+D visual and accessibility checks (dev site, Bold theme): screenshots of
+every new screen at 1280/1366 and 375 px (queue reworked to full width,
+mobile history table stacked, long buttons wrap); no horizontal overflow.
+axe-core 4.11 (`dev-tools/audit.mjs`): 64 page runs (public verify page
+valid and unknown; member payments, report form, record, edit, receipt,
+privacy; admin overview with birthday tabs, pending queue, review of
+pending/approved/needs-info, receipt, all payments, record (search and
+form), items, new item, item page, item edit, member payments, reports,
+payment settings, birthdays, birthday notices, member page; 1366 and 375 px)
+plus admin dark mode on all 16 admin payment/birthday screens: **0
+violations of any impact**; the only console errors are the expected 404 of
+the unknown-receipt check. The receipt printed to PDF (Chrome, A4) is one
+page; toolbar and banner hidden.
 
 Addendum C3 (2026-10-30): `bin/check` = lint + **373 unit/DB tests** +
 **647 smoke checks**, all green with the local MariaDB's sql_mode and again
@@ -1525,6 +1715,39 @@ playwright-core; tools in `dev-tools/`, never deployed):
   since they are notifications, not transactional mail. Retention is in
   whole months; the export contains only messages the person sent.
 
+- Addendum D1: the existing daily digest stays the "daily" notice and keeps
+  its "next 7 days" list (installs with an edited template keep working);
+  it is skipped when nobody has a birthday today (with skip-empty on).
+  "This week" on the dashboard is Monday-Sunday like the weekly email.
+  Recipients whose address has any suppression (bounce, complaint or
+  unsubscribe) get no notice emails (spec A5); the bell still counts for
+  them. The birthday list
+  page lists all active members (admins see everyone; the celebrants
+  opt-in only governs the public list).
+- Addendum D2: payments are for member accounts (groups have no members
+  row and no Payments menu). "Any amount" is only allowed for optional
+  (nobody) items, which create no charges; payments for them count in the
+  item's collected total. Once an item is opened its amount and audience
+  are fixed (single charges can be changed). Admin-recorded payments are
+  approved at once, or wait for another admin when separation of duties is
+  on ("no one approves their own records"). Admins cannot have member
+  accounts in Gather (one role per account), so the "own member account"
+  rule is implemented but can only apply to accounts promoted later. A
+  waived charge expects what was already paid; reversing a dues payment sets
+  the fee status back to Due but leaves the card date (it may have been set
+  by hand). Reversals use the reversal date as their date paid (reports
+  show the correction in the month it happened). The receipt year is the
+  year of approval. Receipt files of active members are kept; the
+  retention period applies to former members' receipts (spec wording).
+  Optional reminder "received" email off by default (spec). Members see
+  admins as the reviewer label (default "Treasurer"); admins see names.
+  Reminders run daily at 09:00 site time (spec gives no time).
+  "Report another payment for the same transfer" shares the receipt file
+  between records (deleted only when no record uses it). Member payment
+  report emails to admins list only reports still pending when the batch
+  is sent. Verification page: "initials" = first-name and last-name
+  initials.
+
 ## Code review fixes (2026-10-24)
 
 Two reviews (security-reviewer, plain-php-reviewer) after phase 7. Every
@@ -1923,6 +2146,24 @@ visible), `conversations.archived_at`, `users.message_findable` (default 1).
   follows renamed regions only after members re-save. Lato is used only
   for the initial in the generated icon (not the theme's heading font,
   which ships as WOFF2 that GD cannot read).
+
+- Addendum D gaps: report-only (no online gateway, by decision). No
+  partial refunds (reverse, then record the part that stays). A charge's
+  amount cannot be changed for all members at once after opening (close
+  and duplicate, or change single charges). Members who change membership
+  type or location after an item opened keep (or do not get) its charge;
+  "Add a charge" on their payments page fixes it. Item audiences are not
+  re-evaluated when the item is re-opened without "join later". The
+  printable receipt relies on the browser's "Save as PDF" (no server-side
+  PDF). QR codes need JavaScript (the verify link is printed as text too).
+  Amounts in words have English unit names for 18 common currencies; others
+  read "… Kenyan shilling and 5/100"-style. Bulk approve is limited to the
+  page shown (50). The payment report email is per admin, not per
+  item. The reconcile check on System health recomputes every item and
+  charge on each view (fine for thousands of charges; slower for very
+  large memberships). The spec's "spec D6 note updated: still no online
+  gateway" is for the study's spec, not the build. Not checked with a real
+  screen reader or on MySQL 8 itself (MySQL 8's sql_mode on MariaDB).
 
 ## Acceptance check (spec §14), final status
 

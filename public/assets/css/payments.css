@@ -166,3 +166,5 @@ progress.pay-bar { width: 6rem; height: 0.6rem; vertical-align: middle; accent-c
 .pay .dash-card-head { margin-bottom: var(--s-3, 0.75rem); }
 .pay-grid { align-items: start; }
 .pay-grid .field { align-content: start; }
+.pay .btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pay .btn-row .btn { white-space: normal; text-align: left; max-width: 100%; }
