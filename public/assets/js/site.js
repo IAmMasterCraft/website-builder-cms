@@ -2,6 +2,7 @@
 import { initLightbox } from './lightbox.js';
 import { initCommunity } from './community.js';
 import { initMessages } from './messages.js';
+import { initPayments } from './payments.js';
 import { initRadio } from './radio.js';
 import { initHeader } from './header.js';
 import { initReveal, initCounters, initParallax, initSteps } from './motion.js';
@@ -11,6 +12,7 @@ import { initAccordions, initShowcase } from './accordion.js';
 
 initHeader();
 initMessages();
+initPayments();
 initReveal();
 initHero();
 

@@ -74,6 +74,7 @@ final class Dashboard
             'title' => 'Overview',
             'counts' => self::counts(),
             'birthdays' => $birthdays,
+            'payments' => user_can($user, 'payments') ? payment_dashboard() : null,
             'activity' => $activity,
             'activity_all' => $all,
             'user' => $user,

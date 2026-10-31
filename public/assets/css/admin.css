@@ -103,6 +103,7 @@ p { margin: 0 0 0.75rem; text-wrap: pretty; }
 .js[data-nav-open~="members"] .nav-group[data-group="members"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="community"] .nav-group[data-group="community"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="messages"] .nav-group[data-group="messages"]:not(.is-closed) > .nav-items,
+.js[data-nav-open~="payments"] .nav-group[data-group="payments"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="communications"] .nav-group[data-group="communications"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="radio"] .nav-group[data-group="radio"]:not(.is-closed) > .nav-items,
 .js[data-nav-open~="system"] .nav-group[data-group="system"]:not(.is-closed) > .nav-items { display: block; }
@@ -828,3 +829,6 @@ img { object-position: var(--fx, 50%) var(--fy, 50%); }
 /* D1: birthday list and notice settings */
 .indent { display: grid; gap: 0.35rem; padding-left: 1.6rem; }
 tr.is-today td { background: var(--accent-soft); }
+
+/* D2: pending payments count on the sidebar link */
+.nav-count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--side-accent); color: #0b1118; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }

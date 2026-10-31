@@ -37,8 +37,8 @@ $u = $c['user'];
             <p class="nav-section" id="<?= e($gid) ?>-label"><?= e($g['label']) ?></p>
             <button type="button" class="nav-group-toggle" aria-expanded="<?= $isActive ? 'true' : 'false' ?>" aria-controls="<?= e($gid) ?>"><?= icon($g['icon'], 'icon group-icon') ?><span class="nav-group-label"><?= e($g['label']) ?><?= $isActive ? '<span class="sr-only"> (current section)</span>' : '' ?></span><?= icon('chevron-down', 'icon chev') ?></button>
             <ul class="nav-items" id="<?= e($gid) ?>" aria-labelledby="<?= e($gid) ?>-label" data-label="<?= e($g['label']) ?>">
-              <?php foreach ($g['links'] as [$href, $label, $iconName]): $active = $href === $activeHref; ?>
-                <li><a href="<?= e($href) ?>"<?= $active ? ' aria-current="page"' : '' ?>><?= icon($iconName) ?><span><?= e($label) ?></span></a></li>
+              <?php foreach ($g['links'] as $link): [$href, $label, $iconName] = $link; $badge = (int) ($link[3] ?? 0); $active = $href === $activeHref; ?>
+                <li><a href="<?= e($href) ?>"<?= $active ? ' aria-current="page"' : '' ?>><?= icon($iconName) ?><span><?= e($label) ?></span><?php if ($badge > 0): ?><span class="nav-count tabular"><?= $badge ?><span class="sr-only"> waiting</span></span><?php endif ?></a></li>
               <?php endforeach ?>
             </ul>
           </li>

@@ -55,6 +55,8 @@ function expected_permission(string $path): ?string
         // C3: the Team inbox and reported messages need `messages`; everyone has their own messages.
         '#^/admin/messages/(team|reports)(/|$)#' => 'messages',
         '#^/admin/messages(/|$)#' => null,
+        // D2: payments (the payment settings are super admin, matched below by /admin/settings).
+        '#^/admin/payments(/|\.|$)#' => 'payments',
         '#^/admin/(settings|design|custom-fields|locations|users|audit|backups|health)(\b|/|\.)#' => 'super_admin',
         '#^/admin/(media|albums)(/|$)#' => 'gallery_media',
         '#^/admin/(menus|pages|templates|layout)(/|$)#' => 'pages_menus',

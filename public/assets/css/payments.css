@@ -1,0 +1,168 @@
+/* Addendum D2: payments. Loaded on the member's payment pages (site theme
+   tokens), the admin payment screens (admin tokens) and the printable
+   receipt. Each value falls back from the site token to the admin one.
+   Mobile first. */
+.pay, .pay-admin, .receipt-page {
+  --pay-ink: var(--c-ink, var(--ink, #111a24));
+  --pay-muted: var(--c-muted, var(--muted, #5a6779));
+  --pay-line: var(--c-line, var(--line, #dde3ea));
+  --pay-surface: var(--c-surface, var(--panel, #fff));
+  --pay-soft: var(--c-surface-2, var(--panel-2, #f8fafc));
+  --pay-accent: var(--c-accent, var(--accent, #0b7577));
+  --pay-ok: var(--c-success, var(--ok, #17663a));
+  --pay-ok-soft: var(--c-success-soft, var(--ok-soft, #e3f4ea));
+  --pay-warn: var(--c-warn, var(--warn, #8a5a00));
+  --pay-warn-soft: var(--c-warn-soft, var(--warn-soft, #fdf1d8));
+  --pay-bad: var(--c-danger, var(--bad, #b42318));
+  --pay-bad-soft: var(--c-danger-soft, var(--bad-soft, #fdecea));
+  --pay-r: var(--radius-l, var(--r-m, 12px));
+  min-width: 0;
+}
+.pay { display: grid; gap: var(--s-5, 1.25rem); }
+.pay-back { margin: 0; }
+.pay-back a { display: inline-flex; align-items: center; gap: 0.25rem; }
+.pay-badge.ok { background: var(--pay-ok-soft); color: var(--pay-ok); }
+.pay-badge.warn { background: var(--pay-warn-soft); color: var(--pay-warn); }
+.pay-badge.bad { background: var(--pay-bad-soft); color: var(--pay-bad); }
+.pay-badge.muted { background: var(--pay-soft); color: var(--pay-muted); }
+
+/* What I owe */
+.pay-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin: 0 0 1rem; }
+.pay-totals div { padding: 0.75rem 1rem; border-radius: var(--pay-r); background: var(--pay-soft); }
+.pay-totals dt { color: var(--pay-muted); font-size: 0.85rem; }
+.pay-totals dd { margin: 0; font-size: 1.35rem; font-weight: 700; color: var(--pay-ink); }
+.pay-owe { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.pay-owe li { display: grid; gap: 0.5rem; padding: 0.85rem 1rem; border: 1px solid var(--pay-line); border-radius: var(--pay-r); }
+.pay-owe h3 { margin: 0; font-size: 1.05rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.pay-owe p { margin: 0; }
+.pay-owe-balance strong { font-size: 1.15rem; }
+.pay-owe .btn { justify-self: start; }
+@media (min-width: 40rem) {
+  .pay-owe li { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
+  .pay-owe-balance { text-align: right; }
+}
+.pay-optional { margin: 1rem 0 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.pay-year { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.pay-year select { width: auto; }
+.pay .dash-card-head { flex-wrap: wrap; }
+.pay-badge { white-space: nowrap; }
+@media (max-width: 39.99rem) {
+  .pay-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pay-table, .pay-table tbody, .pay-table tr, .pay-table td { display: block; width: 100%; }
+  .pay-table tr { padding: 0.5rem 0; border-top: 1px solid var(--pay-line); }
+  .pay-table tr:first-child { border-top: 0; }
+  .pay-table td { border: 0; padding: 0.2rem var(--s-4, 1rem); display: flex; gap: 0.75rem; justify-content: space-between; align-items: center; }
+  .pay-table td[data-label]::before { content: attr(data-label); color: var(--pay-muted); font-weight: 600; }
+  .pay-table td:empty { display: none; }
+}
+.pay-actions { white-space: nowrap; }
+
+/* Form */
+.pay-grid { display: grid; gap: var(--s-4, 1rem); }
+@media (min-width: 40rem) { .pay-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pay-grid .field { min-width: 0; }
+.pay-money { display: flex; align-items: stretch; }
+.pay-money > span { display: inline-flex; align-items: center; padding: 0 0.7rem; border: 1px solid var(--c-input-border, var(--line-strong, #c3ccd7)); border-right: 0; border-radius: var(--radius-s, 8px) 0 0 var(--radius-s, 8px); background: var(--pay-soft); color: var(--pay-muted); font-weight: 600; }
+.pay-money input { flex: 1; min-width: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.pay-warnings ul { margin: 0.25rem 0 0; padding-left: 1.2rem; }
+.pay-preview { display: flex; gap: 0.75rem; align-items: center; }
+.pay-preview[hidden] { display: none; }
+.pay-preview img { max-width: 160px; max-height: 160px; border-radius: 8px; border: 1px solid var(--pay-line); object-fit: contain; background: var(--pay-soft); }
+.pay-bank .prose > :last-child { margin-bottom: 0; }
+
+/* Record */
+.pay-facts { display: grid; gap: 0.75rem 1.5rem; margin: 0 0 1rem; }
+@media (min-width: 40rem) { .pay-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pay-facts .wide { grid-column: 1 / -1; } }
+.pay-facts dt { color: var(--pay-muted); font-size: 0.85rem; }
+.pay-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.pay-receipt-file { margin: 0 0 1rem; }
+.pay-receipt-file img { display: block; max-width: 200px; height: auto; border: 1px solid var(--pay-line); border-radius: 8px; }
+.pay-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.pay-timeline li { padding-left: 1rem; border-left: 3px solid var(--pay-line); }
+.pay-timeline time { color: var(--pay-muted); font-size: 0.85rem; margin-right: 0.35rem; }
+.pay-note { white-space: normal; overflow-wrap: anywhere; }
+.btn-row form { margin: 0; }
+
+/* Admin */
+.pay-admin .pay-progress { display: block; width: 100%; min-width: 6rem; height: 8px; border-radius: 99px; background: var(--pay-soft); overflow: hidden; border: 1px solid var(--pay-line); }
+.pay-admin .pay-progress span { display: block; height: 100%; background: var(--pay-accent); }
+.pay-admin .pay-progress span.w0 { width: 0; }
+.pay-row-warn { color: var(--pay-warn); font-weight: 600; font-size: 0.85rem; display: flex; gap: 0.3rem; align-items: center; }
+.pay-thumb { display: block; width: 72px; height: 72px; border-radius: 8px; border: 1px solid var(--pay-line); object-fit: cover; background: var(--pay-soft); }
+.pay-thumb-link { display: inline-flex; flex-direction: column; align-items: center; gap: 0.2rem; font-size: 0.8rem; }
+.pay-queue { list-style: none; margin: 0; padding: 0; }
+.pay-queue > li { display: grid; gap: 0.75rem; padding: 1rem; border-top: 1px solid var(--pay-line); }
+.pay-queue > li:first-child { border-top: 0; }
+@media (min-width: 40rem) { .pay-queue > li { grid-template-columns: auto 80px minmax(0, 1fr); align-items: start; } .pay-queue .pay-review { grid-column: 3; } }
+@media (min-width: 75rem) { .pay-queue > li { grid-template-columns: auto 80px minmax(0, 1fr) minmax(12rem, 16rem); } .pay-queue .pay-review { grid-column: auto; } }
+.pay-queue-page { display: grid; gap: 1rem; }
+.pay-queue h2 { font-size: 1rem; margin: 0 0 0.2rem; overflow-wrap: anywhere; }
+.pay-queue p { margin: 0 0 0.2rem; }
+.pay-queue .pay-review { display: grid; gap: 0.5rem; }
+.pay-queue .pay-review form { display: grid; gap: 0.35rem; margin: 0; }
+.pay-review-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pay-review-page { display: grid; gap: 1rem; }
+@media (min-width: 64rem) { .pay-review-page { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; } }
+.pay-receipt-large img { display: block; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--pay-line); }
+.pay-receipt-large iframe { width: 100%; height: 32rem; border: 1px solid var(--pay-line); border-radius: 8px; }
+.pay-kbd { font-size: 0.8rem; color: var(--pay-muted); }
+.pay-kbd kbd { font: 600 0.75rem/1 var(--font, system-ui); padding: 0.15rem 0.35rem; border: 1px solid var(--pay-line); border-radius: 4px; background: var(--pay-soft); }
+.pay-stats { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); margin: 0 0 1rem; }
+.pay-stats div { padding: 0.75rem 1rem; border: 1px solid var(--pay-line); border-radius: var(--pay-r); background: var(--pay-surface); }
+.pay-stats dt { color: var(--pay-muted); font-size: 0.85rem; }
+.pay-stats dd { margin: 0; font-size: 1.2rem; font-weight: 700; }
+.pay-inline-form { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: end; margin: 0; }
+.pay-inline-form input[type="text"] { width: auto; flex: 1 1 8rem; min-width: 0; }
+.pay-member-pick { display: grid; gap: 0.35rem; max-height: 20rem; overflow: auto; padding: 0.25rem; }
+.pay-choose-hint { margin: 0; }
+
+/* Receipt (print layout) */
+.receipt-page { max-width: 48rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; color: var(--pay-ink); }
+.receipt-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
+.receipt { background: #fff; color: #111; border: 1px solid #d6dee8; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgb(0 0 0 / 0.08); }
+.receipt-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; border-bottom: 2px solid #111; padding-bottom: 1rem; margin-bottom: 1rem; }
+.receipt-org { display: flex; gap: 0.75rem; align-items: flex-start; min-width: 0; }
+.receipt-logo { width: 64px; height: 64px; object-fit: contain; }
+.receipt-org-name { font-size: 1.25rem; font-weight: 800; margin: 0 0 0.2rem; }
+.receipt-small { font-size: 0.85rem; color: #444; margin: 0; overflow-wrap: anywhere; }
+.receipt-no { text-align: right; }
+.receipt-no h1 { margin: 0; font-size: 1.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: #111; }
+.receipt-no p { margin: 0; font-weight: 700; }
+.receipt-lines { display: grid; gap: 0; margin: 0; }
+.receipt-lines > div { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid #e3e7ec; }
+.receipt-lines dt { color: #444; font-size: 0.9rem; }
+.receipt-lines dd { margin: 0; overflow-wrap: anywhere; }
+.receipt-amount strong { font-size: 1.4rem; }
+.receipt-foot { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-top: 1.25rem; }
+.receipt-qr { width: 112px; height: 112px; flex: none; display: flex; align-items: center; justify-content: center; }
+.receipt-qr svg { width: 112px; height: 112px; }
+.receipt-qr .receipt-small { font-size: 0.6rem; }
+.receipt-foot > p { flex: 1 1 14rem; }
+.receipt-url { overflow-wrap: anywhere; }
+.receipt-void { padding: 0.75rem 1rem; border: 2px solid #b42318; color: #b42318; font-weight: 700; border-radius: 8px; }
+.receipt.is-reversed .receipt-amount strong { text-decoration: line-through; }
+.receipt-check-facts { display: grid; gap: 0.6rem; margin: 0; padding: var(--s-5, 1.25rem) var(--s-6, 1.5rem) 0; }
+.receipt-check-facts > div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--c-line, #dde3ea); padding-bottom: 0.5rem; }
+.receipt-check-facts dt { color: var(--c-muted, #5a6779); }
+.receipt-check-facts dd { margin: 0; font-weight: 700; }
+@media (max-width: 30rem) {
+  .receipt { padding: 1rem; }
+  .receipt-lines > div { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  .receipt-no { text-align: left; }
+}
+@media print {
+  @page { size: A4 portrait; margin: 14mm; }
+  .no-print, .imp-banner { display: none !important; }
+  .print-body { background: #fff; }
+  .receipt-page { padding: 0; max-width: none; }
+  .receipt { border: 0; box-shadow: none; padding: 0; }
+  .receipt-lines > div { break-inside: avoid; }
+}
+progress.pay-bar { width: 6rem; height: 0.6rem; vertical-align: middle; accent-color: var(--pay-accent); }
+.pay-admin > .panel, .pay-admin > section, .pay-admin > form.panel { margin-top: 1rem; }
+.pay-admin .panel-body.pay-review { gap: 1.25rem; }
+.pay-admin .pay-review form + form { padding-top: 1rem; border-top: 1px solid var(--pay-line); }
+.pay-owe p .icon, .pay-optional .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.15em; }
+.pay .dash-card-head { margin-bottom: var(--s-3, 0.75rem); }
+.pay-grid { align-items: start; }
+.pay-grid .field { align-content: start; }

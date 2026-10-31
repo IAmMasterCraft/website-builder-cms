@@ -3,6 +3,7 @@ import { pickImage, pickerAvailable } from './media-picker.js';
 import { initRichText } from './rt.js';
 import { initFocal } from './focal.js';
 import { initMessages } from './messages.js';
+import { initPayments } from './payments.js';
 
 const csrf = document.querySelector('meta[name="csrf"]')?.content ?? '';
 const root = document.documentElement;
@@ -276,3 +277,4 @@ if (scrollers.length) {
 
 initFocal();
 initMessages();
+initPayments();

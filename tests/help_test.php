@@ -272,7 +272,7 @@ test('B3: bin/docs-html builds a static site with relative links, images and .no
 test('B1: sidebar groups follow permissions; empty groups disappear; active parent is the most specific link', function (): void {
     act_as(fixture_admin());
     $all = admin_nav(current_user());
-    same(['site', 'content', 'members', 'community', 'messages', 'communications', 'radio', 'system'], array_column($all, 'key'));
+    same(['site', 'content', 'members', 'community', 'messages', 'payments', 'communications', 'radio', 'system'], array_column($all, 'key'));
     foreach ($all as $g) {
         ok($g['label'] !== '' && $g['icon'] !== '' && $g['links'] !== []);
     }

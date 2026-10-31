@@ -72,6 +72,17 @@ function app_routes(): Router
 
     $r->post('/contact', [Site\Contact::class, 'send']);
 
+    // D2: payments, member side, and the public receipt check
+    $r->get('/account/payments', [Account\Payments::class, 'index']);
+    $r->get('/account/payments/new', [Account\Payments::class, 'create']);
+    $r->post('/account/payments', [Account\Payments::class, 'store']);
+    $r->get('/account/payments/{id:\d+}', [Account\Payments::class, 'show']);
+    $r->get('/account/payments/{id:\d+}/edit', [Account\Payments::class, 'edit']);
+    $r->post('/account/payments/{id:\d+}', [Account\Payments::class, 'update']);
+    $r->post('/account/payments/{id:\d+}/withdraw', [Account\Payments::class, 'withdraw']);
+    $r->get('/account/payments/{id:\d+}/receipt', [Account\Payments::class, 'receipt']);
+    $r->get('/verify-receipt/{code:[a-f0-9]{24}}', [Account\Payments::class, 'verify']);
+
     // C3: direct messages, member side (the same handlers serve /admin/messages)
     message_routes($r, '/account/messages');
 
@@ -326,6 +337,42 @@ function app_routes(): Router
     $r->post('/admin/settings/messages', [Admin\Messages::class, 'saveSettings']);
     $r->post('/admin/messages/preferences', [Site\Messages::class, 'preferences']);
     message_routes($r, '/admin/messages');
+
+    // Addendum D2: payments (permission `payments`; settings: super admin)
+    $pay = Admin\Payments::class;
+    $r->get('/admin/payments', [$pay, 'index']);
+    $r->post('/admin/payments/bulk-approve', [$pay, 'bulkApprove']);
+    $r->post('/admin/payments/preferences', [$pay, 'preferences']);
+    $r->get('/admin/payments/all', [$pay, 'all']);
+    $r->get('/admin/payments/all.csv', [$pay, 'allCsv']);
+    $r->get('/admin/payments/record', [$pay, 'recordForm']);
+    $r->post('/admin/payments/record', [$pay, 'record']);
+    $r->get('/admin/payments/reports', [$pay, 'reports']);
+    $r->get('/admin/payments/reports.csv', [$pay, 'reportsCsv']);
+    $r->get('/admin/payments/items', [$pay, 'items']);
+    $r->get('/admin/payments/items/new', [$pay, 'createItem']);
+    $r->post('/admin/payments/items', [$pay, 'storeItem']);
+    $r->get('/admin/payments/items/{id:\d+}', [$pay, 'item']);
+    $r->get('/admin/payments/items/{id:\d+}.csv', [$pay, 'itemCsv']);
+    $r->get('/admin/payments/items/{id:\d+}/edit', [$pay, 'editItem']);
+    $r->post('/admin/payments/items/{id:\d+}', [$pay, 'updateItem']);
+    $r->post('/admin/payments/items/{id:\d+}/status', [$pay, 'itemStatus']);
+    $r->post('/admin/payments/items/{id:\d+}/duplicate', [$pay, 'duplicateItem']);
+    $r->post('/admin/payments/items/{id:\d+}/delete', [$pay, 'deleteItem']);
+    $r->post('/admin/payments/items/{id:\d+}/remind', [$pay, 'remind']);
+    $r->post('/admin/payments/items/{id:\d+}/message', [$pay, 'message']);
+    $r->post('/admin/payments/items/{id:\d+}/members', [$pay, 'addMembers']);
+    $r->get('/admin/payments/member/{id:\d+}', [$pay, 'member']);
+    $r->post('/admin/payments/member/{id:\d+}/charges', [$pay, 'addCharge']);
+    $r->post('/admin/payments/charges/{id:\d+}', [$pay, 'charge']);
+    $r->get('/admin/payments/{id:\d+}', [$pay, 'show']);
+    $r->post('/admin/payments/{id:\d+}/approve', [$pay, 'approve']);
+    $r->post('/admin/payments/{id:\d+}/reject', [$pay, 'reject']);
+    $r->post('/admin/payments/{id:\d+}/info', [$pay, 'info']);
+    $r->post('/admin/payments/{id:\d+}/reverse', [$pay, 'reverse']);
+    $r->get('/admin/payments/{id:\d+}/receipt', [$pay, 'receipt']);
+    $r->get('/admin/settings/payments', [$pay, 'settings']);
+    $r->post('/admin/settings/payments', [$pay, 'saveSettings']);
 
     // Addendum B3: help centre (docs/ rendered in the admin)
     $docImage = '{name:[a-z0-9][a-z0-9_-]*\.(?:webp|png|jpe?g|gif)}';

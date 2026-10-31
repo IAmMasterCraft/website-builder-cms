@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="<?= e(theme_css_url($theme)) ?>">
 <link rel="stylesheet" href="<?= e(asset('assets/css/site.css')) ?>">
 <link rel="stylesheet" href="<?= e(asset('assets/css/card.css')) ?>">
+<?php foreach ($extra_css ?? [] as $css): ?><link rel="stylesheet" href="<?= e(asset($css)) ?>">
+<?php endforeach ?>
 <script type="module" src="<?= e(asset('assets/js/card.js')) ?>"></script>
 </head>
 <body class="print-body<?= is_impersonating() ? ' is-impersonating' : '' ?>">

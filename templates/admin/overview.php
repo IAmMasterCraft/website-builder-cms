@@ -63,6 +63,16 @@ $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good
         <?php endforeach ?>
       </div>
     </section>
+    <?php if (($payments ?? null) !== null): ?>
+    <section class="panel" aria-labelledby="pay-title">
+      <div class="panel-head"><h2 id="pay-title">Payments</h2><a class="small-text" href="/admin/payments/reports">Reports</a></div>
+      <div class="panel-body stat-grid flush">
+        <a href="/admin/payments" class="stat-card<?= $payments['pending'] > 0 ? ' attention' : '' ?>"><span class="label"><?= icon('inbox') ?>Waiting for review</span><span class="value"><?= (int) $payments['pending'] ?></span></a>
+        <a href="/admin/payments/reports" class="stat-card"><span class="label"><?= icon('landmark') ?>Collected this month</span><span class="value tabular"><?= e(money($payments['month'])) ?></span></a>
+      </div>
+      <?php if ($payments['outstanding']): ?><div class="panel-body"><h3 class="h-small">Most outstanding</h3><ul class="bday-list"><?php foreach ($payments['outstanding'] as $o): ?><li><a href="/admin/payments/items/<?= (int) $o['id'] ?>"><?= e($o['name']) ?></a><span class="tabular"><?= e(money((int) $o['outstanding_minor'])) ?></span></li><?php endforeach ?></ul></div><?php endif ?>
+    </section>
+    <?php endif ?>
     <?php if ($birthdays !== null): $bt = $birthdays['tab']; ?>
     <section class="panel" aria-labelledby="bday-title" id="birthdays">
       <div class="panel-head"><h2 id="bday-title">Birthdays</h2><span class="muted small-text">Emails at <?= e(birthday_time()) ?></span></div>

@@ -114,6 +114,14 @@ function admin_nav(?array $user): array
             ['/admin/messages/reports', 'Reported messages', 'flag', 'messages'],
             ['/admin/settings/messages', 'Message settings', 'settings', 'super_admin'],
         ]],
+        ['payments', 'Payments', 'landmark', [
+            ['/admin/payments', 'Pending', 'inbox', 'payments'],
+            ['/admin/payments/all', 'All payments', 'history', 'payments'],
+            ['/admin/payments/items', 'Dues and items', 'tag', 'payments'],
+            ['/admin/payments/record', 'Record a payment', 'plus', 'payments'],
+            ['/admin/payments/reports', 'Reports', 'activity', 'payments'],
+            ['/admin/settings/payments', 'Payment settings', 'settings', 'super_admin'],
+        ]],
         ['communications', 'Communications', 'mail', [
             ['/admin/campaigns', 'Campaigns', 'send', 'communications'],
             ['/admin/notices', 'Notices', 'bell', 'communications'],
@@ -142,7 +150,9 @@ function admin_nav(?array $user): array
         $visible = [];
         foreach ($links as [$href, $text, $icon, $perm]) {
             if ($perm === null || user_can($user, $perm)) {
-                $visible[] = [$href, $text, $icon];
+                // D2: the pending payments count shows as a badge on its link.
+                $badge = $href === '/admin/payments' ? payment_pending_count() : 0;
+                $visible[] = $badge > 0 ? [$href, $text, $icon, $badge] : [$href, $text, $icon];
             }
         }
         if ($visible !== []) {
@@ -156,7 +166,7 @@ function admin_nav(?array $user): array
 function admin_nav_active(array $nav, string $path): array
 {
     // Screens without their own link highlight the link they belong to.
-    foreach (['/admin/impersonate' => '/admin/members'] as $prefix => $owner) {
+    foreach (['/admin/impersonate' => '/admin/members', '/admin/payments/member' => '/admin/payments/all'] as $prefix => $owner) {
         if (str_starts_with($path, $prefix . '/')) {
             $path = $owner;
         }
@@ -184,7 +194,9 @@ function admin_chrome(): array
     $messageReports = user_can($user, 'messages') ? msg_reports_open_count() : 0;
     // D1: "N birthdays today" for the people who receive the birthday notices.
     $birthdays = birthday_is_recipient($user) ? birthday_count('today') : 0;
-    $detail = ['unread' => $unread, 'comments' => $pendingComments, 'jobs' => $pendingJobs, 'message_reports' => $messageReports, 'birthdays' => $birthdays];
+    // D2: payment reports waiting for review (one indexed COUNT per request).
+    $payments = user_can($user, 'payments') ? payment_pending_count() : 0;
+    $detail = ['unread' => $unread, 'comments' => $pendingComments, 'jobs' => $pendingJobs, 'message_reports' => $messageReports, 'birthdays' => $birthdays, 'payments' => $payments];
     return [
         'site_name' => (string) setting('site.name', 'Gather'),
         'tile_url' => favicon_tile_url(), // C2: the site's icon tile next to its name

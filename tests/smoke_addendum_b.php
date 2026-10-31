@@ -15,7 +15,7 @@ function set_session_cookie(array $r): string
 // ---- B1: sidebar groups ------------------------------------------------------------
 $h = $admin->get('/admin/members')['body'];
 check('B1: each sidebar group header is a button with aria-expanded and aria-controls', (bool) preg_match('#<button type="button" class="nav-group-toggle" aria-expanded="(true|false)" aria-controls="nav-g-site">#', $h)
-    && substr_count($h, 'class="nav-group-toggle"') === 8); // C3 added the Messages group
+    && substr_count($h, 'class="nav-group-toggle"') === 9); // C3 added the Messages group, D2 Payments
 check('B1: the group of the current page is the active parent, open, with the current link marked', (bool) preg_match('#<li class="nav-group is-active-parent" data-group="members">\s*<p class="nav-section"[^>]*>Members</p>\s*<button type="button" class="nav-group-toggle" aria-expanded="true" aria-controls="nav-g-members">#', $h)
     && str_contains($h, '<a href="/admin/members" aria-current="page">') && substr_count($h, 'is-active-parent') === 1);
 check('B1: other groups start closed; the no-JS label and the list ids are in the markup', str_contains($h, 'aria-expanded="false" aria-controls="nav-g-radio"') && str_contains($h, '<ul class="nav-items" id="nav-g-radio"') && str_contains($h, 'class="nav-section" id="nav-g-radio-label"'));

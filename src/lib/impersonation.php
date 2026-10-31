@@ -305,6 +305,10 @@ function impersonation_guard(string $method, string $path): void
         if (str_starts_with($path, '/account/messages')) {
             throw new HttpException(403, 'Messages are read-only while you view the site as ' . $imp['name'] . ': you cannot send, edit, delete, report, block or leave conversations as the member. Use “Return to admin” first.');
         }
+        // D2: payments are read-only too, even with "allow changes".
+        if (str_starts_with($path, '/account/payments')) {
+            throw new HttpException(403, 'Payments are read-only while you view the site as ' . $imp['name'] . ': you cannot report, edit or withdraw payments as the member. To record a payment for them, return to admin and use Payments → Record a payment.');
+        }
         foreach (impersonation_change_routes() as $re => $what) {
             if (preg_match($re, $path)) {
                 if (!empty($imp['allow_changes'])) {

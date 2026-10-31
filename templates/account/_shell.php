@@ -8,6 +8,7 @@ $links = [
     ['jobs', '/account/jobs', 'Jobs', 'briefcase', $verified],
     ['downloads', '/account/downloads', 'Downloads', 'file-down', $verified],
     ['messages', '/account/messages', 'Messages', 'message', $verified],
+    ['payments', '/account/payments', 'Payments', 'landmark', !$is_group && $verified],
     ['notices', '/account/notices', 'Notices', 'bell', $verified],
     ['preferences', '/account/preferences', 'Email preferences', 'mail', $verified],
     ['password', '/account/password', 'Email and password', 'lock', true],

@@ -189,7 +189,9 @@ $other = new Browser($base);
 check('another session cannot continue the install', $other->get('/install/admin')['status'] === 403);
 $r = $admin->submit('/install/admin', '/install/admin', ['site_name' => 'Smoke Test Society', 'name' => 'Sam Smoke', 'email' => 'sam@example.test', 'password' => 'short']);
 check('installer validates the admin password', $r['status'] === 422 && str_contains($r['body'], 'at least 10'));
-$r = $admin->submit('/install/admin', '/install/admin', ['site_name' => 'Smoke Test Society', 'name' => 'Sam Smoke', 'email' => 'sam@example.test', 'password' => 'smoke-test-password']);
+check('D2: the installer guesses the currency from the country header', str_contains($admin->get('/install/admin', ['CF-IPCountry: KE'])['body'], '<option value="KES" selected>') && str_contains($admin->get('/install/admin', ['Accept-Language: en-GB,en;q=0.8'])['body'], '<option value="GBP" selected>')
+    && str_contains($admin->get('/install/admin')['body'], '<option value="NGN" selected>'));
+$r = $admin->submit('/install/admin', '/install/admin', ['site_name' => 'Smoke Test Society', 'name' => 'Sam Smoke', 'email' => 'sam@example.test', 'password' => 'smoke-test-password', 'currency' => 'GBP']);
 check('installer creates the super admin', $r['status'] === 303 && $r['location'] === '/install/theme');
 $r = $admin->submit('/install/theme', '/install/theme', ['theme' => 'civic']);
 check('installer saves the theme', $r['status'] === 303 && $r['location'] === '/install/content');

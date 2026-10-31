@@ -41,7 +41,7 @@ function help_manifest(): array
     foreach ([
         'how-do-i', 'first-login', 'help-centre', 'settings', 'design', 'header-footer-menus', 'page-builder', 'media-library',
         'posts', 'events', 'gallery', 'downloads', 'leaders', 'awards', 'faqs', 'branches-groups',
-        'members', 'jobs', 'comments', 'messages', 'notices', 'campaigns', 'email-templates', 'inbox', 'email-settings',
+        'members', 'jobs', 'comments', 'messages', 'payments', 'notices', 'campaigns', 'email-templates', 'inbox', 'email-settings',
         'radio', 'users-roles', 'audit-log', 'backups', 'system-health', 'updating', 'troubleshooting',
     ] as $name) {
         $list['manager-guide/' . $name] = $mg($name);
@@ -488,6 +488,13 @@ function help_slug_for_admin_path(string $path): ?string
         '/admin/messages/team' => 'manager-guide/messages#team-inbox',
         '/admin/messages/reports' => 'manager-guide/messages#reported-messages',
         '/admin/settings/messages' => 'manager-guide/messages#message-settings',
+        '/admin/payments' => 'manager-guide/payments',
+        '/admin/payments/all' => 'manager-guide/payments#all-payments',
+        '/admin/payments/items' => 'manager-guide/payments#dues-and-items',
+        '/admin/payments/record' => 'manager-guide/payments#recording-a-payment',
+        '/admin/payments/reports' => 'manager-guide/payments#reports',
+        '/admin/payments/member' => 'manager-guide/payments#a-members-payments',
+        '/admin/settings/payments' => 'manager-guide/payments#payment-settings',
         '/admin/notices' => 'manager-guide/notices',
         '/admin/campaigns' => 'manager-guide/campaigns',
         '/admin/email-templates' => 'manager-guide/email-templates',

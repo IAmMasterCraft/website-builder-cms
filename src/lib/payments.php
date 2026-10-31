@@ -676,7 +676,7 @@ function payment_reusable_receipt(int $fromId, int $memberId): ?array
  * A member reports a payment (status pending). Returns [id, error].
  * @return array{0:?int,1:?string}
  */
-function payment_submit(array $user, int $memberId, array $d, ?array $file, ?int $fromId = null, bool $isUpload = true): array
+function payment_submit(array $user, int $memberId, array $d, ?array $file, ?int $fromId = null, bool $isUpload = true, ?int $heldMediaId = null): array
 {
     $hit = rate_take('payrep:' . (int) $user['id'], PAYMENT_REPORTS_PER_DAY, 86400);
     if ($hit === null) {
@@ -689,6 +689,7 @@ function payment_submit(array $user, int $memberId, array $d, ?array $file, ?int
         rate_release($hit);
         return [null, $e->getMessage()];
     }
+    $mediaId ??= $heldMediaId;
     $mediaId ??= $from !== null && $from['receipt_media_id'] !== null ? (int) $from['receipt_media_id'] : null;
     if ($mediaId === null && payment_settings()['receipt_required']) {
         rate_release($hit);
@@ -1369,6 +1370,10 @@ function cron_payment_retention(?DateTimeImmutable $now = null): string
         payment_receipt_release((int) $p['receipt_media_id']);
         $n++;
     }
+    // Receipts uploaded with a form that was never sent (kept while a warning was shown) go after a day.
+    foreach (q_all("SELECT md.id FROM media md WHERE md.folder = 'receipts' AND md.created_at < UTC_TIMESTAMP() - INTERVAL 1 DAY AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.receipt_media_id = md.id) LIMIT 200") as $r) {
+        payment_receipt_release((int) $r['id']);
+    }
     return $n . ' receipt file(s) deleted';
 }
 
@@ -1384,6 +1389,30 @@ function payment_verify(string $code): ?array
            FROM payments p LEFT JOIN members m ON m.id = p.member_id WHERE p.receipt_code = ? AND p.entry_type = 'payment'",
         [$code]
     );
+}
+
+/** Everything the printable receipt shows (member and admin views share it). */
+function receipt_view_data(array $p): array
+{
+    return [
+        'title' => 'Receipt ' . $p['receipt_number'],
+        'site_name' => (string) setting('site.name'),
+        'logo' => media_find((int) setting('site.logo_media_id', 0) ?: null),
+        'address' => (string) setting('contact.address', ''),
+        'contact_email' => (string) setting('contact.email', ''),
+        'charity_number' => (string) setting('org.charity_number', ''),
+        'p' => $p,
+        'member_name' => payment_member_label($p),
+        'member_number' => (string) ($p['member_number'] ?? ''),
+        'what' => payment_what($p),
+        'amount' => money((int) $p['amount_minor'], (string) $p['currency']),
+        'amount_words' => money_words((int) $p['amount_minor'], (string) $p['currency']),
+        'method' => PAYMENT_METHODS[$p['method']] ?? $p['method'],
+        'confirmed' => fmt_date((string) $p['reviewed_at'], 'j F Y'),
+        'paid_on' => (new DateTimeImmutable((string) $p['paid_on']))->format('j F Y'),
+        'verify_url' => base_url('/verify-receipt/' . $p['receipt_code']),
+        'reversed' => ($p['reversal_id'] ?? null) !== null,
+    ];
 }
 
 /** Initials only ("A. O.") for the public verification page. */

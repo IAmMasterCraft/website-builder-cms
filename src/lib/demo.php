@@ -422,6 +422,7 @@ function demo_seed(int $userId): void
 
     demo_seed_community($userId);
     demo_seed_messages($userId);
+    demo_seed_payments($userId);
 
     $top = db_insert('menus', ['name' => 'Top bar', 'location' => 'topbar']);
     $add($top, 'FAQ', 'list', 'faq');
@@ -730,4 +731,131 @@ function demo_seed_messages(int $adminId): void
         [$tom, 'Hello team, my member card shows last year\'s address. How do I change it?'],
     ], 't:' . $tom);
     q('UPDATE conversations SET team_notified_message_id = last_message_id WHERE id = ?', [$team]);
+}
+
+/**
+ * A placeholder "bank transfer confirmation" drawn with GD (no third-party
+ * images, no real bank): used as the demo members' receipts.
+ */
+function demo_receipt_image(string $file, array $lines, int $seed): void
+{
+    mt_srand($seed);
+    $w = 640;
+    $h = 400;
+    $img = imagecreatetruecolor($w, $h);
+    imagefilledrectangle($img, 0, 0, $w, $h, imagecolorallocate($img, 248, 249, 251));
+    $band = [[18, 53, 91], [11, 117, 119], [120, 60, 40]][$seed % 3];
+    imagefilledrectangle($img, 0, 0, $w, 64, imagecolorallocate($img, $band[0], $band[1], $band[2]));
+    $white = imagecolorallocate($img, 255, 255, 255);
+    $ink = imagecolorallocate($img, 30, 36, 44);
+    $grey = imagecolorallocate($img, 120, 128, 140);
+    imagestring($img, 5, 24, 24, 'DEMO BANK - TRANSFER CONFIRMATION', $white);
+    $y = 92;
+    foreach ($lines as [$label, $value]) {
+        imagestring($img, 3, 24, $y, $label, $grey);
+        imagestring($img, 5, 220, $y - 2, $value, $ink);
+        imageline($img, 24, $y + 22, $w - 24, $y + 22, imagecolorallocate($img, 222, 226, 232));
+        $y += 40;
+    }
+    imagestring($img, 2, 24, $h - 28, 'Generated placeholder for the demo site. Not a real bank document.', $grey);
+    imagepng($img, $file);
+}
+
+/**
+ * D2 demo: this year's dues, a hall levy and donations, a draft for next
+ * year, and payment reports in every state (approved with receipts, pending,
+ * rejected, needs info). A UK demo: the currency is GBP unless the installer
+ * already chose one.
+ */
+function demo_seed_payments(int $adminId): void
+{
+    if (q_val('SELECT 1 FROM payment_items LIMIT 1') !== null) {
+        return;
+    }
+    if (setting('payments') === null) {
+        setting_set('payments', ['currency' => 'GBP'] + payment_settings());
+    }
+    $scale = ['NGN' => 1000, 'KES' => 100, 'GHS' => 10, 'JPY' => 100, 'INR' => 50, 'ZAR' => 10, 'XOF' => 500, 'XAF' => 500][site_currency()] ?? 1;
+    $amount = static fn (int $major): string => money_input($major * $scale * 10 ** currency_decimals());
+    setting_set('payments', [
+        'bank_details' => '<p><strong>Harbourside Community Association (demo)</strong><br>Sort code 00-00-00 · Account 00000000</p><p>Use your member number as the payment reference.</p>',
+    ] + payment_settings());
+    $year = (int) (new DateTimeImmutable('now', site_tz()))->format('Y');
+    $admin = q_one('SELECT id, email, role, status, display_name FROM users WHERE id = ?', [$adminId]);
+    if ($admin === null) {
+        return;
+    }
+    $admin['permissions'] = [];
+    $mk = static function (array $in) use ($adminId): int {
+        [$d, $errors] = payment_item_validate($in + ['item_kind' => 'dues', 'allow_part' => '1', 'include_new_members' => '1', 'remind_enabled' => '1']);
+        if ($errors) {
+            throw new RuntimeException('demo item: ' . json_encode($errors));
+        }
+        return db_insert('payment_items', $d + ['created_by' => $adminId]);
+    };
+    $dues = $mk(['name' => "$year annual dues", 'description' => 'Membership dues for the year: they keep the hall open and the newsletter going.', 'amount' => $amount(30),
+        'applies_to' => 'everyone', 'due_date' => "$year-03-31", 'counts_as_dues' => '1', 'covers_until' => "$year-12-31"]);
+    $levy = $mk(['name' => 'Hall building levy', 'item_kind' => 'levy', 'description' => 'A one-off levy towards the new roof of the community hall. Pay in parts if that is easier.', 'amount' => $amount(50),
+        'applies_to' => 'everyone', 'due_date' => "$year-12-15"]);
+    $donation = $mk(['name' => 'Donation', 'item_kind' => 'donation', 'description' => 'Any amount towards our winter appeal.', 'amount_mode' => 'any', 'amount' => '', 'applies_to' => 'nobody']);
+    foreach ([$dues, $levy, $donation] as $id) {
+        payment_item_set_status($id, 'open');
+    }
+    payment_item_duplicate($dues, $adminId);
+
+    $member = static function (string $email): ?array {
+        $u = q_one("SELECT u.id, u.email, u.role, u.status, u.display_name, m.id AS member_id, m.member_number FROM users u JOIN members m ON m.user_id = u.id WHERE u.email = ?", [$email]);
+        return $u;
+    };
+    $receipt = static function (array $m, string $amountText, string $ref, string $date, int $seed): array {
+        $base = tempnam(sys_get_temp_dir(), 'grcp');
+        $file = $base . '.png';
+        demo_receipt_image($file, [['Date', $date], ['Amount', site_currency() . ' ' . $amountText], ['From', (string) $m['display_name']], ['To', 'Harbourside Community Assoc.'], ['Reference', $ref]], $seed);
+        unlink($base);
+        return ['tmp_name' => $file, 'name' => 'transfer-' . strtolower(preg_replace('/[^A-Za-z0-9]/', '', $ref) ?: 'receipt') . '.png', 'size' => (int) filesize($file), 'error' => UPLOAD_ERR_OK];
+    };
+    $report = static function (array $m, string $target, int $major, string $daysAgo, string $method, string $ref, bool $withReceipt, int $seed, array $extra = []) use ($amount, $receipt): ?int {
+        $date = (new DateTimeImmutable('now', site_tz()))->modify($daysAgo)->format('Y-m-d');
+        [$d, $errors] = payment_validate(['target' => $target, 'amount' => $amount($major), 'paid_on' => $date, 'method' => $method, 'reference' => $ref] + $extra, (int) $m['member_id'], false);
+        if ($errors) {
+            return null;
+        }
+        $file = $withReceipt ? $receipt($m, $amount($major), $ref, $date, $seed) : null;
+        [$id] = payment_submit($m, (int) $m['member_id'], $d, $file, null, false);
+        if ($file !== null && is_file($file['tmp_name'])) {
+            unlink($file['tmp_name']);
+        }
+        return $id;
+    };
+    $charge = static fn (int $item, array $m): string => 'c' . (int) q_val('SELECT id FROM payment_charges WHERE item_id = ? AND member_id = ?', [$item, (int) $m['member_id']]);
+
+    $amara = $member('amara.okafor@example.org');
+    $tom = $member('tom.brennan@example.org');
+    $priya = $member('priya.shah@example.org');
+    if ($amara === null || $tom === null || $priya === null) {
+        return;
+    }
+    // Approved dues (Amara and Priya reported them with receipts; Tom paid cash at a meeting).
+    if (($id = $report($amara, $charge($dues, $amara), 30, '-200 days', 'bank_transfer', 'HCA DUES ' . $amara['member_number'], true, 1)) !== null) {
+        payment_approve($id, $admin, '');
+    }
+    if (($id = $report($priya, $charge($dues, $priya), 30, '-150 days', 'bank_transfer', 'PRIYA SHAH SUBS', true, 2)) !== null) {
+        payment_approve($id, $admin, '');
+    }
+    [$d] = payment_validate(['target' => $charge($dues, $tom), 'amount' => $amount(30), 'paid_on' => (new DateTimeImmutable('-120 days', site_tz()))->format('Y-m-d'), 'method' => 'cash', 'note' => 'Paid at the spring members’ meeting.'], (int) $tom['member_id'], true);
+    payment_record($admin, $d, null);
+    // Waiting for review: Amara's part payment of the levy and her donation, Priya's levy in full.
+    $report($amara, $charge($levy, $amara), 20, '-3 days', 'bank_transfer', 'LEVY PART 1 ' . $amara['member_number'], true, 3);
+    $report($priya, $charge($levy, $priya), 50, '-1 day', 'mobile_money', 'MM-' . strtoupper(substr(sha1('priya'), 0, 8)), true, 4);
+    $report($amara, 'i' . $donation, 10, '-2 days', 'bank_transfer', 'WINTER APPEAL', true, 5);
+    // Rejected and "needs info".
+    if (($id = $report($tom, $charge($levy, $tom), 25, '-20 days', 'bank_transfer', 'TB LEVY', true, 6)) !== null) {
+        payment_review($id, $admin, 'reject', PAYMENT_REJECT_PRESETS[0]);
+    }
+    if (($id = $report($tom, 'i' . $donation, 15, '-6 days', 'cash', '', true, 7, ['note' => 'Gave it to Mary at the coffee morning.'])) !== null) {
+        payment_review($id, $admin, 'info', 'Thank you! Which coffee morning was it, and did you get a paper receipt?');
+    }
+    q("DELETE FROM rate_hits WHERE bucket LIKE 'payrep:%'");
+    // Demo emails would otherwise wait in the queue for addresses that do not exist.
+    q("DELETE FROM email_queue WHERE status = 'queued' AND dedupe_key LIKE 'pay:%'");
 }
