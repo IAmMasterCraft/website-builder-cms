@@ -52,8 +52,11 @@ $reversed = $p['reversal_id'] !== null;
   <div class="panel-head"><h2 id="act-title">Review</h2></div>
   <div class="panel-body pay-review">
     <?php if ($separation !== null): ?><p class="notice-box"><?= e($separation) ?></p><?php else: ?>
-    <form method="post" action="/admin/payments/<?= (int) $p['id'] ?>/approve" class="pay-inline-form"><?= csrf_field() ?>
+    <form method="post" action="/admin/payments/<?= (int) $p['id'] ?>/approve" class="pay-inline-form"><?= csrf_field() ?><input type="hidden" name="version" value="<?= e(payment_version($p)) ?>">
       <div class="field"><label for="ap-note">Note (optional, kept on the record)</label><input type="text" id="ap-note" name="note" maxlength="1000"></div>
+      <?php if ($p['charge_id'] !== null && (int) $p['charge_paid'] + (int) $p['amount_minor'] > (int) $p['charge_amount']): ?>
+        <div class="field"><label class="check-line"><input type="checkbox" name="overpay" value="1"> <span>Approve anyway (overpayment: more than the <?= e(money(max(0, (int) $p['charge_amount'] - (int) $p['charge_paid']))) ?> still owed)</span></label></div>
+      <?php endif ?>
       <button class="btn accent" type="submit" data-pay-approve><?= icon('check') ?> Approve and send receipt</button></form>
     <?php endif ?>
     <form method="post" action="/admin/payments/<?= (int) $p['id'] ?>/reject" class="pay-inline-form"><?= csrf_field() ?>

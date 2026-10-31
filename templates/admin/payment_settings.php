@@ -10,7 +10,7 @@ $err = static fn (string $k): ?string => $errors[$k] ?? null;
     <section class="panel"><div class="panel-body fields">
       <div class="field"><label for="ps-currency">Currency</label>
         <select id="ps-currency" name="currency" aria-describedby="ps-currency-hint"<?= $locked ? ' disabled' : '' ?>><?php foreach (currency_options() as $code => $label): ?><option value="<?= e($code) ?>"<?= $v('currency') === $code ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach ?></select>
-        <p class="hint" id="ps-currency-hint"><?= $locked ? 'Locked: payments have been recorded in this currency.' : 'One currency for the whole site. It cannot change once the first payment is recorded.' ?></p></div>
+        <p class="hint" id="ps-currency-hint"><?= $locked ? 'Locked: payment items or payments already use this currency.' : 'One currency for the whole site. It cannot change once the first payment item is created.' ?></p></div>
       <div class="field"><label for="ps-bank">Bank details shown on “Report a payment”</label>
         <div class="rt" data-rt>
           <div class="rt-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="ps-bank-lbl" hidden><?= \Core\Sanitizer::clean($v('bank_details')) ?></div>

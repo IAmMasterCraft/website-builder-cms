@@ -122,7 +122,11 @@ $h = $admin->get('/admin/payments/' . $p1);
 check('D2: the review screen shows the receipt, the timeline with names, and next/previous', $h['status'] === 200 && str_contains($h['body'], 'Approve and send receipt') && str_contains($h['body'], 'by Penny Payer') && (str_contains($h['body'], 'data-pay-next') || str_contains($h['body'], 'data-pay-prev')));
 $r = $admin->post('/admin/payments/' . $p1 . '/approve', ['note' => 'x']);
 check('D2: approving without a CSRF token is refused (419)', $r['status'] === 419 && q_val('SELECT status FROM payments WHERE id = ?', [$p1]) === 'pending');
-$r = $admin->submit('/admin/payments/' . $p1, '/admin/payments/' . $p1 . '/approve', ['note' => 'Seen on the statement']);
+$version = static fn (Browser $b, string $page): string => preg_match('/name="version" value="([a-f0-9]{20})"/', $b->get($page)['body'], $vm) ? $vm[1] : '';
+$r = $admin->submit('/admin/payments/' . $p1, '/admin/payments/' . $p1 . '/approve', ['note' => 'x', 'version' => str_repeat('0', 20)]);
+check('D review: approving with a stale version token is refused ("changed since you opened it")', $r['status'] === 303 && q_val('SELECT status FROM payments WHERE id = ?', [$p1]) === 'pending'
+    && str_contains($admin->get('/admin/payments/' . $p1)['body'], 'changed since you opened it'));
+$r = $admin->submit('/admin/payments/' . $p1, '/admin/payments/' . $p1 . '/approve', ['note' => 'Seen on the statement', 'version' => $version($admin, '/admin/payments/' . $p1)]);
 $rcp = (string) q_val('SELECT receipt_number FROM payments WHERE id = ?', [$p1]);
 check('D2: approve → receipt number, charge part-paid, audited', $r['status'] === 303 && (bool) preg_match('/^RCP-\d{4}-\d{5}$/', $rcp) && q_val('SELECT charge_status FROM payment_charges WHERE id = ?', [$chargeId]) === 'part'
     && (int) q_val("SELECT COUNT(*) FROM audit_log WHERE action = 'approve' AND item_type = 'payment' AND item_id = ?", [$p1]) === 1);
@@ -152,15 +156,32 @@ check('D2: reverse → linked negative entry, balance back, receipt invalid', $r
     && q_val('SELECT charge_status FROM payment_charges WHERE id = ?', [$chargeId]) === 'unpaid' && str_contains((new Browser($base))->get('/verify-receipt/' . $code)['body'], 'Not a valid receipt')
     && str_contains($penny->get('/account/payments/' . $p1 . '/receipt')['body'], 'no longer valid'));
 check('D2: the ledger counters match after approve and reverse (reconcile)', payments_reconcile() === []);
+// Overpayment needs an explicit confirmation on the single approve.
+$r = $penny->post('/account/payments', ['_csrf' => $penny->csrf('/account/payments/new'), 'receipt' => $jpg('over.jpg'), 'confirm' => '1'] + ['reference' => 'PENNY-OVER', 'amount' => '45'] + $base1);
+$pOver = (int) q_val("SELECT id FROM payments WHERE reference = 'PENNY-OVER'");
+$h = $admin->get('/admin/payments/' . $pOver);
+check('D review: the review screen asks to confirm an overpayment', str_contains($h['body'], 'Approve anyway (overpayment'));
+$admin->submit('/admin/payments/' . $pOver, '/admin/payments/' . $pOver . '/approve', ['version' => $version($admin, '/admin/payments/' . $pOver)]);
+check('D review: … and refuses it without the tick', q_val('SELECT status FROM payments WHERE id = ?', [$pOver]) === 'pending' && str_contains($admin->get('/admin/payments/' . $pOver)['body'], 'above what is owed'));
+$admin->submit('/admin/payments/' . $pOver, '/admin/payments/' . $pOver . '/approve', ['version' => $version($admin, '/admin/payments/' . $pOver), 'overpay' => '1']);
+check('D review: … and approves it with the tick', q_val('SELECT status FROM payments WHERE id = ?', [$pOver]) === 'approved' && payments_reconcile() === []);
+
 // Admin records cash for Quentin; bulk approve.
 $qCharge = (int) q_val('SELECT id FROM payment_charges WHERE item_id = ? AND member_id = ?', [$itemId, $qMid]);
 status_is($admin, '/admin/payments/record?q=Quentin', 200, 'Quentin Payer');
 $r = $admin->submit('/admin/payments/record?member=' . $qMid, '/admin/payments/record', ['member_id' => (string) $qMid, 'target' => 'c' . $qCharge, 'amount' => '40', 'paid_on' => payment_today(), 'method' => 'cash', 'note' => 'AGM']);
 check('D2: recording cash for a member saves it approved with "Recorded by"; dues paid sets the fee status and card date', $r['status'] === 303 && q_val('SELECT status FROM payments WHERE member_id = ? AND recorded_by IS NOT NULL', [$qMid]) === 'approved'
     && q_val('SELECT membership_fee_status FROM members WHERE id = ?', [$qMid]) === 'paid' && q_val('SELECT card_valid_until FROM members WHERE id = ?', [$qMid]) === '2027-12-31');
-$ids = array_map('intval', array_column(q_all("SELECT id FROM payments WHERE status = 'pending' ORDER BY id"), 'id'));
-$r = $admin->post('/admin/payments/bulk-approve', ['_csrf' => meta_csrf($admin, '/admin/payments'), 'ids' => $ids]);
-check('D2: bulk approve approves the selected reports without warnings', $r['status'] === 303 && (int) q_val("SELECT COUNT(*) FROM payments WHERE status = 'pending'") < count($ids) + 1);
+$queue = $admin->get('/admin/payments')['body'];
+preg_match_all('/name="v\[(\d+)\]" value="([a-f0-9]{20})"/', $queue, $vm, PREG_SET_ORDER);
+$ids = array_map(static fn (array $x): int => (int) $x[1], $vm);
+$fields = ['_csrf' => meta_csrf($admin, '/admin/payments')];
+foreach ($vm as $i => [, $vid, $vv]) {
+    $fields['ids[' . $i . ']'] = $vid;
+    $fields['v[' . $vid . ']'] = $vv;
+}
+$r = $admin->post('/admin/payments/bulk-approve', $fields);
+check('D2: bulk approve approves the selected reports without warnings (with their version tokens)', $r['status'] === 303 && $ids !== [] && (int) q_val('SELECT COUNT(*) FROM payments WHERE status = \'approved\' AND id IN (' . implode(',', $ids) . ')') === count($ids));
 // Charges: waive and change amount on the member's payments page.
 status_is($admin, '/admin/payments/member/' . $pMid, 200, 'Charges');
 $r = $admin->submit('/admin/payments/member/' . $pMid, '/admin/payments/charges/' . $chargeId, ['action' => 'amount', 'amount' => '20', 'reason' => 'Concession']);
@@ -201,4 +222,4 @@ $admin->submit('/account', '/impersonation/stop', []);
 check('D2: data export includes charges and payment records', str_contains($penny->get('/account/privacy/export')['body'], '"payments"') && str_contains($penny->last['body'], 'PENNY-REF-2'));
 check('D2: payments admins see a Payments card on the overview', str_contains($admin->get('/admin')['body'], 'Collected this month'));
 check('D2: members get 403 on /admin/payments', $penny->get('/admin/payments')['status'] === 403);
-check('D2: the counters still match the ledger at the end (System health)', payments_reconcile() === [] && str_contains($admin->get('/admin/health')['body'], 'item and charge totals match the payment records'));
+check('D2: the counters still match the ledger at the end (System health)', payments_reconcile() === [] && payments_reconcile_record() === [] && str_contains($admin->get('/admin/health')['body'], 'totals match the payment records; full check'));

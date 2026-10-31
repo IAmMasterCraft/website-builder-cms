@@ -75,9 +75,42 @@ function payments_tx(callable $fn, int $tries = 4): mixed
 }
 
 /** Has any payment record been made (the currency can no longer change)? */
+/** Largest amount accepted anywhere: 1,000,000,000 major units (in minor units of the site currency). */
+function payment_max_minor(): int
+{
+    return 1_000_000_000 * 10 ** currency_decimals();
+}
+
+/** Message for an amount above payment_max_minor(), or null. */
+function payment_amount_problem(?int $minor): ?string
+{
+    return $minor !== null && $minor > payment_max_minor() ? 'Amounts can be at most ' . money(payment_max_minor()) . '.' : null;
+}
+
+/**
+ * The currency can no longer change once anything was priced in it: an
+ * item, a charge or a payment record (review).
+ */
+function payments_currency_locked(): bool
+{
+    return q_val('SELECT 1 FROM payments LIMIT 1') !== null || q_val('SELECT 1 FROM payment_items LIMIT 1') !== null || q_val('SELECT 1 FROM payment_charges LIMIT 1') !== null;
+}
+
 function payments_exist(): bool
 {
     return q_val('SELECT 1 FROM payments LIMIT 1') !== null;
+}
+
+/** One line of text: control characters removed, whitespace (incl. newlines) collapsed. */
+function payment_line(string $v): string
+{
+    return trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x{2028}\x{2029}]/u', ' ', $v)));
+}
+
+/** Multi-line text: control characters other than newlines and tabs removed, line endings normalised. */
+function payment_text(string $v): string
+{
+    return trim((string) preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', str_replace(["\r\n", "\r"], "\n", $v)));
 }
 
 /** Pending reports waiting for review (one indexed COUNT, cached per request). */
@@ -331,6 +364,8 @@ function payment_item_validate(array $in, ?array $existing = null): array
             $d['amount_minor'] = money_parse((string) ($in['amount'] ?? ''));
             if ($d['amount_minor'] === null || $d['amount_minor'] <= 0) {
                 $errors['amount'] = 'Enter the amount, e.g. ' . money_input(3000) . '.';
+            } elseif (($p = payment_amount_problem($d['amount_minor'])) !== null) {
+                $errors['amount'] = $p;
             }
         }
         if ($d['applies_to'] === 'membership_type') {
@@ -590,9 +625,9 @@ function payment_validate(array $in, int $memberId, bool $byAdmin, ?array $exist
         'amount_minor' => money_parse((string) ($in['amount'] ?? '')),
         'paid_on' => trim((string) ($in['paid_on'] ?? '')),
         'method' => (string) ($in['method'] ?? ''),
-        'reference' => trim((string) preg_replace('/\s+/u', ' ', (string) ($in['reference'] ?? ''))),
-        'payer_name' => trim((string) ($in['payer_name'] ?? '')),
-        'note' => trim((string) ($in['note'] ?? '')),
+        'reference' => payment_line((string) ($in['reference'] ?? '')),
+        'payer_name' => payment_line((string) ($in['payer_name'] ?? '')),
+        'note' => payment_text((string) ($in['note'] ?? '')),
         'id' => $existing['id'] ?? null,
     ];
     $balance = null;
@@ -620,7 +655,7 @@ function payment_validate(array $in, int $memberId, bool $byAdmin, ?array $exist
             }
         }
     } elseif ($target === 'other') {
-        $d['other_name'] = trim((string) ($in['other_name'] ?? ''));
+        $d['other_name'] = payment_line((string) ($in['other_name'] ?? ''));
         if ($d['other_name'] === '' || mb_strlen($d['other_name']) > 120) {
             $errors['other_name'] = 'Say what the payment was for (up to 120 characters).';
         }
@@ -629,6 +664,8 @@ function payment_validate(array $in, int $memberId, bool $byAdmin, ?array $exist
     }
     if ($d['amount_minor'] === null || $d['amount_minor'] <= 0) {
         $errors['amount'] = 'Enter the amount paid, e.g. ' . money_input(2500) . '.';
+    } elseif (($tooBig = payment_amount_problem($d['amount_minor'])) !== null) {
+        $errors['amount'] = $tooBig;
     } elseif ($balance !== null && $item !== null) {
         if ((int) $item['allow_part'] === 0 && $d['amount_minor'] < $balance) {
             $errors['amount'] = 'This item must be paid in full: ' . money($balance) . '.';
@@ -825,17 +862,48 @@ function payment_separation_problem(array $p, array $admin): ?string
     return null;
 }
 
-/** Approve a pending/needs-info record: ledger, receipt number, email. Returns an error or null. */
-function payment_approve(int $id, array $admin, string $note = '', ?DateTimeImmutable $now = null): ?string
+/**
+ * Version token of what an admin reviews: changes when the member edits any
+ * detail (amount, target, date, method, reference, payer, note, receipt) or
+ * the status changes. Forms carry it; payment_approve() compares it under the
+ * row lock, so an admin never approves something other than what they saw.
+ */
+function payment_version(array $p): string
+{
+    return substr(hash('sha256', implode('|', [
+        $p['id'], $p['status'], $p['amount_minor'], $p['charge_id'] ?? '', $p['item_id'] ?? '', $p['other_name'], $p['paid_on'],
+        $p['method'], $p['reference'], $p['payer_name'], (string) ($p['note'] ?? ''), $p['receipt_media_id'] ?? '',
+    ])), 0, 20);
+}
+
+const PAYMENT_CHANGED = 'This report changed since you opened it. Check it again before approving.';
+const PAYMENT_OVERPAY = 'Approving this would take the amount paid above what is owed for this charge. Tick “Approve anyway (overpayment)” to confirm.';
+
+/**
+ * Approve a pending/needs-info record: ledger, receipt number, email.
+ * $version: the token the admin's form carried (null = internal call).
+ * $allowOverpay: the admin confirmed approving more than the balance.
+ * Returns an error or null.
+ */
+function payment_approve(int $id, array $admin, string $note = '', ?DateTimeImmutable $now = null, ?string $version = null, bool $allowOverpay = true): ?string
 {
     $now ??= new DateTimeImmutable('now', utc());
-    $error = payments_tx(static function () use ($id, $admin, $note, $now): ?string {
+    $error = payments_tx(static function () use ($id, $admin, $note, $now, $version, $allowOverpay): ?string {
         $p = q_one('SELECT * FROM payments WHERE id = ? FOR UPDATE', [$id]);
         if ($p === null || $p['entry_type'] !== 'payment' || !in_array($p['status'], ['pending', 'needs_info'], true)) {
             return 'This payment is no longer waiting for review.';
         }
+        if ($version !== null && !hash_equals(payment_version($p), $version)) {
+            return PAYMENT_CHANGED;
+        }
         if (($problem = payment_separation_problem($p, $admin)) !== null) {
             return $problem;
+        }
+        if ($p['charge_id'] !== null && !$allowOverpay) {
+            $c = q_one('SELECT amount_minor, paid_minor FROM payment_charges WHERE id = ? FOR UPDATE', [(int) $p['charge_id']]);
+            if ($c !== null && (int) $c['paid_minor'] + (int) $p['amount_minor'] > (int) $c['amount_minor']) {
+                return PAYMENT_OVERPAY;
+            }
         }
         payment_ledger_apply($p, (int) $p['amount_minor']);
         q("UPDATE payments SET status = 'approved', reviewed_by = ?, reviewed_at = ?, review_note = ?, receipt_number = ?, receipt_code = ? WHERE id = ?", [
@@ -971,6 +1039,9 @@ function payment_charge_set_amount(int $chargeId, array $admin, string $amountTe
     if ($amount === null) {
         return 'Enter the new amount.';
     }
+    if (($p = payment_amount_problem($amount)) !== null) {
+        return $p;
+    }
     if ($reason === '' || mb_strlen($reason) > 255) {
         return 'Give a reason (up to 255 characters).';
     }
@@ -1033,7 +1104,7 @@ function payment_mail_member(int $paymentId, string $template): bool
         return false;
     }
     $parts = email_template_render($template, [
-        'first_name' => (string) $p['first_name'], 'item' => payment_what($p), 'amount' => money((int) $p['amount_minor'], (string) $p['currency']),
+        'first_name' => payment_line((string) $p['first_name']), 'item' => payment_line(payment_what($p)), 'amount' => money((int) $p['amount_minor'], (string) $p['currency']),
         'date_paid' => (new DateTimeImmutable((string) $p['paid_on']))->format('j M Y'), 'receipt_number' => (string) ($p['receipt_number'] ?? ''),
         'reason' => (string) $p['review_note'], 'question' => (string) $p['review_note'],
         'receipt_url' => base_url('/account/payments/' . $paymentId . '/receipt'), 'payment_url' => base_url('/account/payments/' . $paymentId),
@@ -1092,9 +1163,10 @@ function cron_payment_notices(?int $now = null): string
                 continue;
             }
             $seen[(int) $r['id']] = true;
-            $lines[] = '• ' . payment_member_label($r) . ($r['member_number'] ? ' (' . $r['member_number'] . ')' : '') . ' · ' . payment_what($r) . ' · ' . money((int) $r['amount_minor'], (string) $r['currency'])
+            // Every member-typed value is flattened to one line, so nothing typed can add lines to the email.
+            $lines[] = '• ' . payment_line(payment_member_label($r) . ($r['member_number'] ? ' (' . $r['member_number'] . ')' : '') . ' · ' . payment_what($r)) . ' · ' . money((int) $r['amount_minor'], (string) $r['currency'])
                 . ' · paid ' . (new DateTimeImmutable((string) $r['paid_on']))->format('j M') . ' by ' . strtolower(PAYMENT_METHODS[$r['method']] ?? $r['method'])
-                . ($r['reference'] !== '' ? ' (ref ' . $r['reference'] . ')' : '') . ($r['event_type'] !== 'submitted' ? ' [' . ($r['event_type'] === 'answered' ? 'answered your question' : 'edited') . ']' : '')
+                . ($r['reference'] !== '' ? ' (ref ' . payment_line((string) $r['reference']) . ')' : '') . ($r['event_type'] !== 'submitted' ? ' [' . ($r['event_type'] === 'answered' ? 'answered your question' : 'edited') . ']' : '')
                 . "\n  Review: " . base_url('/admin/payments/' . (int) $r['id']);
         }
         $parts = email_template_render('payment_reported_admin', [
@@ -1256,6 +1328,36 @@ function payments_reconcile(bool $fix = false): array
     return $drift;
 }
 
+/** Run the full reconcile (report only) and remember the result for System health. */
+function payments_reconcile_record(?int $now = null): array
+{
+    $drift = payments_reconcile();
+    setting_set('payments.reconcile', ['at' => $now ?? time(), 'count' => count($drift), 'first' => $drift[0] ?? '']);
+    return $drift;
+}
+
+/** Cron (nightly): the full reconcile, so System health never has to recompute everything. */
+function cron_payment_reconcile(): string
+{
+    $n = count(payments_reconcile_record());
+    return $n === 0 ? 'no drift' : $n . ' difference(s): run php bin/payments-reconcile';
+}
+
+/**
+ * Cheap check for System health: grand totals of the maintained counters
+ * against the ledger (four aggregate queries, no per-item work).
+ * @return array{ok:bool, detail:string}
+ */
+function payments_totals_check(): array
+{
+    $paid = (int) q_val('SELECT COALESCE(SUM(paid_minor), 0) FROM payment_charges');
+    $paidLedger = (int) q_val("SELECT COALESCE(SUM(amount_minor), 0) FROM payments WHERE status = 'approved' AND charge_id IS NOT NULL");
+    $collected = (int) q_val('SELECT COALESCE(SUM(collected_minor), 0) FROM payment_items');
+    $collectedLedger = (int) q_val("SELECT COALESCE(SUM(amount_minor), 0) FROM payments WHERE status = 'approved' AND item_id IS NOT NULL");
+    $ok = $paid === $paidLedger && $collected === $collectedLedger;
+    return ['ok' => $ok, 'detail' => $ok ? 'totals match the payment records' : sprintf('charges paid %s vs ledger %s; items collected %s vs ledger %s', money($paid), money($paidLedger), money($collected), money($collectedLedger))];
+}
+
 // ---- Reports ----------------------------------------------------------------------------------------
 
 /**
@@ -1342,6 +1444,12 @@ function payments_account_purge(int $userId): void
         payment_event((int) $p['id'], null, null, 'system', 'account_deleted', 'Withdrawn: the account was deleted.');
     }
     q("UPDATE payments SET former_label = ?, payer_name = '' WHERE member_id = ?", [$label, (int) $m['id']]);
+    // Text the member typed goes too (review): their note, reference and "Other" description on the
+    // records they reported, and the reference/description copied onto reversals of those records.
+    // Item, amount, dates, method, status and receipt number stay for the accounts.
+    q("UPDATE payments SET note = NULL, reference = '', other_name = '' WHERE member_id = ? AND recorded_by IS NULL", [(int) $m['id']]);
+    q("UPDATE payments r JOIN payments o ON o.id = r.reverses_id SET r.reference = '', r.other_name = '' WHERE r.member_id = ? AND o.recorded_by IS NULL", [(int) $m['id']]);
+    q("UPDATE payment_events e JOIN payments p ON p.id = e.payment_id SET e.note = '' WHERE p.member_id = ? AND e.actor_role = 'member'", [(int) $m['id']]);
     foreach (q_all('SELECT * FROM payment_charges WHERE member_id = ? FOR UPDATE', [(int) $m['id']]) as $c) {
         if ((int) $c['paid_minor'] === 0 && q_val('SELECT 1 FROM payments WHERE charge_id = ? LIMIT 1', [(int) $c['id']]) === null) {
             [$e, $o] = payment_charge_contrib($c);

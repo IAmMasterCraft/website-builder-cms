@@ -25,6 +25,7 @@ function cron_jobs(): array
         'payment_notices' => ['every' => 1, 'run' => 'cron_payment_notices'],
         'payment_reminders' => ['daily_at' => '09:00', 'run' => 'cron_payment_reminders'],
         'payment_retention' => ['daily_at' => '03:45', 'run' => 'cron_payment_retention'],
+        'payment_reconcile' => ['daily_at' => '04:15', 'run' => 'cron_payment_reconcile'],
         // Backups can take long: they run after the main lock is released, under their own lock.
         'backups' => ['daily_at' => backup_settings()['time'], 'run' => 'cron_backups', 'own_lock' => true],
     ];

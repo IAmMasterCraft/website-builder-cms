@@ -51,6 +51,12 @@ Actions on each row:
 **Approve selected**: tick several reports and approve them in one go. Only
 reports without warnings can be ticked. Look at the others one by one.
 
+Gather approves exactly what you looked at: if the member changes the report
+after you opened the page, approving says "This report changed since you
+opened it" and you check it again. A payment that would take the member
+above what they owe for a charge needs the tick **Approve anyway
+(overpayment)** on the review screen (bulk approval skips it).
+
 ![The review screen](../images/admin-payment-review.webp)
 
 Click a member's name to open the **review screen**: the full details, a
@@ -221,7 +227,8 @@ date and the member's initials. It shows nothing else about the member.
 
 - **Currency**: one currency for the whole site, chosen when installing
   (Gather guesses it from your location, otherwise Nigerian naira). It can
-  only change until the first payment is recorded.
+  only change until the first payment item is created. Amounts can be up
+  to 1,000,000,000 (in the site currency).
 - **Bank details** shown at the top of "Report a payment" and in reminder
   emails: account name, number, bank and the reference to use.
 - **Members must upload a receipt** (on by default; admins recording a
@@ -241,8 +248,11 @@ permission can open them, and they never appear in the media library.
 Members' data downloads include their charges and payment records.
 
 When a member's account is deleted, their payment records **stay** for the
-organisation's accounts, but their name is replaced with "Former member
-#<number>" and any "paid by" name is removed. Reports still waiting for
+organisation's accounts (item, amount, dates, method, status and receipt
+number), but their name is replaced with "Former member #<number>" and
+the text they typed is removed: the "paid by" name, notes, references and
+"Other" descriptions on payments they reported. Text admins typed (on
+payments they recorded, reasons and questions) stays. Reports still waiting for
 review are withdrawn. Charges with nothing paid are removed, and other
 balances are waived. The uploaded receipt files are deleted once the
 retention period has passed.
@@ -251,6 +261,7 @@ retention period has passed.
 
 Each item's expected, collected and outstanding amounts are kept up to date
 whenever a payment is approved or reversed. **System health** checks them
-against the payment records under **Payments → Payment counters**. If it
-ever reports a difference, a technical person runs `php bin/payments-reconcile`
+against the payment records under **Payments → Payment counters**: the grand
+totals on every view, and the full item-by-item check that cron runs every
+night at 04:15 (with the time it last ran). If it ever reports a difference, a technical person runs `php bin/payments-reconcile`
 to see it and `php bin/payments-reconcile --fix` to correct it.

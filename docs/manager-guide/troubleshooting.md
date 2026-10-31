@@ -49,7 +49,8 @@ and `storage/logs/cron.log`.
 
 | Problem | Fix |
 |---|---|
-| The currency cannot be changed | It locks once the first payment is recorded, so old amounts keep their meaning. Choose it before opening any item. |
+| The currency cannot be changed | It locks once the first payment item exists, so amounts keep their meaning. Choose it before creating any item. |
+| "This report changed since you opened it" | The member edited the report while you had it open. Look at it again, then approve. |
 | A member says they cannot see an item in "What I owe" | The item is still a **draft** or **closed**, it does not apply to them (membership type or location), it was opened before they joined without **Also apply to people who join later**, or their charge was waived. Add a charge on their **Payments** page. |
 | An item says "Creating charges…" for a long time | Charges for large memberships are made 500 at a time by cron every minute: check **System health → Cron**. |
 | A payment was approved by mistake | Open it and **Reverse this payment** with a reason. Approved payments are never edited or deleted. |

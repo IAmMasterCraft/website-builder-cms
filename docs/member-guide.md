@@ -338,8 +338,10 @@ you have already paid, report the payment so the treasurer can confirm it.
   member number is retired, event registrations are kept without your name,
   your comments show as "former member", and the messages you sent are
   emptied (others see "Former member · Message deleted"). Payment records
-  are kept for the organisation's accounts with your name replaced by
-  "Former member" and your member number; your uploaded receipts are
+  are kept for the organisation's accounts (what was paid, amounts, dates,
+  method, receipt number) with your name replaced by "Former member" and
+  your member number, and the notes, references and descriptions you typed
+  removed; your uploaded receipts are
   deleted after the retention period (7 years unless your organisation
   chose otherwise).
 

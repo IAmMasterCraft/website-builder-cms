@@ -110,18 +110,31 @@ final class Payments
         }
         $rows = q_all(self::rowsSql() . ' WHERE p.id IN (' . db_placeholders(count($ids)) . ") AND p.status = 'pending'", $ids);
         $dups = self::duplicates($rows);
+        $versions = is_array($_POST['v'] ?? null) ? $_POST['v'] : [];
         $approved = 0;
-        $skipped = 0;
+        $skipped = ['warnings' => 0, 'changed' => 0, 'overpayment' => 0, 'other' => 0];
         foreach ($rows as $r) {
             $over = $r['charge_id'] !== null && (int) $r['amount_minor'] > max(0, (int) $r['charge_amount'] - (int) $r['charge_paid']);
-            if (($dups[(int) $r['id']] ?? []) !== [] || $over || payment_approve((int) $r['id'], $user) !== null) {
-                $skipped++;
+            if (($dups[(int) $r['id']] ?? []) !== [] || $over) {
+                $skipped['warnings']++;
+                continue;
+            }
+            // The version each row had when the queue was shown; the charge is re-checked under lock (no overpayment in bulk).
+            $error = payment_approve((int) $r['id'], $user, '', null, is_string($versions[$r['id']] ?? null) ? $versions[$r['id']] : '', false);
+            if ($error !== null) {
+                $skipped[match ($error) { PAYMENT_CHANGED => 'changed', PAYMENT_OVERPAY => 'overpayment', default => 'other' }]++;
                 continue;
             }
             audit('approve', 'payment', (int) $r['id'], money((int) $r['amount_minor'], (string) $r['currency']) . ' · ' . payment_member_label($r) . ' (bulk)');
             $approved++;
         }
-        flash(pluralise($approved, 'payment') . ' approved' . ($skipped ? '; ' . $skipped . ' left for a closer look (warnings, separation of duties or already reviewed)' : '') . '.', $approved > 0 ? 'success' : 'error');
+        $notes = array_filter([
+            $skipped['warnings'] ? $skipped['warnings'] . ' with warnings' : '',
+            $skipped['changed'] ? $skipped['changed'] . ' changed since you opened the list' : '',
+            $skipped['overpayment'] ? $skipped['overpayment'] . ' would be an overpayment' : '',
+            $skipped['other'] ? $skipped['other'] . ' already reviewed or blocked by separation of duties' : '',
+        ]);
+        flash(pluralise($approved, 'payment') . ' approved' . ($notes ? '; left for a closer look: ' . implode(', ', $notes) : '') . '.', $approved > 0 ? 'success' : 'error');
         redirect('/admin/payments');
     }
 
@@ -172,7 +185,7 @@ final class Payments
         csrf_check();
         $user = self::admin();
         $rec = self::find((int) $p['id']);
-        $error = payment_approve((int) $rec['id'], $user, mb_substr(input('note'), 0, 1000));
+        $error = payment_approve((int) $rec['id'], $user, mb_substr(input('note'), 0, 1000), null, input('version'), input('overpay') === '1');
         if ($error !== null) {
             flash($error, 'error');
             redirect('/admin/payments/' . (int) $rec['id']);
@@ -545,13 +558,27 @@ final class Payments
     {
         csrf_check();
         self::admin();
-        $item = payment_item((int) $p['id']) ?? throw new HttpException(404);
-        [$d, $errors] = payment_item_validate($_POST, $item);
+        // Review: the "locked once opened" check reads the item under a row lock, so an item
+        // opened by another admin a moment ago cannot get a new amount or audience.
+        $result = payments_tx(static function () use ($p): array {
+            $item = q_one('SELECT * FROM payment_items WHERE id = ? FOR UPDATE', [(int) $p['id']]);
+            if ($item === null) {
+                return [null, null, []];
+            }
+            [$d, $errors] = payment_item_validate($_POST, $item);
+            if (!$errors) {
+                db_update('payment_items', (int) $item['id'], $d);
+            }
+            return [$item, $d, $errors];
+        });
+        [$item, $d, $errors] = $result;
+        if ($item === null) {
+            throw new HttpException(404);
+        }
         if ($errors) {
             remember_input($_POST, $errors);
             redirect('/admin/payments/items/' . (int) $item['id'] . '/edit');
         }
-        db_update('payment_items', (int) $item['id'], $d);
         audit('update', 'payment_item', (int) $item['id'], $d['name']);
         flash('Item saved.');
         redirect('/admin/payments/items/' . (int) $item['id']);
@@ -760,7 +787,7 @@ final class Payments
             'notify_received' => $s['notify_received'] ? '1' : '', 'remind_before' => (string) $s['remind_before'], 'remind_after' => (string) $s['remind_after'],
             'reviewer_label' => $s['reviewer_label'], 'retention_years' => (string) $s['retention_years'], 'bank_details' => $s['bank_details'],
         ];
-        render('admin/payment_settings', ['title' => 'Payment settings', 'values' => $values, 'errors' => $old['errors'], 'locked' => payments_exist(), 'extra_css' => ['assets/css/payments.css']], 'admin');
+        render('admin/payment_settings', ['title' => 'Payment settings', 'values' => $values, 'errors' => $old['errors'], 'locked' => payments_currency_locked(), 'extra_css' => ['assets/css/payments.css']], 'admin');
     }
 
     public static function saveSettings(array $p): void
@@ -770,8 +797,8 @@ final class Payments
         $s = payment_settings();
         $errors = [];
         $currency = strtoupper(input('currency'));
-        if (payments_exist()) {
-            $currency = $s['currency']; // blocked once any payment exists
+        if (payments_currency_locked()) {
+            $currency = $s['currency']; // blocked once any item, charge or payment exists
         } elseif (!isset(currency_table()[$currency])) {
             $errors['currency'] = 'Choose a currency.';
         }

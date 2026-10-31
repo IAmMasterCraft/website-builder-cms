@@ -233,7 +233,9 @@ included.
 
 **Who receives them**: **Every admin who can manage members** (super admins
 and admins with the members permission; the default) or **Only these
-people** (tick active admins and super admins). Admins whose address is on
+people** (tick some of them). Only people who can see members' details
+are offered, and someone who loses the members permission stops getting
+the emails. Admins whose address is on
 the suppression list (bounced, complained or unsubscribed) are skipped.
 
 Each person gets at most one daily email per day, one weekly email per week

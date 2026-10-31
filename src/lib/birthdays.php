@@ -84,7 +84,8 @@ function birthday_notice_settings(): array
 /** Active staff who may be chosen as recipients (Settings → Birthdays). */
 function birthday_staff_choices(): array
 {
-    return q_all("SELECT id, email, display_name, role FROM users WHERE role IN ('super_admin','admin') AND status = 'active' ORDER BY display_name, id");
+    // Only people who may see members' details (super admins, admins with the members permission).
+    return q_all("SELECT u.id, u.email, u.display_name, u.role FROM users u WHERE u.status = 'active' AND (u.role = 'super_admin' OR (u.role = 'admin' AND EXISTS (SELECT 1 FROM admin_permissions p WHERE p.user_id = u.id AND p.permission = 'members'))) ORDER BY u.display_name, u.id");
 }
 
 /**
@@ -100,7 +101,8 @@ function birthday_notice_recipients(?array $settings = null): array
         if ($s['chosen'] === []) {
             return [];
         }
-        $rows = q_all("SELECT u.id, u.email, u.display_name FROM users u WHERE u.status = 'active' AND u.role IN ('super_admin','admin') AND u.id IN (" . db_placeholders(count($s['chosen'])) . ') ORDER BY u.id', $s['chosen']);
+        // Chosen people still need the members permission (or super admin) when the notice is sent.
+        $rows = q_all("SELECT u.id, u.email, u.display_name FROM users u WHERE u.status = 'active' AND (u.role = 'super_admin' OR (u.role = 'admin' AND EXISTS (SELECT 1 FROM admin_permissions p WHERE p.user_id = u.id AND p.permission = 'members'))) AND u.id IN (" . db_placeholders(count($s['chosen'])) . ') ORDER BY u.id', $s['chosen']);
     } else {
         $rows = q_all("SELECT u.id, u.email, u.display_name FROM users u WHERE u.status = 'active' AND (u.role = 'super_admin' OR (u.role = 'admin' AND EXISTS (SELECT 1 FROM admin_permissions p WHERE p.user_id = u.id AND p.permission = 'members'))) ORDER BY u.id");
     }
@@ -120,7 +122,7 @@ function birthday_is_recipient(?array $user): bool
         return false;
     }
     $s = birthday_notice_settings();
-    return $s['recipients'] === 'chosen' ? in_array((int) $user['id'], $s['chosen'], true) : user_can($user, 'members');
+    return user_can($user, 'members') && ($s['recipients'] !== 'chosen' || in_array((int) $user['id'], $s['chosen'], true));
 }
 
 /**
@@ -168,7 +170,8 @@ function birthday_day_label(array $m, string $format = 'D j M'): string
 /** One notice line: name, member number, day; with links to the admin page and "Send a message" (C3). */
 function birthday_notice_line(array $m, bool $links = true): string
 {
-    $line = '• ' . member_full_name($m) . ($m['member_number'] ? ' (' . $m['member_number'] . ')' : '') . ' · ' . birthday_day_label($m);
+    // Names are member-typed: flattened to one line (no control characters) before they go into an email.
+    $line = '• ' . payment_line(member_full_name($m) . ($m['member_number'] ? ' (' . $m['member_number'] . ')' : '')) . ' · ' . birthday_day_label($m);
     if ($links) {
         $line .= "\n  Member page: " . base_url('/admin/members/' . (int) $m['id'])
             . "\n  Send a message: " . base_url('/admin/messages/new?to=' . (int) $m['user_id']);

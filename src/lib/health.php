@@ -398,13 +398,18 @@ function health_payment_items(): array
 {
     $out = [];
     try {
-        $drift = payments_reconcile();
-        $out[] = health_item('Payment counters', $drift === [] ? 'ok' : 'bad', $drift === []
-            ? 'item and charge totals match the payment records'
-            : pluralise(count($drift), 'difference') . ' found (' . $drift[0] . (count($drift) > 1 ? '; …' : '') . '). Run php bin/payments-reconcile --fix');
+        // Review: no full recompute on every view. Grand totals are compared at once; the full
+        // per-item/per-charge reconcile runs nightly (cron) and by bin/payments-reconcile.
+        $totals = payments_totals_check();
+        $last = setting('payments.reconcile');
+        $last = is_array($last) ? $last : null;
+        $ok = $totals['ok'] && ($last === null || (int) $last['count'] === 0);
+        $detail = $totals['detail'] . '; full check ' . ($last === null ? 'not run yet (nightly by cron)' : fmt_datetime(gmdate('Y-m-d H:i:s', (int) $last['at'])) . ': '
+            . ((int) $last['count'] === 0 ? 'item and charge totals match the payment records' : pluralise((int) $last['count'], 'difference') . ' (' . $last['first'] . ')'));
+        $out[] = health_item('Payment counters', $ok ? 'ok' : 'bad', $detail . ($ok ? '' : '. Run php bin/payments-reconcile --fix'));
         $pending = (int) q_val('SELECT COUNT(*) FROM payment_items WHERE charges_pending = 1');
         $out[] = health_item('Dues charges', $pending === 0 ? 'ok' : 'warn', $pending === 0 ? 'no charges waiting to be created' : pluralise($pending, 'item') . ' still creating member charges (cron, 500 at a time)');
-        $out[] = health_item('Site currency', 'ok', site_currency() . ' (' . currency_info()[0] . ')' . (payments_exist() ? ': locked, payments exist' : ''));
+        $out[] = health_item('Site currency', 'ok', site_currency() . ' (' . currency_info()[0] . ')' . (payments_currency_locked() ? ': locked, items or payments use it' : ''));
     } catch (Throwable $e) {
         $out[] = health_item('Payments', 'bad', 'check failed: ' . $e->getMessage());
     }

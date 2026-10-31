@@ -370,18 +370,26 @@ test('D2: account deletion anonymises records, removes unpaid charges, keeps rec
     payment_item_set_status($dues, 'open');
     payment_item_set_status($levy, 'open');
     $charge = pay_charge($dues, $m['member_id']);
-    $p = pay_report($m, 'c' . $charge['id'], '10', ['payer_name' => 'My Spouse']);
+    $p = pay_report($m, 'c' . $charge['id'], '10', ['payer_name' => 'My Spouse', 'note' => 'Paid from my private account at Bank X', 'reference' => 'MY-NAME-REF']);
+    $other = pay_report($m, 'other', '3', ['other_name' => 'Raffle for my daughter Jane']);
+    [$d] = payment_validate(['target' => 'c' . $charge['id'], 'amount' => '1', 'paid_on' => payment_today(), 'method' => 'cash', 'note' => 'Admin: paid at AGM', 'reference' => 'BOOK-12'], $m['member_id'], true);
+    [$rec] = payment_record($admin, $d, null);
     payment_approve($p, $admin);
     $media = fixture_image_media($m['user_id'], 'private');
     q("UPDATE media SET folder = 'receipts' WHERE id = ?", [$media]);
     q('UPDATE payments SET receipt_media_id = ? WHERE id = ?', [$media, $p]);
     $waiting = pay_report($m, 'c' . $charge['id'], '5');
     $export = member_export($m['user_id']);
-    same(2, count($export['payments']['records']));
+    same(4, count($export['payments']['records']));
     same(2, count($export['payments']['charges']));
     ok(account_delete($m['user_id']));
     $row = payment_find($p);
     same([null, 'Former member #' . $number, ''], [$row['member_id'], $row['former_label'], $row['payer_name']]);
+    same([null, ''], [$row['note'], $row['reference']], 'review: member-typed note and reference cleared');
+    same(['', 'Other'], [payment_find($other)['other_name'], payment_what(payment_find($other))]);
+    same(['Admin: paid at AGM', 'BOOK-12'], [payment_find((int) $rec)['note'], payment_find((int) $rec)['reference']], 'admin-typed text on recorded payments stays');
+    same(1000, (int) $row['amount_minor'], 'amount kept');
+    ok($row['receipt_number'] !== null && $row['paid_on'] !== '' && $row['method'] === 'bank_transfer', 'receipt number, date and method kept');
     same('Former member #' . $number, payment_member_label($row));
     same('withdrawn', payment_find($waiting)['status']);
     same(0, (int) q_val('SELECT COUNT(*) FROM payment_charges WHERE item_id = ?', [$levy]), 'unpaid charge removed');
@@ -459,4 +467,69 @@ test('D2: the receipt verification lookup shows only initials and invalidates re
     payment_reverse($p, $admin, 'Refunded');
     ok(payment_verify($code)['reversal_id'] !== null);
     same(null, payment_verify('nothex'));
+});
+
+// ---- Addendum D security review --------------------------------------------------------------
+
+test('D review: single-line fields are flattened; emails get no injected lines', function (): void {
+    pay_reset();
+    $m = pay_member("Eve\nInjected line");
+    $admin = dm_staff(['payments']);
+    $id = pay_report($m, 'other', '2', ['other_name' => "Raffle\n• Fake Name · £9,999.00\r\n  Review: https://evil.example/", 'payer_name' => "A\tB\nC", 'reference' => "R1\nR2", 'note' => "line one\r\nline two\x07"]);
+    $p = payment_find($id);
+    same(['Raffle • Fake Name · £9,999.00 Review: https://evil.example/', 'A B C', 'R1 R2', "line one\nline two"], [$p['other_name'], $p['payer_name'], $p['reference'], $p['note']]);
+    cron_payment_notices();
+    $body = (string) q_val('SELECT text_body FROM email_queue WHERE to_email = ? AND dedupe_key LIKE ?', [$admin['email'], 'payrep:%']);
+    $lines = array_values(array_filter(explode("\n", $body), static fn (string $l): bool => str_starts_with(ltrim($l), '•')));
+    same(1, count($lines), 'one report line, nothing injected');
+    contains('Eve Injected line Payer', $lines[0]);
+    not_contains("\nline two", $body, 'notes are never put in emails');
+    same('• Eve Injected line Payer · Sun 1 Mar', explode("\n", birthday_notice_line(['first_name' => "Eve\nInjected line", 'last_name' => 'Payer', 'member_number' => null, 'celebrated_on' => '2026-03-01', 'birth_month' => 3, 'birth_day' => 1, 'id' => 1, 'user_id' => 1]))[0]);
+});
+
+test('D review: approve only what was reviewed (version token) and confirm overpayments', function (): void {
+    pay_reset();
+    $m = pay_member();
+    $admin = dm_staff(['payments']);
+    $item = pay_item();
+    payment_item_set_status($item, 'open');
+    $charge = pay_charge($item, $m['member_id']);
+    $id = pay_report($m, 'c' . $charge['id'], '10');
+    $seen = payment_version(payment_find($id));
+    // The member edits the amount after the admin opened the report.
+    [$d] = payment_validate(['target' => 'c' . $charge['id'], 'amount' => '29', 'paid_on' => payment_today(), 'method' => 'cash'], $m['member_id'], false, payment_find($id));
+    same(null, payment_member_update($m['user'], $id, $m['member_id'], $d, null));
+    same(PAYMENT_CHANGED, payment_approve($id, $admin, '', null, $seen, false));
+    same('', payment_approve($id, $admin, '', null, '', false) === PAYMENT_CHANGED ? '' : 'x', 'an empty token is refused too');
+    same('pending', payment_find($id)['status']);
+    same(null, payment_approve($id, $admin, '', null, payment_version(payment_find($id)), false));
+    $over = pay_report($m, 'c' . $charge['id'], '5');
+    $v = payment_version(payment_find($over));
+    same(PAYMENT_OVERPAY, payment_approve($over, $admin, '', null, $v, false), '29 + 5 > 30');
+    same(null, payment_approve($over, $admin, '', null, $v, true), 'explicit confirmation');
+    same(3400, (int) pay_charge($item, $m['member_id'])['paid_minor']);
+    same([], payments_reconcile());
+});
+
+test('D review: currency locked by items too; amounts capped; cheap totals check and nightly reconcile', function (): void {
+    pay_reset();
+    same(false, payments_currency_locked());
+    $item = pay_item(['name' => 'Draft only']);
+    same(true, payments_currency_locked(), 'a draft item already fixes the currency');
+    [, $e] = payment_item_validate(['name' => 'Huge', 'item_kind' => 'dues', 'amount' => '1000000000.01', 'applies_to' => 'everyone']);
+    contains('Amounts can be at most £1,000,000,000.00', $e['amount'] ?? '');
+    [, $e] = payment_item_validate(['name' => 'Max', 'item_kind' => 'dues', 'amount' => '1,000,000,000', 'applies_to' => 'everyone']);
+    same([], $e);
+    $m = pay_member();
+    [, $e] = payment_validate(['target' => 'other', 'other_name' => 'x', 'amount' => '99999999999', 'paid_on' => payment_today(), 'method' => 'cash'], $m['member_id'], false);
+    contains('at most', $e['amount'] ?? '');
+    payment_item_set_status($item, 'open');
+    same(true, payments_totals_check()['ok']);
+    q('UPDATE payment_charges SET paid_minor = paid_minor + 1 WHERE item_id = ? LIMIT 1', [$item]);
+    same(false, payments_totals_check()['ok'], 'grand totals catch the drift');
+    same('2 difference(s): run php bin/payments-reconcile', cron_payment_reconcile(), 'the charge and its item');
+    settings_all([]);
+    same(2, setting('payments.reconcile')['count']);
+    payments_reconcile(true);
+    same('no drift', cron_payment_reconcile());
 });

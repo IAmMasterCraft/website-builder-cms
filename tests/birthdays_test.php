@@ -107,14 +107,17 @@ test('D1: daily notice, skip empty switch and per-notice switches', function ():
 test('D1: chosen recipients, suppressed admins skipped, essential at send time', function (): void {
     bday_reset();
     $tz = site_tz();
-    $a = fixture_admin('admin', ['radio']);
+    $a = fixture_admin('admin', ['members', 'radio']);
     $b = fixture_admin('super_admin');
     $c = fixture_admin('admin', ['members']);
+    $radioOnly = fixture_admin('admin', ['radio']);
     $emails = array_column(q_all('SELECT id, email FROM users WHERE id IN (?, ?, ?)', [$a, $b, $c]), 'email', 'id');
     q("INSERT INTO email_suppressions (email, reason) VALUES (?, 'unsubscribe')", [$emails[$c]]);
-    setting_set('birthdays.notices', ['recipients' => 'chosen', 'chosen' => [$a, $c]]);
+    setting_set('birthdays.notices', ['recipients' => 'chosen', 'chosen' => [$a, $c, $radioOnly]]);
     $ids = array_column(birthday_notice_recipients(), 'id');
-    same([$a], $ids, 'chosen people only, suppressed address skipped');
+    same([$a], $ids, 'chosen people only, suppressed address skipped, no one without the members permission');
+    ok(!in_array($radioOnly, array_map('intval', array_column(birthday_staff_choices(), 'id')), true), 'review: only members admins and super admins can be chosen');
+    ok(!birthday_is_recipient(dm_user($radioOnly)));
     ok(birthday_is_recipient(dm_user($a)) && !birthday_is_recipient(dm_user($b)));
     fixture_full_member(['first_name' => 'Today', 'birth_day' => 5, 'birth_month' => 5]);
     birthday_run(new DateTimeImmutable('2026-05-05 08:00', $tz));

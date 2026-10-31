@@ -1724,6 +1724,9 @@ playwright-core; tools in `dev-tools/`, never deployed):
   them. The birthday list
   page lists all active members (admins see everyone; the celebrants
   opt-in only governs the public list).
+- Addendum D review: the version token covers what the admin sees (not
+  `updated_at`, which also changes on unrelated writes). Anonymisation
+  keeps admin-typed text, because it is the organisation's own record.
 - Addendum D2: payments are for member accounts (groups have no members
   row and no Payments menu). "Any amount" is only allowed for optional
   (nobody) items, which create no charges; payments for them count in the
@@ -2045,6 +2048,63 @@ visible), `conversations.archived_at`, `users.message_findable` (default 1).
   leaves, the group is archived (read-only, "closed", no adding, no
   digests).
 
+## Addendum D security review fixes (2026-10-31)
+
+A fresh-context review of Addendum D found no critical/high issues. Each
+finding was fixed with tests (`tests/payments_test.php` "D review" tests,
+`tests/birthdays_test.php`, smoke checks in `tests/smoke_addendum_d.php`).
+No new migration.
+
+- MEDIUM email line injection: single-line fields (`other_name`,
+  `payer_name`, `reference`) go through `payment_line()` (control
+  characters incl. U+2028/9 removed, whitespace and newlines collapsed);
+  `note` stays multi-line (`payment_text()`: control characters removed,
+  line endings normalised) and is never put in an email. The admin
+  report list, member emails (`item`, `first_name`) and
+  `birthday_notice_line()` flatten member-typed names and descriptions
+  again when building the text, so rows stored earlier cannot add lines.
+- MEDIUM/LOW approve what was reviewed: `payment_version()` (hash of status,
+  amount, charge, item, description, date, method, reference, payer, note,
+  receipt) is a hidden field on the review screen, each queue row and the
+  bulk form (`v[id]`); `payment_approve(..., $version, $allowOverpay)`
+  compares it under the row lock and answers "This report changed since
+  you opened it" (an empty token is refused too; internal callers pass
+  null).
+- LOW over-allocation: under the charge's row lock, approving more than the
+  balance needs "Approve anyway (overpayment)" on the review screen; bulk
+  approve skips it and says why (flash lists warnings / changed /
+  overpayment / other). Admin-recorded payments keep the warning-and-confirm
+  step of the record form.
+- LOW birthday recipients: chosen people must still be super admins or
+  have the members permission when the notice is sent; only such people
+  are offered; `birthday_is_recipient()` requires the members permission.
+- LOW deletion anonymisation: `payments_account_purge()` also clears the
+  member-typed note, reference and "Other" description on records the
+  member reported (and the reference/description copied onto their
+  reversals) and the notes of the member's own timeline events. Kept:
+  item, amount, currency, dates, method, status, receipt number, reviewer
+  and admin-typed text (recorded payments, reasons, questions). Receipt
+  files follow the existing retention rule. Privacy page, manager and
+  member guides updated.
+- Minor: the currency locks once any item, charge or payment exists
+  (`payments_currency_locked()`); `Admin\Payments::updateItem` validates
+  and saves inside one transaction with the item row locked (`FOR
+  UPDATE`); amounts are capped at 1,000,000,000 major units
+  (`payment_max_minor()`, "Amounts can be at most …") for items, reports,
+  recorded payments and charge changes.
+- Performance: System health no longer recomputes every item and charge.
+  It compares the grand totals (`payments_totals_check()`: four aggregate
+  queries) and shows the last full reconcile, which cron runs nightly
+  (`payment_reconcile`, 04:15, stored in `payments.reconcile`) and
+  `bin/payments-reconcile` records too.
+- Dev site: the reviewer's withdrawn test records #16 and #17 (with their
+  events) and six unreferenced receipt files were removed; reconcile clean.
+
+After these fixes: `bin/check` = lint + **406 unit/DB tests** + **728 smoke
+checks**, green with the local MariaDB sql_mode and with MySQL 8's default
+set globally (restored afterwards to `STRICT_TRANS_TABLES,
+ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION`).
+
 ## Known gaps / next steps
 
 - Not run here: PHP 8.2 and MySQL 8 (local runs use PHP 8.5 and MariaDB);
@@ -2156,12 +2216,12 @@ visible), `conversations.archived_at`, `users.message_findable` (default 1).
   re-evaluated when the item is re-opened without "join later". The
   printable receipt relies on the browser's "Save as PDF" (no server-side
   PDF). QR codes need JavaScript (the verify link is printed as text too).
+  The full reconcile runs nightly; between runs System health checks grand
+  totals only.
   Amounts in words have English unit names for 18 common currencies; others
   read "… Kenyan shilling and 5/100"-style. Bulk approve is limited to the
   page shown (50). The payment report email is per admin, not per
-  item. The reconcile check on System health recomputes every item and
-  charge on each view (fine for thousands of charges; slower for very
-  large memberships). The spec's "spec D6 note updated: still no online
+  item. The spec's "spec D6 note updated: still no online
   gateway" is for the study's spec, not the build. Not checked with a real
   screen reader or on MySQL 8 itself (MySQL 8's sql_mode on MariaDB).
 

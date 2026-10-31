@@ -10,7 +10,7 @@
     <?php if ($member && $member['deletion_requested_at']): ?>
       <p class="notice warn">You asked for your account to be deleted on <?= e(fmt_date((string) $member['deletion_requested_at'])) ?>. An administrator will confirm it soon.</p>
     <?php else: ?>
-      <p>We will remove your profile and photo. Your member number is retired, event registrations are kept without your name, and comments are shown as “former member”. Payment records are kept for our financial records, with your name replaced by “Former member” and your member number; uploaded receipts are deleted <?= (int) payment_settings()['retention_years'] ?> years after the payment. An administrator confirms deletion requests.</p>
+      <p>We will remove your profile and photo. Your member number is retired, event registrations are kept without your name, and comments are shown as “former member”. Payment records are kept for our financial records (what was paid, the amount, dates, method and receipt number), with your name replaced by “Former member” and your member number; the notes, references and descriptions you typed are removed; uploaded receipts are deleted <?= (int) payment_settings()['retention_years'] ?> years after the payment. An administrator confirms deletion requests.</p>
       <form class="form" method="post" action="/account/privacy/delete" data-confirm="Send a request to delete your account?">
         <?= csrf_field() ?>
         <?= view('partials/ffield', ['name' => 'password', 'label' => 'Your password', 'type' => 'password', 'required' => true, 'auto' => 'current-password', 'values' => [], 'errors' => $errors]) ?>

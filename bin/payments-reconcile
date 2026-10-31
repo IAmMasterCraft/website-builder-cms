@@ -14,6 +14,8 @@ require __DIR__ . '/../src/load.php';
 
 $fix = in_array('--fix', array_slice($argv, 1), true);
 $drift = payments_reconcile($fix);
+// System health shows the result of the last full check (also run nightly by cron).
+setting_set('payments.reconcile', ['at' => time(), 'count' => $fix ? count(payments_reconcile()) : count($drift), 'first' => $fix ? '' : ($drift[0] ?? '')]);
 if ($drift === []) {
     echo "No drift: every counter matches the payment records.\n";
     exit(0);
